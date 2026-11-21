@@ -179,11 +179,14 @@ const state = {
 
   // Calendar & Study Schedule State
   calendar: loadJSON("rbi_study_schedule", null),
+  calendar_planStartDate: loadJSON("rbi_calendar_start_date", "2026-11-01"),
   calendar_currentDate: new Date(),
   calendar_selectedDate: getLocalDateString(new Date()),
   calendar_filterPhase: "all",
   calendar_filterStatus: "all",
-  calendar_view: "month"
+  calendar_filterDayType: "all",
+  calendar_view: "month",
+  calendar_day_metadata: {}
 };
 
 // Render reusable pagination controls (50 items per page; hidden if totalPages <= 1)
@@ -3861,14 +3864,213 @@ function parseScheduleDate(raw) {
   return getLocalDateString(new Date());
 }
 
+// Classify day into normal, chapter-test, mix-test, or buffer-day
+function classifyDayType(p2Topic = "", p1Topic = "", ca = "") {
+  const combined = `${p2Topic || ""} ${p1Topic || ""} ${ca || ""}`.toLowerCase();
+  if (combined.includes("mix test")) return "mix-test";
+  if (combined.includes("chapter test")) return "chapter-test";
+  if (combined.includes("buffer day") || combined.includes("buffer")) return "buffer-day";
+  return "normal-day";
+}
+
+// Get metadata for a specific date (dayNum, dayType, p2 details, p1 details, ca)
+function getDayMetadata(dateStr) {
+  if (!state.calendar_day_metadata) {
+    state.calendar_day_metadata = {};
+  }
+  if (state.calendar_day_metadata[dateStr]) {
+    return state.calendar_day_metadata[dateStr];
+  }
+
+  // Look in existing calendar tasks for this date
+  const tasks = (state.calendar || []).filter(t => t.date === dateStr);
+  if (tasks.length > 0) {
+    const firstWithMeta = tasks.find(t => t.p2_topic || t.p1_topic || t.dayType || t.dayNum);
+    const p2Task = tasks.find(t => t.phase === "Phase-2");
+    const p1Task = tasks.find(t => t.phase === "Phase-1");
+    const caTask = tasks.find(t => (t.subject && t.subject.includes("Current Affairs")) || t.phase === "General");
+
+    const p2Sub = p2Task ? p2Task.subject : (firstWithMeta ? firstWithMeta.p2_subject : "");
+    const p2Top = p2Task ? p2Task.topic : (firstWithMeta ? firstWithMeta.p2_topic : "");
+    const p1Sub = p1Task ? p1Task.subject : (firstWithMeta ? firstWithMeta.p1_subject : "");
+    const p1Top = p1Task ? p1Task.topic : (firstWithMeta ? firstWithMeta.p1_topic : "");
+    const caTop = caTask ? caTask.topic : (firstWithMeta ? firstWithMeta.ca : "");
+
+    const dayType = (firstWithMeta && firstWithMeta.dayType) || classifyDayType(p2Top, p1Top, caTop);
+    const dayNum = (firstWithMeta && firstWithMeta.dayNum) || null;
+
+    const meta = {
+      dayNum,
+      dayType,
+      p2_subject: p2Sub || "",
+      p2_topic: p2Top || "",
+      p1_subject: p1Sub || "",
+      p1_topic: p1Top || "",
+      ca: caTop || ""
+    };
+    state.calendar_day_metadata[dateStr] = meta;
+    return meta;
+  }
+
+  return null;
+}
+
+// Rebuild day metadata from official schedule data or calendar tasks
+function rebuildCalendarMetadata() {
+  state.calendar_day_metadata = state.calendar_day_metadata || {};
+  const startStr = state.calendar_planStartDate || "2026-11-01";
+  const [sYear, sMonth, sDay] = startStr.split("-").map(Number);
+
+  if (typeof RBI_OFFICIAL_SCHEDULE_DATA !== "undefined" && Array.isArray(RBI_OFFICIAL_SCHEDULE_DATA)) {
+    for (const item of RBI_OFFICIAL_SCHEDULE_DATA) {
+      const targetDate = new Date(sYear, sMonth - 1, sDay + (item.day - 1));
+      const dateStr = getLocalDateString(targetDate);
+      state.calendar_day_metadata[dateStr] = {
+        dayNum: item.day,
+        dayType: item.dayType || classifyDayType(item.p2_topic, item.p1_topic, item.ca),
+        p2_subject: item.p2_subject || "",
+        p2_topic: item.p2_topic || "",
+        p1_subject: item.p1_subject || "",
+        p1_topic: item.p1_topic || "",
+        ca: item.ca || ""
+      };
+    }
+  }
+
+  // Overlay tasks from state.calendar
+  for (const t of (state.calendar || [])) {
+    if (!state.calendar_day_metadata[t.date]) {
+      state.calendar_day_metadata[t.date] = {
+        dayNum: t.dayNum || null,
+        dayType: t.dayType || classifyDayType(t.topic, t.subject, ""),
+        p2_subject: t.phase === "Phase-2" ? t.subject : (t.p2_subject || ""),
+        p2_topic: t.phase === "Phase-2" ? t.topic : (t.p2_topic || ""),
+        p1_subject: t.phase === "Phase-1" ? t.subject : (t.p1_subject || ""),
+        p1_topic: t.phase === "Phase-1" ? t.topic : (t.p1_topic || ""),
+        ca: t.ca || (t.type === "Current Affairs" ? t.topic : "")
+      };
+    }
+  }
+}
+
 // Convert 2D spreadsheet rows into structured task objects
 function mapScheduleRowsToTasks(rows) {
   if (!rows || rows.length < 2) return [];
 
-  // Identify column headers with fuzzy matching
   const headers = rows[0].map(h => String(h || "").trim().toLowerCase());
   const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
 
+  // Check if this is the multi-phase RBI Study Schedule format
+  const isMultiPhase = headers.some(h => h.includes("phase-2") || h.includes("phase 2") || h.includes("phase-1") || h.includes("phase 1"));
+
+  if (isMultiPhase) {
+    const dayCol = findCol(["day", "day no", "date", "timeline"]);
+    const p2SubCol = findCol(["subject (phase-2)", "phase-2 subject", "subject p2", "p2 subject"]);
+    const p2TopCol = findCol(["topic (phase-2)", "phase-2 topic", "topic p2", "p2 topic"]);
+    const p1SubCol = findCol(["subject (phase-1)", "phase-1 subject", "subject p1", "p1 subject"]);
+    const p1TopCol = findCol(["topic (phase-1)", "phase-1 topic", "topic p1", "p1 topic"]);
+    const caCol = findCol(["current affairs", "ca", "general awareness", "spotlight"]);
+
+    const startStr = state.calendar_planStartDate || "2026-11-01";
+    const [sYear, sMonth, sDay] = startStr.split("-").map(Number);
+
+    const tasks = [];
+    state.calendar_day_metadata = state.calendar_day_metadata || {};
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || r.length === 0 || !r.some(cell => String(cell).trim().length > 0)) continue;
+
+      const rawDay = dayCol !== -1 ? String(r[dayCol] || "").trim() : String(i);
+      const dayNum = parseInt(rawDay, 10) || i;
+
+      const targetDate = new Date(sYear, sMonth - 1, sDay + (dayNum - 1));
+      const dateStr = getLocalDateString(targetDate);
+
+      const p2Subject = p2SubCol !== -1 ? String(r[p2SubCol] || "").trim() : "";
+      const p2Topic = p2TopCol !== -1 ? String(r[p2TopCol] || "").trim() : "";
+      const p1Subject = p1SubCol !== -1 ? String(r[p1SubCol] || "").trim() : "";
+      const p1Topic = p1TopCol !== -1 ? String(r[p1TopCol] || "").trim() : "";
+      const caTopic = caCol !== -1 ? String(r[caCol] || "").trim() : "";
+
+      const dayType = classifyDayType(p2Topic, p1Topic, caTopic);
+
+      // Save day metadata
+      state.calendar_day_metadata[dateStr] = {
+        dayNum,
+        dayType,
+        p2_subject: p2Subject,
+        p2_topic: p2Topic,
+        p1_subject: p1Subject,
+        p1_topic: p1Topic,
+        ca: caTopic
+      };
+
+      if (p2Topic) {
+        tasks.push({
+          id: `task-d${dayNum}-p2-${i}`,
+          date: dateStr,
+          dayNum: dayNum,
+          dayType: dayType,
+          phase: "Phase-2",
+          subject: p2Subject || "Phase-2",
+          topic: p2Topic,
+          type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "Descriptive Writing")),
+          time: "10:00 AM",
+          status: "pending",
+          p2_subject: p2Subject,
+          p2_topic: p2Topic,
+          p1_subject: p1Subject,
+          p1_topic: p1Topic,
+          ca: caTopic
+        });
+      }
+
+      if (p1Topic) {
+        tasks.push({
+          id: `task-d${dayNum}-p1-${i}`,
+          date: dateStr,
+          dayNum: dayNum,
+          dayType: dayType,
+          phase: "Phase-1",
+          subject: p1Subject || "Phase-1",
+          topic: p1Topic,
+          type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "MCQ Practice")),
+          time: "02:00 PM",
+          status: "pending",
+          p2_subject: p2Subject,
+          p2_topic: p2Topic,
+          p1_subject: p1Subject,
+          p1_topic: p1Topic,
+          ca: caTopic
+        });
+      }
+
+      if (caTopic) {
+        tasks.push({
+          id: `task-d${dayNum}-ca-${i}`,
+          date: dateStr,
+          dayNum: dayNum,
+          dayType: dayType,
+          phase: "General",
+          subject: "Current Affairs & Reports",
+          topic: caTopic,
+          type: "Current Affairs",
+          time: "06:00 PM",
+          status: "pending",
+          p2_subject: p2Subject,
+          p2_topic: p2Topic,
+          p1_subject: p1Subject,
+          p1_topic: p1Topic,
+          ca: caTopic
+        });
+      }
+    }
+
+    return tasks;
+  }
+
+  // Generic single-phase spreadsheet format
   const dateCol = findCol(["date", "day", "when", "scheduled", "timeline"]);
   const phaseCol = findCol(["phase", "tier", "stage", "part"]);
   const subjectCol = findCol(["subject", "paper", "section", "module", "course"]);
@@ -3890,7 +4092,6 @@ function mapScheduleRowsToTasks(rows) {
     const rawTime = timeCol !== -1 ? String(r[timeCol] || "").trim() : "";
     const rawStatus = statusCol !== -1 ? String(r[statusCol] || "").trim().toLowerCase() : "";
 
-    // Normalize Phase
     let phase = "General";
     const phaseLower = rawPhase.toLowerCase();
     if (phaseLower.includes("1") || phaseLower.includes("p1") || phaseLower.includes("objective") || phaseLower.includes("mcq")) {
@@ -3899,30 +4100,38 @@ function mapScheduleRowsToTasks(rows) {
       phase = "Phase-2";
     }
 
-    // Normalize Task Type
+    const dayType = classifyDayType(rawTopic, rawSubject, rawType);
+
     let taskType = "Study Task";
-    const typeLower = (rawType + " " + rawTopic).toLowerCase();
-    if (typeLower.includes("mcq") || typeLower.includes("objective") || typeLower.includes("spotlight")) {
-      taskType = "MCQ Practice";
-    } else if (typeLower.includes("descriptive") || typeLower.includes("writing") || typeLower.includes("essay") || typeLower.includes("precis")) {
-      taskType = "Descriptive Writing";
-    } else if (typeLower.includes("mock") || typeLower.includes("test") || typeLower.includes("full length")) {
-      taskType = "Mock Test";
-    } else if (typeLower.includes("revision") || typeLower.includes("review")) {
-      taskType = "Revision";
-    } else if (typeLower.includes("reading") || typeLower.includes("notes") || typeLower.includes("chapter")) {
-      taskType = "Reading / Notes";
+    if (dayType === "mix-test") taskType = "Mix Test";
+    else if (dayType === "chapter-test") taskType = "Chapter Test";
+    else if (dayType === "buffer-day") taskType = "Revision";
+    else {
+      const typeLower = (rawType + " " + rawTopic).toLowerCase();
+      if (typeLower.includes("mcq") || typeLower.includes("objective") || typeLower.includes("spotlight")) {
+        taskType = "MCQ Practice";
+      } else if (typeLower.includes("descriptive") || typeLower.includes("writing") || typeLower.includes("essay") || typeLower.includes("precis")) {
+        taskType = "Descriptive Writing";
+      } else if (typeLower.includes("mock") || typeLower.includes("test") || typeLower.includes("full length")) {
+        taskType = "Mock Test";
+      } else if (typeLower.includes("revision") || typeLower.includes("review")) {
+        taskType = "Revision";
+      } else if (typeLower.includes("reading") || typeLower.includes("notes") || typeLower.includes("chapter")) {
+        taskType = "Reading / Notes";
+      }
     }
 
     const isCompleted = ["completed", "done", "yes", "true", "1", "finished"].includes(rawStatus);
+    const dateStr = parseScheduleDate(rawDate);
 
     tasks.push({
       id: makeId("task"),
-      date: parseScheduleDate(rawDate),
+      date: dateStr,
       phase: phase,
       subject: rawSubject || (phase === "Phase-1" ? "General Awareness" : "ESI"),
       topic: rawTopic || "Scheduled Preparation Task",
       type: taskType,
+      dayType: dayType,
       time: rawTime || "",
       status: isCompleted ? "completed" : "pending"
     });
@@ -3931,50 +4140,120 @@ function mapScheduleRowsToTasks(rows) {
   return tasks;
 }
 
-// Generate a 30-Day RBI Grade B Exam Study Plan
-function generateDefaultSchedule() {
+// Generate RBI Grade B Exam Study Plan (loads 415-Day Official Schedule if available)
+function generateDefaultSchedule(startDateStr = null) {
+  const startStr = startDateStr || state.calendar_planStartDate || "2026-11-01";
+  state.calendar_planStartDate = startStr;
+  saveJSON("rbi_calendar_start_date", startStr);
+
+  const [sYear, sMonth, sDay] = startStr.split("-").map(Number);
+
+  // If official 415-day schedule data is present
+  if (typeof RBI_OFFICIAL_SCHEDULE_DATA !== "undefined" && Array.isArray(RBI_OFFICIAL_SCHEDULE_DATA) && RBI_OFFICIAL_SCHEDULE_DATA.length > 0) {
+    const tasks = [];
+    state.calendar_day_metadata = {};
+
+    for (const item of RBI_OFFICIAL_SCHEDULE_DATA) {
+      const dayNum = item.day;
+      const targetDate = new Date(sYear, sMonth - 1, sDay + (dayNum - 1));
+      const dateStr = getLocalDateString(targetDate);
+      const dayType = item.dayType || classifyDayType(item.p2_topic, item.p1_topic, item.ca);
+
+      state.calendar_day_metadata[dateStr] = {
+        dayNum: dayNum,
+        dayType: dayType,
+        p2_subject: item.p2_subject || "",
+        p2_topic: item.p2_topic || "",
+        p1_subject: item.p1_subject || "",
+        p1_topic: item.p1_topic || "",
+        ca: item.ca || ""
+      };
+
+      if (item.p2_topic) {
+        tasks.push({
+          id: `task-d${dayNum}-p2`,
+          date: dateStr,
+          dayNum: dayNum,
+          dayType: dayType,
+          phase: "Phase-2",
+          subject: item.p2_subject || "Phase-2",
+          topic: item.p2_topic,
+          type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "Descriptive Writing")),
+          time: "10:00 AM",
+          status: "pending",
+          p2_subject: item.p2_subject,
+          p2_topic: item.p2_topic,
+          p1_subject: item.p1_subject,
+          p1_topic: item.p1_topic,
+          ca: item.ca
+        });
+      }
+
+      if (item.p1_topic) {
+        tasks.push({
+          id: `task-d${dayNum}-p1`,
+          date: dateStr,
+          dayNum: dayNum,
+          dayType: dayType,
+          phase: "Phase-1",
+          subject: item.p1_subject || "Phase-1",
+          topic: item.p1_topic,
+          type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "MCQ Practice")),
+          time: "02:00 PM",
+          status: "pending",
+          p2_subject: item.p2_subject,
+          p2_topic: item.p2_topic,
+          p1_subject: item.p1_subject,
+          p1_topic: item.p1_topic,
+          ca: item.ca
+        });
+      }
+
+      if (item.ca) {
+        tasks.push({
+          id: `task-d${dayNum}-ca`,
+          date: dateStr,
+          dayNum: dayNum,
+          dayType: dayType,
+          phase: "General",
+          subject: "Current Affairs & Reports",
+          topic: item.ca,
+          type: "Current Affairs",
+          time: "06:00 PM",
+          status: "pending",
+          p2_subject: item.p2_subject,
+          p2_topic: item.p2_topic,
+          p1_subject: item.p1_subject,
+          p1_topic: item.p1_topic,
+          ca: item.ca
+        });
+      }
+    }
+
+    return tasks;
+  }
+
+  // Fallback 30-Day Plan if schedule data not loaded
   const plan = [];
   const today = new Date();
-
-  const subjectsAndTopics = [
+  const sampleTopics = [
     { phase: "Phase-1", subject: "General Awareness", topic: "Spotlight Nov 1-6 Current Affairs (Part 1 - 50 MCQs)", type: "MCQ Practice", time: "10:00 AM" },
-    { phase: "Phase-2", subject: "ESI", topic: "Chapter 1: National Income - Concepts & Methods of Measurement", type: "Descriptive Writing", time: "11:00 AM" },
+    { phase: "Phase-2", subject: "ESI", topic: "Chapter 1: National Income - Concepts & Measurement", type: "Descriptive Writing", time: "11:00 AM" },
     { phase: "Phase-1", subject: "Reasoning Ability", topic: "Puzzles & Seating Arrangement (Circular & Floor)", type: "MCQ Practice", time: "02:00 PM" },
     { phase: "Phase-2", subject: "Finance", topic: "Financial System in India - Structure & RBI Functions", type: "Descriptive Writing", time: "10:00 AM" },
     { phase: "Phase-1", subject: "Quantitative Aptitude", topic: "Data Interpretation (Bar & Pie) + Percentage/Ratio", type: "MCQ Practice", time: "03:00 PM" },
     { phase: "Phase-2", subject: "Management", topic: "Leadership Theories - Transformational vs Transactional", type: "Descriptive Writing", time: "11:00 AM" },
-    { phase: "General", subject: "Weekly Revision", topic: "Spotlight GA Week 1 & 2 Rapid Revision + Formula Review", type: "Revision", time: "04:00 PM" },
-    { phase: "Phase-1", subject: "English Language", topic: "Reading Comprehension & Para Jumbles", type: "MCQ Practice", time: "10:00 AM" },
-    { phase: "Phase-2", subject: "English Descriptive", topic: "Essay Writing: Digital Currency (CBDC) & Financial Inclusion", type: "Descriptive Writing", time: "11:00 AM" },
-    { phase: "Phase-1", subject: "Mock Test", topic: "Phase-1 Full Length Mock Speed Test 1 (200 MCQs)", type: "Mock Test", time: "09:00 AM" },
-    { phase: "Phase-2", subject: "ESI", topic: "Inflation - Types, Causes & Monetary Policy Transmission", type: "Descriptive Writing", time: "10:00 AM" },
-    { phase: "Phase-1", subject: "General Awareness", topic: "Spotlight Banking & Financial Awareness Quiz", type: "MCQ Practice", time: "02:00 PM" },
-    { phase: "Phase-2", subject: "Finance", topic: "Primary & Secondary Markets - SEBI Regulations", type: "Descriptive Writing", time: "11:00 AM" },
-    { phase: "Phase-1", subject: "Reasoning Ability", topic: "Critical Reasoning, Syllogisms & Machine Input", type: "MCQ Practice", time: "03:00 PM" },
-    { phase: "Phase-2", subject: "Management", topic: "Motivation Theories - Maslow, Herzberg & Vroom", type: "Descriptive Writing", time: "10:00 AM" },
-    { phase: "Phase-1", subject: "Quantitative Aptitude", topic: "Time & Work, Speed Distance & Quadratic Equations", type: "MCQ Practice", time: "02:00 PM" },
-    { phase: "Phase-2", subject: "ESI", topic: "Sustainable Development Goals (SDGs) & Environmental Issues", type: "Descriptive Writing", time: "11:00 AM" },
-    { phase: "Phase-1", subject: "English Language", topic: "Error Spotting & Vocabulary Enhancement", type: "MCQ Practice", time: "10:00 AM" },
-    { phase: "Phase-2", subject: "English Descriptive", topic: "Précis Writing: Economic Reforms in Post-Pandemic India", type: "Descriptive Writing", time: "03:00 PM" },
-    { phase: "Phase-1", subject: "Mock Test", topic: "Phase-1 Full Length Mock Exam 2 (Speed & Accuracy)", type: "Mock Test", time: "09:00 AM" },
-    { phase: "Phase-2", subject: "Finance", topic: "Corporate Governance in Public & Private Sector Banks", type: "Descriptive Writing", time: "10:00 AM" },
-    { phase: "Phase-1", subject: "General Awareness", topic: "Union Budget, Economic Survey & Government Schemes", type: "MCQ Practice", time: "02:00 PM" },
-    { phase: "Phase-2", subject: "Management", topic: "Communication - Channels, Barriers & Organizational Culture", type: "Descriptive Writing", time: "11:00 AM" },
-    { phase: "Phase-1", subject: "Reasoning Ability", topic: "Advanced Multi-Variable Puzzles & Coding-Decoding", type: "MCQ Practice", time: "03:00 PM" },
-    { phase: "Phase-2", subject: "ESI", topic: "Poverty Alleviation & Employment Generation Programs in India", type: "Descriptive Writing", time: "10:00 AM" },
-    { phase: "Phase-1", subject: "Quantitative Aptitude", topic: "Caselet Data Interpretation & Number Series", type: "MCQ Practice", time: "02:00 PM" },
-    { phase: "Phase-2", subject: "Finance & Mgmt", topic: "Composite Phase-2 Descriptive Writing Simulation", type: "Descriptive Writing", time: "10:00 AM" },
-    { phase: "Phase-1", subject: "Mock Test", topic: "Phase-1 Final Marathon Mock Test (All 4 Sections)", type: "Mock Test", time: "09:00 AM" },
-    { phase: "General", subject: "Full Revision", topic: "Consolidated Formulas, High-Yield Facts & Model Answers", type: "Revision", time: "10:00 AM" },
-    { phase: "General", subject: "Final Readiness", topic: "Exam Hall Time Strategy & Mindset Optimization", type: "Revision", time: "11:00 AM" }
+    { phase: "General", subject: "Weekly Revision", topic: "Spotlight GA Week 1 & 2 Rapid Revision + Formula Review", type: "Revision", time: "04:00 PM" }
   ];
 
-  for (let i = 0; i < subjectsAndTopics.length; i++) {
+  for (let i = 0; i < 30; i++) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
-    const item = subjectsAndTopics[i];
+    const item = sampleTopics[i % sampleTopics.length];
     plan.push({
       id: makeId("task"),
       date: getLocalDateString(d),
+      dayNum: i + 1,
+      dayType: i % 7 === 4 ? "chapter-test" : (i % 7 === 6 ? "buffer-day" : "normal-day"),
       phase: item.phase,
       subject: item.subject,
       topic: item.topic,
@@ -3987,6 +4266,24 @@ function generateDefaultSchedule() {
   return plan;
 }
 
+// Load official 415-Day Schedule
+function loadOfficialSchedule() {
+  if (state.calendar && state.calendar.length > 0) {
+    if (!confirm("Load the official 415-Day RBI Grade B Preparation Schedule? This will update your calendar schedule.")) return;
+  }
+  const startStr = ($("cal-plan-start-date")?.value) || state.calendar_planStartDate || "2026-11-01";
+  state.calendar_planStartDate = startStr;
+  saveJSON("rbi_calendar_start_date", startStr);
+  state.calendar = generateDefaultSchedule(startStr);
+  saveCalendarSchedule();
+  renderCalendar();
+  const statusElem = $("calendar-import-status");
+  if (statusElem) {
+    statusElem.textContent = `✓ Loaded Official 415-Day RBI Grade B Schedule (88 Chapter Tests, 30 Mix Tests, 23 Buffer Days)!`;
+    setTimeout(() => { statusElem.textContent = ""; }, 5000);
+  }
+}
+
 // Save calendar tasks into localStorage
 function saveCalendarSchedule() {
   saveJSON("rbi_study_schedule", state.calendar || []);
@@ -3994,11 +4291,12 @@ function saveCalendarSchedule() {
 
 // Renders the overall calendar screen
 function renderCalendar() {
-  if (!state.calendar) {
+  if (!state.calendar || state.calendar.length < 50) {
     state.calendar = generateDefaultSchedule();
     saveCalendarSchedule();
   }
 
+  rebuildCalendarMetadata();
   renderCalendarSummary();
   renderCalendarControls();
 
@@ -4058,7 +4356,7 @@ function renderCalendarSummary() {
   `;
 }
 
-// Updates month/year heading
+// Updates month/year heading & controls
 function renderCalendarControls() {
   const heading = $("cal-month-year-display");
   if (!heading) return;
@@ -4070,6 +4368,11 @@ function renderCalendarControls() {
   const year = state.calendar_currentDate.getFullYear();
   const month = state.calendar_currentDate.getMonth();
   heading.textContent = `${monthNames[month]} ${year}`;
+
+  const planStartInput = $("cal-plan-start-date");
+  if (planStartInput && state.calendar_planStartDate) {
+    planStartInput.value = state.calendar_planStartDate;
+  }
 }
 
 // Renders the 7-column Month Grid
@@ -4090,12 +4393,16 @@ function renderMonthGrid() {
 
   const tasks = state.calendar || [];
 
-  // Filter tasks by phase and status if set
+  // Filter tasks by phase, status, and day type
   const filteredTasks = tasks.filter(t => {
     if (state.calendar_filterPhase === "phase1" && t.phase !== "Phase-1") return false;
     if (state.calendar_filterPhase === "phase2" && t.phase !== "Phase-2") return false;
     if (state.calendar_filterStatus === "pending" && t.status === "completed") return false;
     if (state.calendar_filterStatus === "completed" && t.status !== "completed") return false;
+    if (state.calendar_filterDayType && state.calendar_filterDayType !== "all") {
+      const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
+      if (dType !== state.calendar_filterDayType) return false;
+    }
     return true;
   });
 
@@ -4134,10 +4441,25 @@ function renderMonthGrid() {
   grid.innerHTML = html;
 }
 
-// Render individual day cell HTML
+// Render individual day cell HTML with distinct markers for normal, chapter test, mix test, buffer days
 function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, dayTasks) {
   const isToday = dateStr === todayStr;
   const isSelected = dateStr === selectedStr;
+
+  const dayMeta = getDayMetadata(dateStr);
+  const dayType = dayMeta?.dayType || (dayTasks[0]?.dayType) || "normal-day";
+
+  // Build badge tag
+  let badgeHtml = "";
+  if (dayType === "chapter-test") {
+    badgeHtml = `<span class="day-badge-tag tag-chapter" title="Chapter Test">📝 Ch Test</span>`;
+  } else if (dayType === "mix-test") {
+    badgeHtml = `<span class="day-badge-tag tag-mix" title="Mix Test">🔥 Mix Test</span>`;
+  } else if (dayType === "buffer-day") {
+    badgeHtml = `<span class="day-badge-tag tag-buffer" title="Buffer Day / Revision">⏳ Buffer</span>`;
+  } else if (dayMeta?.dayNum) {
+    badgeHtml = `<span class="day-badge-tag tag-normal" title="Normal Study Day">D-${dayMeta.dayNum}</span>`;
+  }
 
   const countBadge = dayTasks.length > 0 ? `<span class="cal-day-task-count">${dayTasks.length}</span>` : "";
 
@@ -4150,7 +4472,7 @@ function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, day
     if (t.phase === "Phase-1") phaseClass = "phase-1";
     if (t.phase === "Phase-2") phaseClass = "phase-2";
     if (t.type === "Revision") phaseClass = "revision";
-    if (t.type === "Mock Test") phaseClass = "mock";
+    if (t.type === "Mock Test" || t.type === "Chapter Test" || t.type === "Mix Test") phaseClass = "mock";
 
     const doneClass = t.status === "completed" ? "is-completed" : "";
     const doneCheck = t.status === "completed" ? "✓ " : "• ";
@@ -4165,9 +4487,12 @@ function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, day
   }
 
   return `
-    <div class="cal-day-cell ${isOtherMonth ? 'is-other-month' : ''} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''}" data-date="${dateStr}">
+    <div class="cal-day-cell day-type-${dayType} ${isOtherMonth ? 'is-other-month' : ''} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''}" data-date="${dateStr}" data-day-type="${dayType}">
       <div class="cal-day-header">
-        <span class="cal-day-num">${dayNum}</span>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <span class="cal-day-num">${dayNum}</span>
+          ${badgeHtml}
+        </div>
         ${countBadge}
       </div>
       <div class="cal-day-events">
@@ -4175,6 +4500,122 @@ function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, day
       </div>
     </div>
   `;
+}
+
+// Build floating Hover Popover HTML showing today's Phase-1 and Phase-2 chapters and topics
+function buildPopoverHTML(dateStr, dayMeta) {
+  const dateObj = new Date(dateStr + "T00:00:00");
+  const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+  const formattedDate = dateObj.toLocaleDateString(undefined, options);
+
+  const dayType = dayMeta?.dayType || "normal-day";
+  let badgeLabel = "📘 Normal Class";
+  if (dayType === "chapter-test") badgeLabel = "📝 Chapter Test";
+  if (dayType === "mix-test") badgeLabel = "🔥 Mix Test";
+  if (dayType === "buffer-day") badgeLabel = "⏳ Buffer Day";
+
+  const dayTitle = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} • ${formattedDate}` : formattedDate;
+
+  const p2Subject = dayMeta?.p2_subject || "";
+  const p2Topic = dayMeta?.p2_topic || "";
+  const p1Subject = dayMeta?.p1_subject || "";
+  const p1Topic = dayMeta?.p1_topic || "";
+  const caTopic = dayMeta?.ca || "";
+
+  return `
+    <div class="popover-header">
+      <span class="popover-day-title">${escapeHTML(dayTitle)}</span>
+      <span class="popover-type-badge ${dayType}">${escapeHTML(badgeLabel)}</span>
+    </div>
+
+    <!-- Phase 2 Details -->
+    <div class="popover-sec p2">
+      <div class="popover-sec-label">
+        <span>📖</span>
+        <span>PHASE-2 (Descriptive / Subjective)</span>
+        ${p2Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p2Subject)}</span>` : ""}
+      </div>
+      <div class="popover-topic-text">${escapeHTML(p2Topic || "No Phase-2 topic scheduled for today")}</div>
+    </div>
+
+    <!-- Phase 1 Details -->
+    <div class="popover-sec p1">
+      <div class="popover-sec-label">
+        <span>🎯</span>
+        <span>PHASE-1 (Objective / MCQ)</span>
+        ${p1Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p1Subject)}</span>` : ""}
+      </div>
+      <div class="popover-topic-text">${escapeHTML(p1Topic || "No Phase-1 topic scheduled for today")}</div>
+    </div>
+
+    <!-- Current Affairs if present -->
+    ${caTopic ? `
+    <div class="popover-sec ca">
+      <div class="popover-sec-label">
+        <span>📰</span>
+        <span>CURRENT AFFAIRS &amp; DRILLS</span>
+      </div>
+      <div class="popover-topic-text">${escapeHTML(caTopic)}</div>
+    </div>
+    ` : ""}
+
+    <div class="popover-hint">Click day to view or mark tasks completed</div>
+  `;
+}
+
+// Show hover popover on calendar cell
+function showCalendarHoverPopover(e, cell) {
+  const popover = $("calendar-hover-popover");
+  if (!popover) return;
+
+  const dateStr = cell.dataset.date;
+  if (!dateStr) return;
+
+  const dayMeta = getDayMetadata(dateStr);
+  if (!dayMeta && !cell.querySelector(".cal-event-pill")) {
+    hideCalendarHoverPopover();
+    return;
+  }
+
+  popover.innerHTML = buildPopoverHTML(dateStr, dayMeta);
+  popover.style.display = "block";
+  popover.style.opacity = "1";
+
+  positionCalendarPopover(e.clientX, e.clientY, popover);
+}
+
+// Dynamically position hover popover keeping it inside viewport
+function positionCalendarPopover(mouseX, mouseY, popover) {
+  const pad = 14;
+  const popRect = popover.getBoundingClientRect();
+  const popW = popRect.width || 350;
+  const popH = popRect.height || 220;
+
+  let left = mouseX + pad;
+  let top = mouseY + pad;
+
+  // Viewport horizontal boundary check
+  if (left + popW > window.innerWidth - 12) {
+    left = mouseX - popW - pad;
+  }
+  if (left < 10) left = 10;
+
+  // Viewport vertical boundary check
+  if (top + popH > window.innerHeight - 12) {
+    top = mouseY - popH - pad;
+  }
+  if (top < 10) top = 10;
+
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+}
+
+// Hide hover popover
+function hideCalendarHoverPopover() {
+  const popover = $("calendar-hover-popover");
+  if (popover) {
+    popover.style.display = "none";
+  }
 }
 
 // Renders right-hand day detail panel
@@ -4189,7 +4630,24 @@ function renderSelectedDayTasks() {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const humanDate = dateObj.toLocaleDateString(undefined, options);
 
-  heading.textContent = humanDate;
+  const dayMeta = getDayMetadata(selDateStr);
+  let metaBadge = "";
+  if (dayMeta) {
+    let typeName = "📘 Normal Day";
+    if (dayMeta.dayType === "chapter-test") typeName = "📝 Chapter Test";
+    if (dayMeta.dayType === "mix-test") typeName = "🔥 Mix Test";
+    if (dayMeta.dayType === "buffer-day") typeName = "⏳ Buffer Day";
+    const dayNumStr = dayMeta.dayNum ? `Day ${dayMeta.dayNum} of 415 • ` : "";
+    metaBadge = `
+      <div style="margin-top: 4px;">
+        <span class="popover-type-badge ${dayMeta.dayType}" style="font-size:11px; padding:3px 9px;">
+          ${dayNumStr}${typeName}
+        </span>
+      </div>
+    `;
+  }
+
+  heading.innerHTML = `${escapeHTML(humanDate)}${metaBadge}`;
 
   const tasks = state.calendar || [];
   const dayTasks = tasks.filter(t => t.date === selDateStr);
@@ -4257,13 +4715,17 @@ function renderAgendaView() {
     if (state.calendar_filterPhase === "phase2" && t.phase !== "Phase-2") return false;
     if (state.calendar_filterStatus === "pending" && t.status === "completed") return false;
     if (state.calendar_filterStatus === "completed" && t.status !== "completed") return false;
+    if (state.calendar_filterDayType && state.calendar_filterDayType !== "all") {
+      const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
+      if (dType !== state.calendar_filterDayType) return false;
+    }
     return true;
   });
 
   if (filteredTasks.length === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 40px; color: var(--muted);">
-        No tasks match your selected phase or status filter.
+        No tasks match your selected phase, status, or day type filter.
       </div>
     `;
     return;
@@ -4284,10 +4746,24 @@ function renderAgendaView() {
     const dateObj = new Date(dateStr + "T00:00:00");
     const humanDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
+    const dayMeta = getDayMetadata(dateStr);
+    let agendaBadge = "";
+    if (dayMeta) {
+      let typeLabel = "📘 Normal Day";
+      if (dayMeta.dayType === "chapter-test") typeLabel = "📝 Chapter Test";
+      if (dayMeta.dayType === "mix-test") typeLabel = "🔥 Mix Test";
+      if (dayMeta.dayType === "buffer-day") typeLabel = "⏳ Buffer Day";
+      const dayNumStr = dayMeta.dayNum ? `Day ${dayMeta.dayNum} • ` : "";
+      agendaBadge = `<span class="popover-type-badge ${dayMeta.dayType}" style="font-size:10px; margin-left:8px; padding:1px 6px;">${dayNumStr}${typeLabel}</span>`;
+    }
+
     html += `
       <div class="agenda-date-group">
         <div class="agenda-date-header">
-          <span>📅 ${humanDate}</span>
+          <div>
+            <span>📅 ${humanDate}</span>
+            ${agendaBadge}
+          </div>
           <span style="font-size:12px; font-weight:normal; color:var(--muted);">${dateTasks.length} task(s)</span>
         </div>
         <div class="agenda-tasks-list">
@@ -5398,6 +5874,11 @@ document.addEventListener("DOMContentLoaded", () => {
     calExcelImport.addEventListener("change", handleCalendarExcelImport);
   }
 
+  const btnLoadOfficialSchedule = $("btn-load-official-schedule");
+  if (btnLoadOfficialSchedule) {
+    btnLoadOfficialSchedule.addEventListener("click", loadOfficialSchedule);
+  }
+
   const btnLoadSampleSchedule = $("btn-load-sample-schedule");
   if (btnLoadSampleSchedule) {
     btnLoadSampleSchedule.addEventListener("click", loadSampleSchedule);
@@ -5416,6 +5897,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnClearSchedule = $("btn-clear-schedule");
   if (btnClearSchedule) {
     btnClearSchedule.addEventListener("click", clearSchedule);
+  }
+
+  const btnApplyPlanStart = $("btn-apply-plan-start");
+  if (btnApplyPlanStart) {
+    btnApplyPlanStart.addEventListener("click", () => {
+      const input = $("cal-plan-start-date");
+      if (input && input.value) {
+        state.calendar_planStartDate = input.value;
+        saveJSON("rbi_calendar_start_date", input.value);
+        state.calendar = generateDefaultSchedule(input.value);
+        saveCalendarSchedule();
+        renderCalendar();
+        const statusElem = $("calendar-import-status");
+        if (statusElem) {
+          statusElem.textContent = `✓ Plan rescheduled starting from ${input.value}!`;
+          setTimeout(() => { statusElem.textContent = ""; }, 4000);
+        }
+      }
+    });
   }
 
   const calBtnPrevMonth = $("cal-btn-prev-month");
@@ -5441,6 +5941,15 @@ document.addEventListener("DOMContentLoaded", () => {
     calBtnToday.addEventListener("click", () => {
       state.calendar_currentDate = new Date();
       state.calendar_selectedDate = getLocalDateString(new Date());
+      renderCalendar();
+    });
+  }
+
+  const calFilterDayType = $("cal-filter-day-type");
+  if (calFilterDayType) {
+    calFilterDayType.value = state.calendar_filterDayType || "all";
+    calFilterDayType.addEventListener("change", (e) => {
+      state.calendar_filterDayType = e.target.value;
       renderCalendar();
     });
   }
@@ -5479,7 +5988,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const daysGrid = $("calendar-days-grid");
   if (daysGrid) {
+    daysGrid.addEventListener("mousemove", (e) => {
+      const cell = e.target.closest(".cal-day-cell");
+      if (cell) {
+        showCalendarHoverPopover(e, cell);
+      } else {
+        hideCalendarHoverPopover();
+      }
+    });
+
+    daysGrid.addEventListener("mouseleave", () => {
+      hideCalendarHoverPopover();
+    });
+
     daysGrid.addEventListener("click", (e) => {
+      hideCalendarHoverPopover();
       const cell = e.target.closest(".cal-day-cell");
       if (cell && cell.dataset.date) {
         state.calendar_selectedDate = cell.dataset.date;
@@ -5487,6 +6010,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
+  window.addEventListener("scroll", hideCalendarHoverPopover, { passive: true });
 
   const dayTasksList = $("cal-selected-day-tasks");
   if (dayTasksList) {

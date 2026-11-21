@@ -741,7 +741,8 @@
         <div class="sample-pills-row">
           <span class="sample-label">Quick Actions:</span>
           <div class="sample-actions">
-            <button type="button" id="btn-load-sample-schedule" class="sample-pill">⚡ Load 30-Day RBI Plan</button>
+            <button type="button" id="btn-load-official-schedule" class="sample-pill primary-pill" style="font-weight:700; color:#003366; border-color:#93c5fd; background:#eff6ff;">⚡ Load Official 415-Day Plan</button>
+            <button type="button" id="btn-load-sample-schedule" class="sample-pill">⚡ Load 30-Day Plan</button>
             <button type="button" id="btn-download-schedule-template" class="sample-pill">⬇️ Download Template (.csv)</button>
             <button type="button" id="btn-export-schedule-csv" class="sample-pill">📤 Export My Schedule (.csv)</button>
             <button type="button" id="btn-clear-schedule" class="sample-pill danger-pill">🗑️ Clear Schedule</button>
@@ -753,6 +754,22 @@
       <!-- Schedule Stats & Progress Bar -->
       <div id="calendar-progress-bar" class="schedule-summary-bar"></div>
 
+      <!-- Calendar Day Types Legend & Plan Start Bar -->
+      <div class="calendar-legend-config-bar">
+        <div class="cal-legend-group">
+          <span class="legend-label">Day Types:</span>
+          <span class="legend-badge-item badge-normal"><span class="legend-chip normal"></span> Normal Day (274)</span>
+          <span class="legend-badge-item badge-chapter"><span class="legend-chip chapter"></span> 📝 Chapter Test (88)</span>
+          <span class="legend-badge-item badge-mix"><span class="legend-chip mix"></span> 🔥 Mix Test (30)</span>
+          <span class="legend-badge-item badge-buffer"><span class="legend-chip buffer"></span> ⏳ Buffer Day (23)</span>
+        </div>
+        <div class="cal-plan-start-group">
+          <label for="cal-plan-start-date">Plan Start:</label>
+          <input type="date" id="cal-plan-start-date" value="2026-11-01" class="cal-date-input">
+          <button type="button" id="btn-apply-plan-start" class="btn-subtle-apply">Apply</button>
+        </div>
+      </div>
+
       <!-- Calendar Controls: Month Navigation & Filters -->
       <div class="calendar-controls-bar">
         <div class="cal-nav-group">
@@ -763,6 +780,13 @@
         </div>
 
         <div class="cal-filter-group">
+          <select id="cal-filter-day-type" class="cal-select">
+            <option value="all">All Day Types</option>
+            <option value="normal-day">Normal Class (274)</option>
+            <option value="chapter-test">📝 Chapter Test (88)</option>
+            <option value="mix-test">🔥 Mix Test (30)</option>
+            <option value="buffer-day">⏳ Buffer Day (23)</option>
+          </select>
           <select id="cal-filter-phase" class="cal-select">
             <option value="all">All Phases</option>
             <option value="phase1">Phase-1 (Objective)</option>
@@ -867,10 +891,14 @@
           </form>
         </div>
       </div>
+
+      <!-- Floating Hover Popover for Calendar Days -->
+      <div id="calendar-hover-popover" class="cal-hover-popover" style="display: none;" role="tooltip"></div>
     </section>
   </main>
 
   <script src="prompt.js"></script>
+  <script src="schedule_data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
