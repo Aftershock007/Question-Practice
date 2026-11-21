@@ -85,6 +85,12 @@ function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.hidden = true);
   const target = $("screen-" + name);
   if (target) target.hidden = false;
+
+  const header = $("app-header");
+  if (header) {
+    header.style.display = (name === "exam") ? "none" : "";
+  }
+
   window.scrollTo(0, 0);
 }
 
@@ -424,11 +430,15 @@ function startTest() {
     blockPaste: blockPaste,
     questions: questionsCopy,
     answers: answers,
-    scores: scores
+    scores: scores,
+    visitedQuestions: [0],
+    markedForReview: []
   };
 
   state.test = test;
   state.currentIndex = 0;
+  state.visitedQuestions = new Set([0]);
+  state.markedForReview = new Set();
   state.endTime = Date.now() + totalMinutes * 60 * 1000;
   test.endTime = state.endTime;
 
@@ -438,6 +448,9 @@ function startTest() {
   renderPalette();
   showQuestion(0);
   showScreen("exam");
+
+  const header = $("app-header");
+  if (header) header.style.display = "none";
 
   const nav = document.querySelector("#app-header nav");
   if (nav) nav.hidden = true;
@@ -481,12 +494,25 @@ function showQuestion(index) {
   state.currentIndex = index;
   state.questionShownAt = Date.now();
 
+  state.visitedQuestions = state.visitedQuestions || new Set([0]);
+  state.visitedQuestions.add(index);
+
   const q = state.test.questions[index];
   const totalQ = state.test.questions.length;
 
-  $("exam-qpos").textContent = `Question ${index + 1} of ${totalQ}`;
-  $("exam-marks").textContent = `[${q.paper}] ${q.marks} marks · ${q.wordLimit} words`;
+  $("exam-qpos").textContent = `Question No. ${index + 1}`;
+  $("exam-marks").textContent = `Marks: ${q.marks}.00 · Word Limit: ${q.wordLimit}`;
   $("exam-question-text").textContent = q.text;
+
+  const secName = $("exam-section-name");
+  if (secName) {
+    secName.textContent = `${q.paper || "Descriptive Test"} (Keyboard Entry)`;
+  }
+
+  const candRoll = document.querySelector(".cand-roll");
+  if (candRoll) {
+    candRoll.innerHTML = `Roll No: <strong>RBI-2026-P2</strong> | Paper: <strong>${escapeHTML(q.paper || "General")}</strong>`;
+  }
 
   const ans = state.test.answers[q.id] || { text: "", wordCount: 0, secondsSpent: 0 };
   const textarea = $("exam-answer");
@@ -495,10 +521,15 @@ function showQuestion(index) {
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
   $("btn-prev").disabled = (index === 0);
-  $("btn-next").disabled = (index === totalQ - 1);
+  const btnNext = $("btn-next");
+  if (btnNext) {
+    btnNext.textContent = (index === totalQ - 1) ? "Save Answer" : "Save & Next ▶";
+    btnNext.disabled = false;
+  }
 
   updateWordCount();
   renderPalette();
+  updateExamSummary();
 }
 
 // Persist the current answer text and accumulate elapsed time for active question
@@ -525,6 +556,9 @@ function storeCurrentAnswer() {
     ans.secondsSpent = (ans.secondsSpent || 0) + elapsed;
     state.questionShownAt = now;
   }
+
+  state.test.visitedQuestions = Array.from(state.visitedQuestions || [0]);
+  state.test.markedForReview = Array.from(state.markedForReview || []);
 
   saveJSON("rbi_active_test", state.test);
 }
@@ -573,8 +607,8 @@ function updateWordCount() {
 
   const wcElem = $("exam-wordcount");
   if (wcElem) {
-    wcElem.textContent = `${count} / ${limit} words`;
-    wcElem.className = "";
+    wcElem.innerHTML = `Words typed: <strong>${count}</strong> / ${limit} words`;
+    wcElem.className = "rbi-wc-indicator";
     if (count > limit) {
       wcElem.classList.add("over-limit");
     } else if (count >= 0.9 * limit) {
@@ -586,33 +620,117 @@ function updateWordCount() {
 
   const paletteBtn = document.querySelector(`#exam-palette button[data-index="${state.currentIndex}"]`);
   if (paletteBtn) {
-    if (count > 0) {
+    const qWcSpan = paletteBtn.querySelector(".palette-wc");
+    if (qWcSpan) {
+      qWcSpan.textContent = count === 1 ? "1 word" : `${count} words`;
+    }
+    const isMarked = state.markedForReview && state.markedForReview.has(currentQ.id);
+    paletteBtn.classList.remove("answered", "not-answered", "review", "answered-review", "not-visited");
+    if (isMarked && count > 0) {
+      paletteBtn.classList.add("answered-review");
+    } else if (isMarked) {
+      paletteBtn.classList.add("review");
+    } else if (count > 0) {
       paletteBtn.classList.add("answered");
     } else {
-      paletteBtn.classList.remove("answered");
+      paletteBtn.classList.add("not-answered");
     }
   }
+
+  updateExamSummary();
 }
 
-// Render question navigation palette buttons showing answered status
+// Render question navigation palette buttons showing answered status and words typed
 function renderPalette() {
   const palette = $("exam-palette");
   if (!palette || !state.test) return;
   palette.innerHTML = "";
+
+  state.visitedQuestions = state.visitedQuestions || new Set([0]);
+  state.markedForReview = state.markedForReview || new Set();
+
   state.test.questions.forEach((q, idx) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.textContent = String(idx + 1);
     btn.dataset.index = String(idx);
+    btn.className = "exam-palette-btn";
+
     const ans = state.test.answers[q.id];
-    if (ans && ans.wordCount > 0) {
+    const wc = ans ? (ans.wordCount || 0) : 0;
+    const isAnswered = wc > 0;
+    const isMarked = state.markedForReview.has(q.id);
+    const isVisited = state.visitedQuestions.has(idx);
+
+    if (isMarked && isAnswered) {
+      btn.classList.add("answered-review");
+    } else if (isMarked) {
+      btn.classList.add("review");
+    } else if (isAnswered) {
       btn.classList.add("answered");
+    } else if (isVisited) {
+      btn.classList.add("not-answered");
+    } else {
+      btn.classList.add("not-visited");
     }
+
     if (idx === state.currentIndex) {
       btn.classList.add("current");
     }
+
+    const wcText = wc === 1 ? "1 word" : `${wc} words`;
+    btn.innerHTML = `<span class="palette-qnum">${idx + 1}</span><span class="palette-wc">${wcText}</span>`;
     palette.appendChild(btn);
   });
+
+  updateExamSummary();
+}
+
+// Update status counts across legend, sidebar summary, and submit confirmation modal
+function updateExamSummary() {
+  if (!state.test) return;
+  const questions = state.test.questions;
+  const total = questions.length;
+  let answered = 0;
+  let notAnswered = 0;
+  let markedReview = 0;
+  let notVisited = 0;
+
+  state.visitedQuestions = state.visitedQuestions || new Set([0]);
+  state.markedForReview = state.markedForReview || new Set();
+
+  questions.forEach((q, idx) => {
+    const ans = state.test.answers[q.id];
+    const isAnswered = ans && ans.wordCount > 0;
+    const isMarked = state.markedForReview.has(q.id);
+    const isVisited = state.visitedQuestions.has(idx);
+
+    if (isMarked) {
+      markedReview++;
+    }
+    if (isAnswered) {
+      answered++;
+    } else if (isVisited) {
+      notAnswered++;
+    } else {
+      notVisited++;
+    }
+  });
+
+  const sumTotal = $("summary-total"); if (sumTotal) sumTotal.textContent = total;
+  const sumAns = $("summary-answered"); if (sumAns) sumAns.textContent = answered;
+  const sumNotAns = $("summary-not-answered"); if (sumNotAns) sumNotAns.textContent = notAnswered;
+  const sumRev = $("summary-review"); if (sumRev) sumRev.textContent = markedReview;
+  const sumNotVis = $("summary-not-visited"); if (sumNotVis) sumNotVis.textContent = notVisited;
+
+  const legAns = document.querySelector(".legend-badge.answered"); if (legAns) legAns.textContent = answered;
+  const legNotAns = document.querySelector(".legend-badge.not-answered"); if (legNotAns) legNotAns.textContent = notAnswered;
+  const legNotVis = document.querySelector(".legend-badge.not-visited"); if (legNotVis) legNotVis.textContent = notVisited;
+  const legRev = document.querySelector(".legend-badge.review"); if (legRev) legRev.textContent = markedReview;
+
+  const modTotal = $("modal-sum-total"); if (modTotal) modTotal.textContent = total;
+  const modAns = $("modal-sum-answered"); if (modAns) modAns.textContent = answered;
+  const modNotAns = $("modal-sum-not-answered"); if (modNotAns) modNotAns.textContent = notAnswered;
+  const modRev = $("modal-sum-marked"); if (modRev) modRev.textContent = markedReview;
 }
 
 // Intercept paste and drag-and-drop actions when paste restriction is enabled
@@ -654,6 +772,9 @@ function finishTest(auto) {
   const nav = document.querySelector("#app-header nav");
   if (nav) nav.hidden = false;
 
+  const header = $("app-header");
+  if (header) header.style.display = "";
+
   const modal = $("confirm-submit");
   if (modal) modal.hidden = true;
 
@@ -692,6 +813,12 @@ function checkResumeActiveTest() {
 function resumeExam() {
   state.currentIndex = 0;
   state.questionShownAt = 0;
+  state.visitedQuestions = new Set(state.test.visitedQuestions || [0]);
+  state.markedForReview = new Set(state.test.markedForReview || []);
+
+  const header = $("app-header");
+  if (header) header.style.display = "none";
+
   renderPalette();
   showQuestion(0);
   showScreen("exam");
@@ -1052,6 +1179,84 @@ function clearAllHistory() {
   }
 }
 
+// Update the visibility and count of the bank batch delete and add buttons based on checkbox selection
+function updateBankBatchState() {
+  const checkboxes = document.querySelectorAll("#bank-list .bank-select-check");
+  const checked = document.querySelectorAll("#bank-list .bank-select-check:checked");
+  const count = checked.length;
+
+  const countElem = $("bank-selected-count");
+  if (countElem) countElem.textContent = count;
+
+  const addCountElem = $("bank-add-selected-count");
+  if (addCountElem) addCountElem.textContent = count;
+
+  const btnDeleteSelected = $("btn-bank-delete-selected");
+  if (btnDeleteSelected) {
+    btnDeleteSelected.style.display = count > 0 ? "inline-block" : "none";
+  }
+
+  const btnAddSelected = $("btn-bank-add-selected");
+  if (btnAddSelected) {
+    btnAddSelected.style.display = count > 0 ? "inline-block" : "none";
+  }
+
+  const selectAll = $("bank-select-all");
+  if (selectAll) {
+    selectAll.checked = checkboxes.length > 0 && count === checkboxes.length;
+    selectAll.indeterminate = count > 0 && count < checkboxes.length;
+  }
+}
+
+// Toggle selection of all question checkboxes in the bank list
+function handleSelectAllBank(event) {
+  const checked = event.target.checked;
+  const checkboxes = document.querySelectorAll("#bank-list .bank-select-check");
+  checkboxes.forEach(cb => { cb.checked = checked; });
+  updateBankBatchState();
+}
+
+// Delete all questions currently checked in the question bank list
+function handleDeleteSelectedBank() {
+  const checked = document.querySelectorAll("#bank-list .bank-select-check:checked");
+  const idsToDelete = new Set(Array.from(checked).map(cb => cb.dataset.id));
+  if (idsToDelete.size === 0) return;
+
+  if (confirm(`Permanently delete ${idsToDelete.size} selected question(s) from Question Bank? This cannot be undone.`)) {
+    let bank = loadJSON("rbi_question_bank", []);
+    bank = bank.filter(q => !idsToDelete.has(q.id));
+    saveJSON("rbi_question_bank", bank);
+    renderBank();
+  }
+}
+
+// Add all questions currently checked in the question bank into today's test setup
+function handleAddSelectedBank() {
+  const checked = document.querySelectorAll("#bank-list .bank-select-check:checked");
+  const idsToAdd = new Set(Array.from(checked).map(cb => cb.dataset.id));
+  if (idsToAdd.size === 0) return;
+
+  const bank = loadJSON("rbi_question_bank", []);
+  let addedCount = 0;
+  bank.forEach(q => {
+    if (idsToAdd.has(q.id)) {
+      if (!state.setup.questions.some(sq => sq.id === q.id)) {
+        state.setup.questions.push(JSON.parse(JSON.stringify(q)));
+        addedCount++;
+      }
+    }
+  });
+
+  if (addedCount > 0) {
+    saveSetup();
+    renderSetupList();
+    alert(`Added ${addedCount} question(s) to today's test.`);
+  } else {
+    alert("All selected questions are already in today's test.");
+  }
+  updateBankBatchState();
+}
+
 // Render the questions stored in the question bank based on search and paper filters
 function renderBank() {
   const bank = loadJSON("rbi_question_bank", []);
@@ -1071,10 +1276,23 @@ function renderBank() {
     return true;
   });
 
+  const batchActions = $("bank-batch-actions");
+  if (batchActions) {
+    batchActions.style.display = filtered.length > 0 ? "flex" : "none";
+  }
+
+  const bankTotalInfo = $("bank-total-info");
+  if (bankTotalInfo) {
+    bankTotalInfo.textContent = filtered.length === bank.length
+      ? `${bank.length} questions`
+      : `Showing ${filtered.length} of ${bank.length} questions`;
+  }
+
   listElem.innerHTML = "";
 
   if (filtered.length === 0) {
     listElem.innerHTML = "<p>No questions found matching your filter.</p>";
+    updateBankBatchState();
     return;
   }
 
@@ -1089,19 +1307,26 @@ function renderBank() {
     const topicText = q.topic ? ` · Topic: ${escapeHTML(q.topic)}` : "";
 
     card.innerHTML = `
-      <div class="bank-card-header">
-        <strong>[${escapeHTML(q.paper)}]</strong> ${escapeHTML(q.marks)} marks (${escapeHTML(q.wordLimit)} words)${topicText} · ${modelNote}
-      </div>
-      <div class="bank-card-text">${escapeHTML(snippet)}</div>
-      <div class="bank-card-actions">
-        <button type="button" class="btn-bank-add" data-id="${escapeHTML(q.id)}">Add to today's test</button>
-        <button type="button" class="btn-bank-edit secondary" data-id="${escapeHTML(q.id)}">Edit</button>
-        <button type="button" class="btn-bank-delete danger" data-id="${escapeHTML(q.id)}">Delete from bank</button>
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <input type="checkbox" class="bank-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select question" style="margin-top: 4px; transform: scale(1.15); cursor: pointer;">
+        <div style="flex: 1; min-width: 0;">
+          <div class="bank-card-header">
+            <strong>[${escapeHTML(q.paper)}]</strong> ${escapeHTML(q.marks)} marks (${escapeHTML(q.wordLimit)} words)${topicText} · ${modelNote}
+          </div>
+          <div class="bank-card-text">${escapeHTML(snippet)}</div>
+          <div class="bank-card-actions">
+            <button type="button" class="btn-bank-add" data-id="${escapeHTML(q.id)}">Add to today's test</button>
+            <button type="button" class="btn-bank-edit secondary" data-id="${escapeHTML(q.id)}">Edit</button>
+            <button type="button" class="btn-bank-delete danger" data-id="${escapeHTML(q.id)}">Delete from bank</button>
+          </div>
+        </div>
       </div>
     `;
 
     listElem.appendChild(card);
   });
+
+  updateBankBatchState();
 }
 
 // Add a single question from the Question Bank into today's setup list
@@ -1867,15 +2092,72 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnPrev = $("btn-prev");
   if (btnPrev) {
     btnPrev.addEventListener("click", () => {
-      if (state.currentIndex > 0) showQuestion(state.currentIndex - 1);
+      if (state.currentIndex > 0) {
+        storeCurrentAnswer();
+        showQuestion(state.currentIndex - 1);
+      }
     });
   }
 
   const btnNext = $("btn-next");
   if (btnNext) {
     btnNext.addEventListener("click", () => {
-      if (state.test && state.currentIndex < state.test.questions.length - 1) {
+      if (state.test) {
+        storeCurrentAnswer();
+        if (state.currentIndex < state.test.questions.length - 1) {
+          showQuestion(state.currentIndex + 1);
+        } else {
+          renderPalette();
+          updateExamSummary();
+        }
+      }
+    });
+  }
+
+  const btnClearAnswer = $("btn-clear-answer");
+  if (btnClearAnswer) {
+    btnClearAnswer.addEventListener("click", () => {
+      if (!state.test) return;
+      const currentQ = state.test.questions[state.currentIndex];
+      if (!currentQ) return;
+      const textarea = $("exam-answer");
+      if (textarea && textarea.value.trim().length > 0) {
+        if (confirm("Are you sure you want to clear your response for this question?")) {
+          textarea.value = "";
+          if (state.test.answers[currentQ.id]) {
+            state.test.answers[currentQ.id].text = "";
+            state.test.answers[currentQ.id].wordCount = 0;
+          }
+          if (state.markedForReview) {
+            state.markedForReview.delete(currentQ.id);
+          }
+          saveJSON("rbi_active_test", state.test);
+          updateWordCount();
+          renderPalette();
+          updateExamSummary();
+        }
+      }
+    });
+  }
+
+  const btnMarkReview = $("btn-mark-review");
+  if (btnMarkReview) {
+    btnMarkReview.addEventListener("click", () => {
+      if (!state.test) return;
+      const currentQ = state.test.questions[state.currentIndex];
+      if (!currentQ) return;
+      storeCurrentAnswer();
+      state.markedForReview = state.markedForReview || new Set();
+      if (state.markedForReview.has(currentQ.id)) {
+        state.markedForReview.delete(currentQ.id);
+      } else {
+        state.markedForReview.add(currentQ.id);
+      }
+      if (state.currentIndex < state.test.questions.length - 1) {
         showQuestion(state.currentIndex + 1);
+      } else {
+        renderPalette();
+        updateExamSummary();
       }
     });
   }
@@ -1904,9 +2186,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Context menu prevention during exam
+  window.addEventListener("contextmenu", (e) => {
+    if (state.test) {
+      e.preventDefault();
+    }
+  });
+
   const btnSubmit = $("btn-submit");
   if (btnSubmit) {
     btnSubmit.addEventListener("click", () => {
+      storeCurrentAnswer();
+      updateExamSummary();
       const modal = $("confirm-submit");
       if (modal) modal.hidden = false;
     });
@@ -2069,8 +2360,29 @@ document.addEventListener("DOMContentLoaded", () => {
     btnBankRandom.addEventListener("click", handleAddRandomQuestions);
   }
 
+  const bankSelectAll = $("bank-select-all");
+  if (bankSelectAll) {
+    bankSelectAll.addEventListener("change", handleSelectAllBank);
+  }
+
+  const btnBankDeleteSelected = $("btn-bank-delete-selected");
+  if (btnBankDeleteSelected) {
+    btnBankDeleteSelected.addEventListener("click", handleDeleteSelectedBank);
+  }
+
+  const btnBankAddSelected = $("btn-bank-add-selected");
+  if (btnBankAddSelected) {
+    btnBankAddSelected.addEventListener("click", handleAddSelectedBank);
+  }
+
   const bankList = $("bank-list");
   if (bankList) {
+    bankList.addEventListener("change", (e) => {
+      if (e.target && e.target.classList.contains("bank-select-check")) {
+        updateBankBatchState();
+      }
+    });
+
     bankList.addEventListener("click", (e) => {
       const addBtn = e.target.closest(".btn-bank-add");
       if (addBtn) {
