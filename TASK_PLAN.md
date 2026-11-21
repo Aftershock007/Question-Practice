@@ -714,7 +714,7 @@ Fill `EVAL_PROMPT_TEMPLATE` with `fillTemplate()` using:
 
 Then add this line at the very top of the returned string: `"QUESTION " + (index + 1) + " OF " + test.questions.length + "\n"`.
 
-**Important:** Do **not** run `fillTemplate` on the user's answer text after inserting it (if the user's answer contains `{{` it must stay as it is). Since `fillTemplate` replaces in one pass on the template only, this is already safe – just do not call it twice.
+**Important:** Do **not** run `fillTemplate` on the user's answer text after inserting it (if the user's answer contains curly braces or markers it must stay as it is). Since `fillTemplate` replaces in one pass on the template only, this is already safe – just do not call it twice.
 
 ### 7.2 `buildCombinedText(test)` → returns a string
 - `fillTemplate(COMBINED_HEADER_TEMPLATE, { DATE, COUNT, TOTAL_MINUTES, USED_TIME: formatDuration(test.usedSeconds), AUTO_NOTE: test.autoSubmitted ? " (auto-submitted, time over)" : "" })`
