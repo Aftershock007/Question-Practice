@@ -47,7 +47,7 @@
           </div>
           <div class="upload-text-group">
             <strong>Upload questions from DOCX or PDF</strong>
-            <span>Extracts questions, 5 options (A–E), explanations, and answer keys automatically</span>
+            <span>Extracts questions, 5 options (A-E), explanations, and answer keys automatically</span>
           </div>
           <label class="btn-minimal-primary">
             Browse Document
@@ -156,7 +156,7 @@
           <div class="rbi-emblem">🏛️</div>
           <div>
             <h3>RESERVE BANK OF INDIA</h3>
-            <p>Phase-I Online Examination — Objective MCQ Console</p>
+            <p>Phase-I Online Examination - Objective MCQ Console</p>
           </div>
         </div>
         <div class="rbi-candidate-box">
@@ -504,7 +504,7 @@
           <div class="rbi-emblem">🏛️</div>
           <div>
             <h3>RESERVE BANK OF INDIA</h3>
-            <p>Phase-II Online Examination — Descriptive Test Console</p>
+            <p>Phase-II Online Examination - Descriptive Test Console</p>
           </div>
         </div>
         <div class="rbi-candidate-box">
@@ -708,16 +708,16 @@
       </div>
     </section>
 
-    <!-- Screen: Study Plan & Calendar -->
-    <section id="screen-calendar" class="screen" hidden>
+    <!-- Screen: Phase-1 Study Plan & Exam Marks Calendar -->
+    <section id="screen-calendar-p1" class="screen" hidden>
       <div class="setup-header">
         <div class="setup-title-group">
-          <h2>📅 Study Plan &amp; Exam Schedule</h2>
-          <p class="setup-subtitle">Import your study plan from Excel (.xlsx, .xls, .csv) or manage your daily schedule interactively.</p>
+          <h2>📅 Phase-1: Objective Exam &amp; Study Schedule</h2>
+          <p class="setup-subtitle">Daily Objective drill schedule (Quant, Reasoning, English, General Awareness &amp; Spotlight) with integrated exam marks tracking.</p>
         </div>
       </div>
 
-      <!-- Schedule Import Card -->
+      <!-- Schedule Import Card for Phase-1 -->
       <div class="minimal-upload-card calendar-upload-card">
         <div class="upload-drop-zone">
           <div class="upload-icon-circle">
@@ -729,32 +729,44 @@
             </svg>
           </div>
           <div class="upload-text-group">
-            <strong>Import Study Schedule from Excel (.xlsx, .xls, .csv)</strong>
-            <span>Upload any spreadsheet with your study timetable. Auto-maps columns: Date, Subject, Topic, Phase, Mode, Time, Status.</span>
+            <strong>Import Study Schedule from Excel (.xlsx, .csv)</strong>
+            <span>Upload any timetable spreadsheet. Select starting date and how many days from the beginning you have already finished.</span>
           </div>
-          <label class="btn-minimal-primary">
-            Upload Excel File
-            <input id="calendar-excel-import" type="file" accept=".xlsx,.xls,.csv" hidden>
+
+          <div class="upload-config-inputs">
+            <label class="upload-field-label">
+              <span>📅 Plan Start Date:</span>
+              <input type="date" id="p1-cal-upload-start-date" value="2026-11-01" class="upload-date-input">
+            </label>
+            <label class="upload-field-label">
+              <span>✅ Days Finished from Start:</span>
+              <input type="number" id="p1-cal-upload-days-finished" min="0" max="415" value="0" placeholder="0" class="upload-num-input">
+            </label>
+          </div>
+
+          <label class="btn-minimal-primary upload-excel-btn">
+            Upload Excel (.xlsx)
+            <input id="p1-calendar-excel-import" type="file" accept=".xlsx,.xls,.csv" hidden>
           </label>
         </div>
 
         <div class="sample-pills-row">
           <span class="sample-label">Quick Actions:</span>
           <div class="sample-actions">
-            <button type="button" id="btn-load-official-schedule" class="sample-pill primary-pill" style="font-weight:700; color:#003366; border-color:#93c5fd; background:#eff6ff;">⚡ Load Official 415-Day Plan</button>
-            <button type="button" id="btn-load-sample-schedule" class="sample-pill">⚡ Load 30-Day Plan</button>
-            <button type="button" id="btn-download-schedule-template" class="sample-pill">⬇️ Download Template (.csv)</button>
-            <button type="button" id="btn-export-schedule-csv" class="sample-pill">📤 Export My Schedule (.csv)</button>
-            <button type="button" id="btn-clear-schedule" class="sample-pill danger-pill">🗑️ Clear Schedule</button>
+            <button type="button" id="btn-p1-load-official-schedule" class="sample-pill primary-pill" style="font-weight:700; color:#003366; border-color:#93c5fd; background:#eff6ff;">⚡ Load Official 415-Day Plan</button>
+            <button type="button" id="btn-p1-apply-config" class="sample-pill" style="font-weight:600; color:#059669; border-color:#a7f3d0; background:#f0fdf4;">✓ Apply Start Date &amp; Finished Days</button>
+            <button type="button" id="btn-p1-download-template" class="sample-pill">⬇️ Download Template (.csv)</button>
+            <button type="button" id="btn-p1-export-csv" class="sample-pill">📤 Export Schedule (.csv)</button>
+            <button type="button" id="btn-p1-clear-schedule" class="sample-pill danger-pill">🗑️ Clear Schedule</button>
           </div>
         </div>
-        <span id="calendar-import-status" class="upload-status-badge"></span>
+        <span id="p1-calendar-import-status" class="upload-status-badge"></span>
       </div>
 
-      <!-- Schedule Stats & Progress Bar -->
-      <div id="calendar-progress-bar" class="schedule-summary-bar"></div>
+      <!-- Phase-1 Schedule & Exam Stats Bar -->
+      <div id="p1-calendar-progress-bar" class="schedule-summary-bar"></div>
 
-      <!-- Calendar Day Types Legend & Plan Start Bar -->
+      <!-- Calendar Day Types Legend & Navigation Bar -->
       <div class="calendar-legend-config-bar">
         <div class="cal-legend-group">
           <span class="legend-label">Day Types:</span>
@@ -762,44 +774,36 @@
           <span class="legend-badge-item badge-chapter"><span class="legend-chip chapter"></span> 📝 Chapter Test (88)</span>
           <span class="legend-badge-item badge-mix"><span class="legend-chip mix"></span> 🔥 Mix Test (30)</span>
           <span class="legend-badge-item badge-buffer"><span class="legend-chip buffer"></span> ⏳ Buffer Day (23)</span>
-        </div>
-        <div class="cal-plan-start-group">
-          <label for="cal-plan-start-date">Plan Start:</label>
-          <input type="date" id="cal-plan-start-date" value="2026-11-01" class="cal-date-input">
-          <button type="button" id="btn-apply-plan-start" class="btn-subtle-apply">Apply</button>
+          <span class="legend-badge-item" style="background:#ecfdf5; border-color:#a7f3d0; color:#065f46;"><span class="legend-chip" style="background:#10b981;"></span> 🏆 Exam Score Logged</span>
         </div>
       </div>
 
       <!-- Calendar Controls: Month Navigation & Filters -->
       <div class="calendar-controls-bar">
         <div class="cal-nav-group">
-          <button type="button" id="cal-btn-prev-month" class="cal-nav-btn" title="Previous Month">◀</button>
-          <h3 id="cal-month-year-display">November 2026</h3>
-          <button type="button" id="cal-btn-next-month" class="cal-nav-btn" title="Next Month">▶</button>
-          <button type="button" id="cal-btn-today" class="cal-today-btn">Today</button>
+          <button type="button" id="p1-cal-btn-prev-month" class="cal-nav-btn" title="Previous Month">◀</button>
+          <h3 id="p1-cal-month-year-display">November 2026</h3>
+          <button type="button" id="p1-cal-btn-next-month" class="cal-nav-btn" title="Next Month">▶</button>
+          <button type="button" id="p1-cal-btn-today" class="cal-today-btn">Today</button>
         </div>
 
         <div class="cal-filter-group">
-          <select id="cal-filter-day-type" class="cal-select">
+          <select id="p1-cal-filter-day-type" class="cal-select">
             <option value="all">All Day Types</option>
             <option value="normal-day">Normal Class (274)</option>
             <option value="chapter-test">📝 Chapter Test (88)</option>
             <option value="mix-test">🔥 Mix Test (30)</option>
             <option value="buffer-day">⏳ Buffer Day (23)</option>
           </select>
-          <select id="cal-filter-phase" class="cal-select">
-            <option value="all">All Phases</option>
-            <option value="phase1">Phase-1 (Objective)</option>
-            <option value="phase2">Phase-2 (Descriptive)</option>
-          </select>
-          <select id="cal-filter-status" class="cal-select">
+          <select id="p1-cal-filter-status" class="cal-select">
             <option value="all">All Statuses</option>
             <option value="pending">Pending</option>
             <option value="completed">Completed</option>
+            <option value="exams">Exams Taken (Scores Logged)</option>
           </select>
           <div class="cal-view-toggle">
-            <button type="button" id="cal-view-month" class="cal-view-btn active">Month View</button>
-            <button type="button" id="cal-view-agenda" class="cal-view-btn">Agenda View</button>
+            <button type="button" id="p1-cal-view-month" class="cal-view-btn active">Month View</button>
+            <button type="button" id="p1-cal-view-agenda" class="cal-view-btn">Agenda View</button>
           </div>
         </div>
       </div>
@@ -809,7 +813,7 @@
         <!-- Left Column: Month Grid or Agenda List -->
         <div class="calendar-grid-container">
           <!-- Month View -->
-          <div id="calendar-month-view" class="calendar-grid-wrapper">
+          <div id="p1-calendar-month-view" class="calendar-grid-wrapper">
             <div class="calendar-weekdays-row">
               <div class="cal-weekday">Sun</div>
               <div class="cal-weekday">Mon</div>
@@ -819,82 +823,224 @@
               <div class="cal-weekday">Fri</div>
               <div class="cal-weekday">Sat</div>
             </div>
-            <div id="calendar-days-grid" class="calendar-days-grid"></div>
+            <div id="p1-calendar-days-grid" class="calendar-days-grid"></div>
           </div>
 
           <!-- Agenda View -->
-          <div id="calendar-agenda-view" class="calendar-agenda-wrapper" style="display: none;">
-            <div id="calendar-agenda-list" class="calendar-agenda-list"></div>
+          <div id="p1-calendar-agenda-view" class="calendar-agenda-wrapper" style="display: none;">
+            <div id="p1-calendar-agenda-list" class="calendar-agenda-list"></div>
           </div>
         </div>
 
-        <!-- Right Column: Day Detail & Task Management Panel -->
+        <!-- Right Column: Day Detail & Task/Exam Management Panel -->
         <div class="calendar-day-panel">
           <div class="day-panel-header">
             <div>
-              <h4 id="cal-selected-date-heading">Selected Day</h4>
-              <span id="cal-selected-date-sub" class="selected-date-sub">0 tasks</span>
+              <h4 id="p1-cal-selected-date-heading">Selected Day</h4>
+              <span id="p1-cal-selected-date-sub" class="selected-date-sub">0 tasks</span>
             </div>
-            <button type="button" id="btn-open-add-task-modal" class="btn-minimal-primary add-task-btn">+ Add Task</button>
+            <button type="button" id="p1-btn-open-add-task-modal" class="btn-minimal-primary add-task-btn">+ Add Task</button>
           </div>
 
-          <div id="cal-selected-day-tasks" class="day-tasks-list"></div>
+          <div id="p1-cal-selected-day-tasks" class="day-tasks-list"></div>
         </div>
       </div>
 
-      <!-- Add / Edit Task Modal -->
-      <div id="modal-task" class="rbi-modal-backdrop" style="display: none;">
-        <div class="rbi-modal-content" style="max-width: 480px;">
-          <div class="rbi-modal-header">
-            <h3 id="modal-task-title">Add Scheduled Task</h3>
-            <button type="button" id="btn-close-task-modal" class="rbi-modal-close">×</button>
-          </div>
-          <form id="form-task-modal" style="padding: 16px;">
-            <label>Date
-              <input type="date" id="task-input-date" required>
-            </label>
-            <div class="form-row-2col">
-              <label>Phase
-                <select id="task-input-phase">
-                  <option value="Phase-1">Phase-1 (Objective / MCQs)</option>
-                  <option value="Phase-2">Phase-2 (Descriptive Writing)</option>
-                  <option value="General">General / Both</option>
-                </select>
-              </label>
-              <label>Task Type
-                <select id="task-input-type">
-                  <option value="MCQ Practice">MCQ Practice</option>
-                  <option value="Descriptive Writing">Descriptive Writing</option>
-                  <option value="Mock Test">Full Mock Test</option>
-                  <option value="Revision">Revision</option>
-                  <option value="Reading / Notes">Reading / Notes</option>
-                  <option value="Other">Other</option>
-                </select>
-              </label>
-            </div>
-            <div class="form-row-2col">
-              <label>Subject / Paper
-                <input type="text" id="task-input-subject" placeholder="e.g. General Awareness, ESI, Finance" required>
-              </label>
-              <label>Time / Duration (optional)
-                <input type="text" id="task-input-time" placeholder="e.g. 10:00 AM or 2 hrs">
-              </label>
-            </div>
-            <label>Topic / Description
-              <textarea id="task-input-topic" rows="2" placeholder="e.g. Spotlight GA Nov 1-6 MCQs or ESI Ch-1 National Income" required></textarea>
-            </label>
-            <input type="hidden" id="task-input-edit-id" value="">
-            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;">
-              <button type="button" id="btn-cancel-task" class="rbi-btn secondary">Cancel</button>
-              <button type="submit" id="btn-save-task" class="rbi-btn primary">Save Task</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <!-- Floating Hover Popover for Calendar Days -->
-      <div id="calendar-hover-popover" class="cal-hover-popover" style="display: none;" role="tooltip"></div>
+      <!-- Floating Hover Popover for Phase-1 Calendar Days -->
+      <div id="p1-calendar-hover-popover" class="cal-hover-popover" style="display: none;" role="tooltip"></div>
     </section>
+
+    <!-- Screen: Phase-2 Study Plan & Exam Marks Calendar -->
+    <section id="screen-calendar-p2" class="screen" hidden>
+      <div class="setup-header">
+        <div class="setup-title-group">
+          <h2>📅 Phase-2: Descriptive Writing &amp; Exam Schedule</h2>
+          <p class="setup-subtitle">Daily Descriptive writing schedule (Economics, Finance, Management &amp; English) with marks &amp; written answer review.</p>
+        </div>
+      </div>
+
+      <!-- Schedule Import Card for Phase-2 -->
+      <div class="minimal-upload-card calendar-upload-card">
+        <div class="upload-drop-zone">
+          <div class="upload-icon-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
+          <div class="upload-text-group">
+            <strong>Import Study Schedule from Excel (.xlsx, .csv)</strong>
+            <span>Upload any timetable spreadsheet. Select starting date and how many days from the beginning you have already finished.</span>
+          </div>
+
+          <div class="upload-config-inputs">
+            <label class="upload-field-label">
+              <span>📅 Plan Start Date:</span>
+              <input type="date" id="p2-cal-upload-start-date" value="2026-11-01" class="upload-date-input">
+            </label>
+            <label class="upload-field-label">
+              <span>✅ Days Finished from Start:</span>
+              <input type="number" id="p2-cal-upload-days-finished" min="0" max="415" value="0" placeholder="0" class="upload-num-input">
+            </label>
+          </div>
+
+          <label class="btn-minimal-primary upload-excel-btn">
+            Upload Excel (.xlsx)
+            <input id="p2-calendar-excel-import" type="file" accept=".xlsx,.xls,.csv" hidden>
+          </label>
+        </div>
+
+        <div class="sample-pills-row">
+          <span class="sample-label">Quick Actions:</span>
+          <div class="sample-actions">
+            <button type="button" id="btn-p2-load-official-schedule" class="sample-pill primary-pill" style="font-weight:700; color:#003366; border-color:#93c5fd; background:#eff6ff;">⚡ Load Official 415-Day Plan</button>
+            <button type="button" id="btn-p2-apply-config" class="sample-pill" style="font-weight:600; color:#059669; border-color:#a7f3d0; background:#f0fdf4;">✓ Apply Start Date &amp; Finished Days</button>
+            <button type="button" id="btn-p2-download-template" class="sample-pill">⬇️ Download Template (.csv)</button>
+            <button type="button" id="btn-p2-export-csv" class="sample-pill">📤 Export Schedule (.csv)</button>
+            <button type="button" id="btn-p2-clear-schedule" class="sample-pill danger-pill">🗑️ Clear Schedule</button>
+          </div>
+        </div>
+        <span id="p2-calendar-import-status" class="upload-status-badge"></span>
+      </div>
+
+      <!-- Phase-2 Schedule & Writing Stats Bar -->
+      <div id="p2-calendar-progress-bar" class="schedule-summary-bar"></div>
+
+      <!-- Calendar Day Types Legend & Navigation Bar -->
+      <div class="calendar-legend-config-bar">
+        <div class="cal-legend-group">
+          <span class="legend-label">Day Types:</span>
+          <span class="legend-badge-item badge-normal"><span class="legend-chip normal"></span> Normal Day (274)</span>
+          <span class="legend-badge-item badge-chapter"><span class="legend-chip chapter"></span> 📝 Chapter Test (88)</span>
+          <span class="legend-badge-item badge-mix"><span class="legend-chip mix"></span> 🔥 Mix Test (30)</span>
+          <span class="legend-badge-item badge-buffer"><span class="legend-chip buffer"></span> ⏳ Buffer Day (23)</span>
+          <span class="legend-badge-item" style="background:#faf5ff; border-color:#e9d5ff; color:#6b21a8;"><span class="legend-chip" style="background:#9333ea;"></span> 🏆 Writing Marks Logged</span>
+        </div>
+      </div>
+
+      <!-- Calendar Controls: Month Navigation & Filters -->
+      <div class="calendar-controls-bar">
+        <div class="cal-nav-group">
+          <button type="button" id="p2-cal-btn-prev-month" class="cal-nav-btn" title="Previous Month">◀</button>
+          <h3 id="p2-cal-month-year-display">November 2026</h3>
+          <button type="button" id="p2-cal-btn-next-month" class="cal-nav-btn" title="Next Month">▶</button>
+          <button type="button" id="p2-cal-btn-today" class="cal-today-btn">Today</button>
+        </div>
+
+        <div class="cal-filter-group">
+          <select id="p2-cal-filter-day-type" class="cal-select">
+            <option value="all">All Day Types</option>
+            <option value="normal-day">Normal Class (274)</option>
+            <option value="chapter-test">📝 Chapter Test (88)</option>
+            <option value="mix-test">🔥 Mix Test (30)</option>
+            <option value="buffer-day">⏳ Buffer Day (23)</option>
+          </select>
+          <select id="p2-cal-filter-status" class="cal-select">
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="completed">Completed</option>
+            <option value="written">Written Tests (Marks Logged)</option>
+          </select>
+          <div class="cal-view-toggle">
+            <button type="button" id="p2-cal-view-month" class="cal-view-btn active">Month View</button>
+            <button type="button" id="p2-cal-view-agenda" class="cal-view-btn">Agenda View</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Calendar Body -->
+      <div class="calendar-main-layout">
+        <!-- Left Column: Month Grid or Agenda List -->
+        <div class="calendar-grid-container">
+          <!-- Month View -->
+          <div id="p2-calendar-month-view" class="calendar-grid-wrapper">
+            <div class="calendar-weekdays-row">
+              <div class="cal-weekday">Sun</div>
+              <div class="cal-weekday">Mon</div>
+              <div class="cal-weekday">Tue</div>
+              <div class="cal-weekday">Wed</div>
+              <div class="cal-weekday">Thu</div>
+              <div class="cal-weekday">Fri</div>
+              <div class="cal-weekday">Sat</div>
+            </div>
+            <div id="p2-calendar-days-grid" class="calendar-days-grid"></div>
+          </div>
+
+          <!-- Agenda View -->
+          <div id="p2-calendar-agenda-view" class="calendar-agenda-wrapper" style="display: none;">
+            <div id="p2-calendar-agenda-list" class="calendar-agenda-list"></div>
+          </div>
+        </div>
+
+        <!-- Right Column: Day Detail & Task/Exam Management Panel -->
+        <div class="calendar-day-panel">
+          <div class="day-panel-header">
+            <div>
+              <h4 id="p2-cal-selected-date-heading">Selected Day</h4>
+              <span id="p2-cal-selected-date-sub" class="selected-date-sub">0 tasks</span>
+            </div>
+            <button type="button" id="p2-btn-open-add-task-modal" class="btn-minimal-primary add-task-btn">+ Add Task</button>
+          </div>
+
+          <div id="p2-cal-selected-day-tasks" class="day-tasks-list"></div>
+        </div>
+      </div>
+
+      <!-- Floating Hover Popover for Phase-2 Calendar Days -->
+      <div id="p2-calendar-hover-popover" class="cal-hover-popover" style="display: none;" role="tooltip"></div>
+    </section>
+
+    <!-- Shared Add / Edit Task Modal -->
+    <div id="modal-task" class="rbi-modal-backdrop" style="display: none;">
+      <div class="rbi-modal-content" style="max-width: 480px;">
+        <div class="rbi-modal-header">
+          <h3 id="modal-task-title">Add Scheduled Task</h3>
+          <button type="button" id="btn-close-task-modal" class="rbi-modal-close">×</button>
+        </div>
+        <form id="form-task-modal" style="padding: 16px;">
+          <label>Date
+            <input type="date" id="task-input-date" required>
+          </label>
+          <div class="form-row-2col">
+            <label>Phase
+              <select id="task-input-phase">
+                <option value="Phase-1">Phase-1 (Objective / MCQs)</option>
+                <option value="Phase-2">Phase-2 (Descriptive Writing)</option>
+                <option value="General">General / Both</option>
+              </select>
+            </label>
+            <label>Task Type
+              <select id="task-input-type">
+                <option value="MCQ Practice">MCQ Practice</option>
+                <option value="Descriptive Writing">Descriptive Writing</option>
+                <option value="Mock Test">Full Mock Test</option>
+                <option value="Revision">Revision</option>
+                <option value="Reading / Notes">Reading / Notes</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row-2col">
+            <label>Subject / Paper
+              <input type="text" id="task-input-subject" placeholder="e.g. General Awareness, ESI, Finance" required>
+            </label>
+            <label>Time / Duration (optional)
+              <input type="text" id="task-input-time" placeholder="e.g. 10:00 AM or 2 hrs">
+            </label>
+          </div>
+          <label>Topic / Description
+            <textarea id="task-input-topic" rows="2" placeholder="e.g. Spotlight GA Nov 1-6 MCQs or ESI Ch-1 National Income" required></textarea>
+          </label>
+          <input type="hidden" id="task-input-edit-id" value="">
+          <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;">
+            <button type="button" id="btn-cancel-task" class="rbi-btn secondary">Cancel</button>
+            <button type="submit" id="btn-save-task" class="rbi-btn primary">Save Task</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </main>
 
   <script src="prompt.js"></script>

@@ -39,9 +39,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 5,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 1): Objective Test + Subjective Test \u2014 National Income",
+    "p2_topic": "Chapter Test (Ch 1): Objective Test + Subjective Test - National Income",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Antonyms & Synonyms",
+    "p1_topic": "Objective Practice - Antonyms & Synonyms",
     "ca": ""
   },
   {
@@ -50,7 +50,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Economic Growth vs Development - Class 1",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 1): Objective Test \u2014 Antonyms & Synonyms",
+    "p1_topic": "Chapter Test (Ch 1): Objective Test - Antonyms & Synonyms",
     "ca": ""
   },
   {
@@ -60,7 +60,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Economic Growth vs Development - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 1"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 1"
   },
   {
     "day": 8,
@@ -69,13 +69,13 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Economic Growth vs Development - Descriptive",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 1)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 1)"
   },
   {
     "day": 9,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 2): Objective Test + Subjective Test \u2014 Economic Growth vs Development",
+    "p2_topic": "Chapter Test (Ch 2): Objective Test + Subjective Test - Economic Growth vs Development",
     "p1_subject": "English Objective",
     "p1_topic": "Error Detection",
     "ca": ""
@@ -86,7 +86,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Sustainable Development & Environmental Issues - Class 1",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Error Detection",
+    "p1_topic": "Objective Practice - Error Detection",
     "ca": ""
   },
   {
@@ -95,7 +95,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Sustainable Development & Environmental Issues - Class 2",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 2): Objective Test \u2014 Error Detection",
+    "p1_topic": "Chapter Test (Ch 2): Objective Test - Error Detection",
     "ca": ""
   },
   {
@@ -111,28 +111,28 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 13,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 3): Objective Test + Subjective Test \u2014 Sustainable Development & Environmental Issues",
+    "p2_topic": "Chapter Test (Ch 3): Objective Test + Subjective Test - Sustainable Development & Environmental Issues",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Gap Fillers + Double Fillers",
+    "p1_topic": "Objective Practice - Gap Fillers + Double Fillers",
     "ca": ""
   },
   {
     "day": 14,
     "dayType": "buffer-day",
     "p2_subject": "Economics",
-    "p2_topic": "Buffer Day (Ch 1\u20133) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 1-3) - Revision",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 2"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 2"
   },
   {
     "day": 15,
     "dayType": "mix-test",
     "p2_subject": "Economics",
-    "p2_topic": "Mix Test (Ch 1\u20133): Objective Test + Subjective Test \u2014 National Income, Economic Growth vs Development, Sustainable Development & Environmental Issues",
+    "p2_topic": "Mix Test (Ch 1-3): Objective Test + Subjective Test - National Income, Economic Growth vs Development, Sustainable Development & Environmental Issues",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 2)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 2)"
   },
   {
     "day": 16,
@@ -140,7 +140,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Economic History of India (1947-91) - Class 1",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 3): Objective Test \u2014 Gap Fillers + Double Fillers",
+    "p1_topic": "Chapter Test (Ch 3): Objective Test - Gap Fillers + Double Fillers",
     "ca": ""
   },
   {
@@ -149,7 +149,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Economic History of India (1947-91) - Class 2",
     "p1_subject": "English Objective",
-    "p1_topic": "Buffer Day (Ch 1\u20133) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 1-3) - Revision",
     "ca": ""
   },
   {
@@ -158,7 +158,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Economic History of India (1947-91) - Class 3",
     "p1_subject": "English Objective",
-    "p1_topic": "Mix Test (Ch 1\u20133): Objective Test \u2014 Antonyms & Synonyms, Error Detection, Gap Fillers + Double Fillers",
+    "p1_topic": "Mix Test (Ch 1-3): Objective Test - Antonyms & Synonyms, Error Detection, Gap Fillers + Double Fillers",
     "ca": ""
   },
   {
@@ -176,17 +176,17 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Economic History of India (1947-91) - Descriptive",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Word Swapping + Misspelled Words",
+    "p1_topic": "Objective Practice - Word Swapping + Misspelled Words",
     "ca": ""
   },
   {
     "day": 21,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 4): Objective Test + Subjective Test \u2014 Economic History of India (1947-91)",
+    "p2_topic": "Chapter Test (Ch 4): Objective Test + Subjective Test - Economic History of India (1947-91)",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 3"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 3"
   },
   {
     "day": 22,
@@ -195,7 +195,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Indian Agriculture - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 3)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 3)"
   },
   {
     "day": 23,
@@ -203,7 +203,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Indian Agriculture - Class 2",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 4): Objective Test \u2014 Word Swapping + Misspelled Words",
+    "p1_topic": "Chapter Test (Ch 4): Objective Test - Word Swapping + Misspelled Words",
     "ca": ""
   },
   {
@@ -221,7 +221,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Indian Agriculture - Class 4",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Idiom/Phrase Usage",
+    "p1_topic": "Objective Practice - Idiom/Phrase Usage",
     "ca": ""
   },
   {
@@ -230,14 +230,14 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Indian Agriculture - Descriptive",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 5): Objective Test \u2014 Idiom/Phrase Usage",
+    "p1_topic": "Chapter Test (Ch 5): Objective Test - Idiom/Phrase Usage",
     "ca": ""
   },
   {
     "day": 27,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 5): Objective Test + Subjective Test \u2014 Indian Agriculture",
+    "p2_topic": "Chapter Test (Ch 5): Objective Test + Subjective Test - Indian Agriculture",
     "p1_subject": "English Objective",
     "p1_topic": "Para Jumble/Sentence Rearrangement",
     "ca": ""
@@ -249,7 +249,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Indian Industries - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 4"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 4"
   },
   {
     "day": 29,
@@ -258,7 +258,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Indian Industries - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 4)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 4)"
   },
   {
     "day": 30,
@@ -266,34 +266,34 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Indian Industries - Descriptive",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Para Jumble/Sentence Rearrangement",
+    "p1_topic": "Objective Practice - Para Jumble/Sentence Rearrangement",
     "ca": ""
   },
   {
     "day": 31,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 6): Objective Test + Subjective Test \u2014 Indian Industries",
+    "p2_topic": "Chapter Test (Ch 6): Objective Test + Subjective Test - Indian Industries",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 6): Objective Test \u2014 Para Jumble/Sentence Rearrangement",
+    "p1_topic": "Chapter Test (Ch 6): Objective Test - Para Jumble/Sentence Rearrangement",
     "ca": ""
   },
   {
     "day": 32,
     "dayType": "buffer-day",
     "p2_subject": "Economics",
-    "p2_topic": "Buffer Day (Ch 4\u20136) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 4-6) - Revision",
     "p1_subject": "English Objective",
-    "p1_topic": "Buffer Day (Ch 4\u20136) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 4-6) - Revision",
     "ca": ""
   },
   {
     "day": 33,
     "dayType": "mix-test",
     "p2_subject": "Economics",
-    "p2_topic": "Mix Test (Ch 4\u20136): Objective Test + Subjective Test \u2014 Economic History of India (1947-91), Indian Agriculture, Indian Industries",
+    "p2_topic": "Mix Test (Ch 4-6): Objective Test + Subjective Test - Economic History of India (1947-91), Indian Agriculture, Indian Industries",
     "p1_subject": "English Objective",
-    "p1_topic": "Mix Test (Ch 4\u20136): Objective Test \u2014 Word Swapping + Misspelled Words, Idiom/Phrase Usage, Para Jumble/Sentence Rearrangement",
+    "p1_topic": "Mix Test (Ch 4-6): Objective Test - Word Swapping + Misspelled Words, Idiom/Phrase Usage, Para Jumble/Sentence Rearrangement",
     "ca": ""
   },
   {
@@ -312,16 +312,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Indian Service Sector - Descriptive",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 5"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 5"
   },
   {
     "day": 36,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 7): Objective Test + Subjective Test \u2014 Indian Service Sector",
+    "p2_topic": "Chapter Test (Ch 7): Objective Test + Subjective Test - Indian Service Sector",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 5)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 5)"
   },
   {
     "day": 37,
@@ -329,7 +329,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Foreign Exchange & BoP - Class 1",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Sentence Connectors & Odd One Out",
+    "p1_topic": "Objective Practice - Sentence Connectors & Odd One Out",
     "ca": ""
   },
   {
@@ -338,7 +338,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Foreign Exchange & BoP - Class 2",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 7): Objective Test \u2014 Sentence Connectors & Odd One Out",
+    "p1_topic": "Chapter Test (Ch 7): Objective Test - Sentence Connectors & Odd One Out",
     "ca": ""
   },
   {
@@ -356,16 +356,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Foreign Exchange & BoP - Descriptive",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Reading Comprehension",
+    "p1_topic": "Objective Practice - Reading Comprehension",
     "ca": ""
   },
   {
     "day": 41,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 8): Objective Test + Subjective Test \u2014 Foreign Exchange & BoP",
+    "p2_topic": "Chapter Test (Ch 8): Objective Test + Subjective Test - Foreign Exchange & BoP",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 8): Objective Test \u2014 Reading Comprehension",
+    "p1_topic": "Chapter Test (Ch 8): Objective Test - Reading Comprehension",
     "ca": ""
   },
   {
@@ -375,7 +375,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Economic Crisis & Economic Reforms 1991 - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 6"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 6"
   },
   {
     "day": 43,
@@ -384,7 +384,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Economic Crisis & Economic Reforms 1991 - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 6)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 6)"
   },
   {
     "day": 44,
@@ -399,25 +399,25 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 45,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 9): Objective Test + Subjective Test \u2014 Economic Crisis & Economic Reforms 1991",
+    "p2_topic": "Chapter Test (Ch 9): Objective Test + Subjective Test - Economic Crisis & Economic Reforms 1991",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Sentence Correction + Cloze Test",
+    "p1_topic": "Objective Practice - Sentence Correction + Cloze Test",
     "ca": ""
   },
   {
     "day": 46,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Buffer Day (Ch 7\u20139) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 7-9) - Revision",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 9): Objective Test \u2014 Sentence Correction + Cloze Test",
+    "p1_topic": "Chapter Test (Ch 9): Objective Test - Sentence Correction + Cloze Test",
     "ca": ""
   },
   {
     "day": 47,
     "dayType": "mix-test",
     "p2_subject": "Economics",
-    "p2_topic": "Mix Test (Ch 7\u20139): Objective Test + Subjective Test \u2014 Indian Service Sector, Foreign Exchange & BoP, Economic Crisis & Economic Reforms 1991",
+    "p2_topic": "Mix Test (Ch 7-9): Objective Test + Subjective Test - Indian Service Sector, Foreign Exchange & BoP, Economic Crisis & Economic Reforms 1991",
     "p1_subject": "English Objective",
     "p1_topic": "Match the Columns & Word Usage",
     "ca": ""
@@ -428,7 +428,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Fiscal Policy - Class 1",
     "p1_subject": "English Objective",
-    "p1_topic": "Objective Practice \u2014 Match the Columns & Word Usage",
+    "p1_topic": "Objective Practice - Match the Columns & Word Usage",
     "ca": ""
   },
   {
@@ -438,7 +438,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Fiscal Policy - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 7"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 7"
   },
   {
     "day": 50,
@@ -447,15 +447,15 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Fiscal Policy - Descriptive",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 7)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 7)"
   },
   {
     "day": 51,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 10): Objective Test + Subjective Test \u2014 Fiscal Policy",
+    "p2_topic": "Chapter Test (Ch 10): Objective Test + Subjective Test - Fiscal Policy",
     "p1_subject": "English Objective",
-    "p1_topic": "Chapter Test (Ch 10): Objective Test \u2014 Match the Columns & Word Usage",
+    "p1_topic": "Chapter Test (Ch 10): Objective Test - Match the Columns & Word Usage",
     "ca": ""
   },
   {
@@ -464,7 +464,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Public Finance - Class 1",
     "p1_subject": "English Objective",
-    "p1_topic": "Buffer Day (Ch 7\u201310) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 7-10) - Revision",
     "ca": ""
   },
   {
@@ -473,7 +473,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Public Finance - Class 2",
     "p1_subject": "English Objective",
-    "p1_topic": "Mix Test (Ch 7\u201310): Objective Test \u2014 Sentence Connectors & Odd One Out, Reading Comprehension, Sentence Correction + Cloze Test, Match the Columns & Word Usage",
+    "p1_topic": "Mix Test (Ch 7-10): Objective Test - Sentence Connectors & Odd One Out, Reading Comprehension, Sentence Correction + Cloze Test, Match the Columns & Word Usage",
     "ca": ""
   },
   {
@@ -489,9 +489,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 55,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 11): Objective Test + Subjective Test \u2014 Public Finance",
+    "p2_topic": "Chapter Test (Ch 11): Objective Test + Subjective Test - Public Finance",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Number Series - Class 1",
+    "p1_topic": "Objective Practice - Number Series - Class 1",
     "ca": ""
   },
   {
@@ -501,7 +501,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "International Economic Institutions - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 8"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 8"
   },
   {
     "day": 57,
@@ -510,7 +510,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "International Economic Institutions - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 8)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 8)"
   },
   {
     "day": 58,
@@ -525,16 +525,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 59,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 12): Objective Test + Subjective Test \u2014 International Economic Institutions",
+    "p2_topic": "Chapter Test (Ch 12): Objective Test + Subjective Test - International Economic Institutions",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Number Series - Class 2",
+    "p1_topic": "Objective Practice - Number Series - Class 2",
     "ca": ""
   },
   {
     "day": 60,
     "dayType": "buffer-day",
     "p2_subject": "Economics",
-    "p2_topic": "Buffer Day (Ch 10\u201312) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 10-12) - Revision",
     "p1_subject": "Quantitative Aptitude",
     "p1_topic": "Number Series - Class 3",
     "ca": ""
@@ -543,9 +543,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 61,
     "dayType": "mix-test",
     "p2_subject": "Economics",
-    "p2_topic": "Mix Test (Ch 10\u201312): Objective Test + Subjective Test \u2014 Fiscal Policy, Public Finance, International Economic Institutions",
+    "p2_topic": "Mix Test (Ch 10-12): Objective Test + Subjective Test - Fiscal Policy, Public Finance, International Economic Institutions",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Number Series - Class 3",
+    "p1_topic": "Objective Practice - Number Series - Class 3",
     "ca": ""
   },
   {
@@ -554,7 +554,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Regional Economic Cooperation - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 1): Objective Test \u2014 Number Series",
+    "p1_topic": "Chapter Test (Ch 1): Objective Test - Number Series",
     "ca": ""
   },
   {
@@ -564,7 +564,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Regional Economic Cooperation - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 9"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 9"
   },
   {
     "day": 64,
@@ -573,13 +573,13 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Regional Economic Cooperation - Descriptive",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 9)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 9)"
   },
   {
     "day": 65,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 13): Objective Test + Subjective Test \u2014 Regional Economic Cooperation",
+    "p2_topic": "Chapter Test (Ch 13): Objective Test + Subjective Test - Regional Economic Cooperation",
     "p1_subject": "Quantitative Aptitude",
     "p1_topic": "Quadratic Equations - Class 1",
     "ca": ""
@@ -590,7 +590,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Poverty & Unemployment - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Quadratic Equations - Class 1",
+    "p1_topic": "Objective Practice - Quadratic Equations - Class 1",
     "ca": ""
   },
   {
@@ -608,7 +608,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Poverty & Unemployment - Class 3",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Quadratic Equations - Class 2",
+    "p1_topic": "Objective Practice - Quadratic Equations - Class 2",
     "ca": ""
   },
   {
@@ -617,17 +617,17 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Poverty & Unemployment - Descriptive",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 2): Objective Test \u2014 Quadratic Equations",
+    "p1_topic": "Chapter Test (Ch 2): Objective Test - Quadratic Equations",
     "ca": ""
   },
   {
     "day": 70,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 14): Objective Test + Subjective Test \u2014 Poverty & Unemployment",
+    "p2_topic": "Chapter Test (Ch 14): Objective Test + Subjective Test - Poverty & Unemployment",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 10"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 10"
   },
   {
     "day": 71,
@@ -636,7 +636,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Role of Indian Banks & RBI in Development Process - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 10)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 10)"
   },
   {
     "day": 72,
@@ -651,27 +651,27 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 73,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 15): Objective Test + Subjective Test \u2014 Role of Indian Banks & RBI in Development Process",
+    "p2_topic": "Chapter Test (Ch 15): Objective Test + Subjective Test - Role of Indian Banks & RBI in Development Process",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Simplification",
+    "p1_topic": "Objective Practice - Simplification",
     "ca": ""
   },
   {
     "day": 74,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Buffer Day (Ch 13\u201315) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 13-15) - Revision",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 3): Objective Test \u2014 Simplification",
+    "p1_topic": "Chapter Test (Ch 3): Objective Test - Simplification",
     "ca": ""
   },
   {
     "day": 75,
     "dayType": "mix-test",
     "p2_subject": "Economics",
-    "p2_topic": "Mix Test (Ch 13\u201315): Objective Test + Subjective Test \u2014 Regional Economic Cooperation, Poverty & Unemployment, Role of Indian Banks & RBI in Development Process",
+    "p2_topic": "Mix Test (Ch 13-15): Objective Test + Subjective Test - Regional Economic Cooperation, Poverty & Unemployment, Role of Indian Banks & RBI in Development Process",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Buffer Day (Ch 1\u20133) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 1-3) - Revision",
     "ca": ""
   },
   {
@@ -680,7 +680,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Multiculturalism - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Mix Test (Ch 1\u20133): Objective Test \u2014 Number Series, Quadratic Equations, Simplification",
+    "p1_topic": "Mix Test (Ch 1-3): Objective Test - Number Series, Quadratic Equations, Simplification",
     "ca": ""
   },
   {
@@ -690,16 +690,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Multiculturalism - Descriptive",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 11"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 11"
   },
   {
     "day": 78,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 16): Objective Test + Subjective Test \u2014 Multiculturalism",
+    "p2_topic": "Chapter Test (Ch 16): Objective Test + Subjective Test - Multiculturalism",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 11)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 11)"
   },
   {
     "day": 79,
@@ -716,7 +716,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Population & Demographic Dividend - Class 2",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Approximation",
+    "p1_topic": "Objective Practice - Approximation",
     "ca": ""
   },
   {
@@ -725,14 +725,14 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Population & Demographic Dividend - Descriptive",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 4): Objective Test \u2014 Approximation",
+    "p1_topic": "Chapter Test (Ch 4): Objective Test - Approximation",
     "ca": ""
   },
   {
     "day": 82,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 17): Objective Test + Subjective Test \u2014 Population & Demographic Dividend",
+    "p2_topic": "Chapter Test (Ch 17): Objective Test + Subjective Test - Population & Demographic Dividend",
     "p1_subject": "Quantitative Aptitude",
     "p1_topic": "Percentage",
     "ca": ""
@@ -743,7 +743,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Urbanization & Migration - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Percentage",
+    "p1_topic": "Objective Practice - Percentage",
     "ca": ""
   },
   {
@@ -753,7 +753,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Urbanization & Migration - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 12"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 12"
   },
   {
     "day": 85,
@@ -762,22 +762,22 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Urbanization & Migration - Descriptive",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 12)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 12)"
   },
   {
     "day": 86,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 18): Objective Test + Subjective Test \u2014 Urbanization & Migration",
+    "p2_topic": "Chapter Test (Ch 18): Objective Test + Subjective Test - Urbanization & Migration",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 5): Objective Test \u2014 Percentage",
+    "p1_topic": "Chapter Test (Ch 5): Objective Test - Percentage",
     "ca": ""
   },
   {
     "day": 87,
     "dayType": "buffer-day",
     "p2_subject": "Economics",
-    "p2_topic": "Buffer Day (Ch 16\u201318) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 16-18) - Revision",
     "p1_subject": "Quantitative Aptitude",
     "p1_topic": "Ratio & Proportion",
     "ca": ""
@@ -786,9 +786,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 88,
     "dayType": "mix-test",
     "p2_subject": "Economics",
-    "p2_topic": "Mix Test (Ch 16\u201318): Objective Test + Subjective Test \u2014 Multiculturalism, Population & Demographic Dividend, Urbanization & Migration",
+    "p2_topic": "Mix Test (Ch 16-18): Objective Test + Subjective Test - Multiculturalism, Population & Demographic Dividend, Urbanization & Migration",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Ratio & Proportion",
+    "p1_topic": "Objective Practice - Ratio & Proportion",
     "ca": ""
   },
   {
@@ -797,7 +797,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Gender Issues - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 6): Objective Test \u2014 Ratio & Proportion",
+    "p1_topic": "Chapter Test (Ch 6): Objective Test - Ratio & Proportion",
     "ca": ""
   },
   {
@@ -806,7 +806,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Gender Issues - Class 2",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Buffer Day (Ch 4\u20136) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 4-6) - Revision",
     "ca": ""
   },
   {
@@ -816,16 +816,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Gender Issues - Descriptive",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 13"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 13"
   },
   {
     "day": 92,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 19): Objective Test + Subjective Test \u2014 Gender Issues",
+    "p2_topic": "Chapter Test (Ch 19): Objective Test + Subjective Test - Gender Issues",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 13)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 13)"
   },
   {
     "day": 93,
@@ -833,7 +833,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Social Justice - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Mix Test (Ch 4\u20136): Objective Test \u2014 Approximation, Percentage, Ratio & Proportion",
+    "p1_topic": "Mix Test (Ch 4-6): Objective Test - Approximation, Percentage, Ratio & Proportion",
     "ca": ""
   },
   {
@@ -851,23 +851,23 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Economics",
     "p2_topic": "Social Justice - Descriptive",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Average",
+    "p1_topic": "Objective Practice - Average",
     "ca": ""
   },
   {
     "day": 96,
     "dayType": "chapter-test",
     "p2_subject": "Economics",
-    "p2_topic": "Chapter Test (Ch 20): Objective Test + Subjective Test \u2014 Social Justice",
+    "p2_topic": "Chapter Test (Ch 20): Objective Test + Subjective Test - Social Justice",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 7): Objective Test \u2014 Average",
+    "p1_topic": "Chapter Test (Ch 7): Objective Test - Average",
     "ca": ""
   },
   {
     "day": 97,
     "dayType": "buffer-day",
     "p2_subject": "Economics",
-    "p2_topic": "Buffer Day (Ch 19\u201320) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 19-20) - Revision",
     "p1_subject": "Quantitative Aptitude",
     "p1_topic": "Problem on Ages",
     "ca": ""
@@ -876,27 +876,27 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 98,
     "dayType": "mix-test",
     "p2_subject": "Economics",
-    "p2_topic": "Mix Test (Ch 19\u201320): Objective Test + Subjective Test \u2014 Gender Issues, Social Justice",
+    "p2_topic": "Mix Test (Ch 19-20): Objective Test + Subjective Test - Gender Issues, Social Justice",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 14"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 14"
   },
   {
     "day": 99,
     "dayType": "normal-day",
     "p2_subject": "Economics",
-    "p2_topic": "[Syllabus Gap] 4 Labour Codes (2020) & Industrial/Labour Policy \u2014 Study + Objective/Descriptive Practice",
+    "p2_topic": "[Syllabus Gap] 4 Labour Codes (2020) & Industrial/Labour Policy - Study + Objective/Descriptive Practice",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 14)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 14)"
   },
   {
     "day": 100,
     "dayType": "normal-day",
     "p2_subject": "Economics",
-    "p2_topic": "[Syllabus Gap] Foreign Trade Policy (FTP 2023) & Export-Import Policy \u2014 Study + Objective/Descriptive Practice",
+    "p2_topic": "[Syllabus Gap] Foreign Trade Policy (FTP 2023) & Export-Import Policy - Study + Objective/Descriptive Practice",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Problem on Ages",
+    "p1_topic": "Objective Practice - Problem on Ages",
     "ca": ""
   },
   {
@@ -905,7 +905,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Organisational Behaviour - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 8): Objective Test \u2014 Problem on Ages",
+    "p1_topic": "Chapter Test (Ch 8): Objective Test - Problem on Ages",
     "ca": ""
   },
   {
@@ -923,16 +923,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Organisational Behaviour - Descriptive Class",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Partnership",
+    "p1_topic": "Objective Practice - Partnership",
     "ca": ""
   },
   {
     "day": 104,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 1): Objective Test + Subjective Test \u2014 Organisational Behaviour",
+    "p2_topic": "Chapter Test (Ch 1): Objective Test + Subjective Test - Organisational Behaviour",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 9): Objective Test \u2014 Partnership",
+    "p1_topic": "Chapter Test (Ch 9): Objective Test - Partnership",
     "ca": ""
   },
   {
@@ -942,7 +942,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Personality - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 15"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 15"
   },
   {
     "day": 106,
@@ -951,7 +951,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Personality - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 15)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 15)"
   },
   {
     "day": 107,
@@ -959,7 +959,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Personality - Class 3",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Buffer Day (Ch 7\u20139) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 7-9) - Revision",
     "ca": ""
   },
   {
@@ -968,7 +968,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Personality - Class 4",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Mix Test (Ch 7\u20139): Objective Test \u2014 Average, Problem on Ages, Partnership",
+    "p1_topic": "Mix Test (Ch 7-9): Objective Test - Average, Problem on Ages, Partnership",
     "ca": ""
   },
   {
@@ -986,16 +986,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Personality - Descriptive Class",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Mixture & Alligation",
+    "p1_topic": "Objective Practice - Mixture & Alligation",
     "ca": ""
   },
   {
     "day": 111,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 2): Objective Test + Subjective Test \u2014 Personality",
+    "p2_topic": "Chapter Test (Ch 2): Objective Test + Subjective Test - Personality",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 10): Objective Test \u2014 Mixture & Alligation",
+    "p1_topic": "Chapter Test (Ch 10): Objective Test - Mixture & Alligation",
     "ca": ""
   },
   {
@@ -1005,7 +1005,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Perception - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 16"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 16"
   },
   {
     "day": 113,
@@ -1014,7 +1014,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Perception - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 16)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 16)"
   },
   {
     "day": 114,
@@ -1029,25 +1029,25 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 115,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 3): Objective Test + Subjective Test \u2014 Perception",
+    "p2_topic": "Chapter Test (Ch 3): Objective Test + Subjective Test - Perception",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Profit, Loss & Discount",
+    "p1_topic": "Objective Practice - Profit, Loss & Discount",
     "ca": ""
   },
   {
     "day": 116,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Buffer Day (Ch 1\u20133) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 1-3) - Revision",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 11): Objective Test \u2014 Profit, Loss & Discount",
+    "p1_topic": "Chapter Test (Ch 11): Objective Test - Profit, Loss & Discount",
     "ca": ""
   },
   {
     "day": 117,
     "dayType": "mix-test",
     "p2_subject": "Management",
-    "p2_topic": "Mix Test (Ch 1\u20133): Objective Test + Subjective Test \u2014 Organisational Behaviour, Personality, Perception",
+    "p2_topic": "Mix Test (Ch 1-3): Objective Test + Subjective Test - Organisational Behaviour, Personality, Perception",
     "p1_subject": "Quantitative Aptitude",
     "p1_topic": "Simple Interest",
     "ca": ""
@@ -1058,7 +1058,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Motivation - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Simple Interest",
+    "p1_topic": "Objective Practice - Simple Interest",
     "ca": ""
   },
   {
@@ -1068,7 +1068,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Motivation - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 17"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 17"
   },
   {
     "day": 120,
@@ -1077,7 +1077,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Motivation - Class 3",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 17)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 17)"
   },
   {
     "day": 121,
@@ -1085,7 +1085,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Motivation - Class 4",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 12): Objective Test \u2014 Simple Interest",
+    "p1_topic": "Chapter Test (Ch 12): Objective Test - Simple Interest",
     "ca": ""
   },
   {
@@ -1094,7 +1094,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Motivation - Class 5",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Buffer Day (Ch 10\u201312) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 10-12) - Revision",
     "ca": ""
   },
   {
@@ -1103,7 +1103,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Motivation - Class 6",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Mix Test (Ch 10\u201312): Objective Test \u2014 Mixture & Alligation, Profit, Loss & Discount, Simple Interest",
+    "p1_topic": "Mix Test (Ch 10-12): Objective Test - Mixture & Alligation, Profit, Loss & Discount, Simple Interest",
     "ca": ""
   },
   {
@@ -1119,9 +1119,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 125,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 4): Objective Test + Subjective Test \u2014 Motivation",
+    "p2_topic": "Chapter Test (Ch 4): Objective Test + Subjective Test - Motivation",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Compound Interest",
+    "p1_topic": "Objective Practice - Compound Interest",
     "ca": ""
   },
   {
@@ -1131,7 +1131,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Leadership - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 18"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 18"
   },
   {
     "day": 127,
@@ -1140,7 +1140,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Leadership - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 18)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 18)"
   },
   {
     "day": 128,
@@ -1148,7 +1148,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Leadership - Class 3",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 13): Objective Test \u2014 Compound Interest",
+    "p1_topic": "Chapter Test (Ch 13): Objective Test - Compound Interest",
     "ca": ""
   },
   {
@@ -1166,7 +1166,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Leadership - Class 5",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Time and Work",
+    "p1_topic": "Objective Practice - Time and Work",
     "ca": ""
   },
   {
@@ -1175,7 +1175,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Leadership - Class 6",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 14): Objective Test \u2014 Time and Work",
+    "p1_topic": "Chapter Test (Ch 14): Objective Test - Time and Work",
     "ca": ""
   },
   {
@@ -1194,16 +1194,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Leadership - Descriptive Class",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 19"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 19"
   },
   {
     "day": 134,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 5): Objective Test + Subjective Test \u2014 Leadership",
+    "p2_topic": "Chapter Test (Ch 5): Objective Test + Subjective Test - Leadership",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 19)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 19)"
   },
   {
     "day": 135,
@@ -1211,7 +1211,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Emotional Intelligence - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Pipes and Cisterns",
+    "p1_topic": "Objective Practice - Pipes and Cisterns",
     "ca": ""
   },
   {
@@ -1220,7 +1220,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Emotional Intelligence - Class 2",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 15): Objective Test \u2014 Pipes and Cisterns",
+    "p1_topic": "Chapter Test (Ch 15): Objective Test - Pipes and Cisterns",
     "ca": ""
   },
   {
@@ -1229,23 +1229,23 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Emotional Intelligence - Descriptive Class",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Buffer Day (Ch 13\u201315) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 13-15) - Revision",
     "ca": ""
   },
   {
     "day": 138,
     "dayType": "mix-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 6): Objective Test + Subjective Test \u2014 Emotional Intelligence",
+    "p2_topic": "Chapter Test (Ch 6): Objective Test + Subjective Test - Emotional Intelligence",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Mix Test (Ch 13\u201315): Objective Test \u2014 Compound Interest, Time and Work, Pipes and Cisterns",
+    "p1_topic": "Mix Test (Ch 13-15): Objective Test - Compound Interest, Time and Work, Pipes and Cisterns",
     "ca": ""
   },
   {
     "day": 139,
     "dayType": "buffer-day",
     "p2_subject": "Management",
-    "p2_topic": "Buffer Day (Ch 4\u20136) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 4-6) - Revision",
     "p1_subject": "Quantitative Aptitude",
     "p1_topic": "Time, Speed & Distance - Class 1 (Basics & Relative Speed)",
     "ca": ""
@@ -1254,10 +1254,10 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 140,
     "dayType": "mix-test",
     "p2_subject": "Management",
-    "p2_topic": "Mix Test (Ch 4\u20136): Objective Test + Subjective Test \u2014 Motivation, Leadership, Emotional Intelligence",
+    "p2_topic": "Mix Test (Ch 4-6): Objective Test + Subjective Test - Motivation, Leadership, Emotional Intelligence",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 20"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 20"
   },
   {
     "day": 141,
@@ -1266,7 +1266,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Transactional Analysis & Johari Window - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 20)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 20)"
   },
   {
     "day": 142,
@@ -1274,7 +1274,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Transactional Analysis & Johari Window - Class 2",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Time, Speed & Distance - Class 1",
+    "p1_topic": "Objective Practice - Time, Speed & Distance - Class 1",
     "ca": ""
   },
   {
@@ -1290,9 +1290,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 144,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 7): Objective Test + Subjective Test \u2014 Transactional Analysis & Johari Window",
+    "p2_topic": "Chapter Test (Ch 7): Objective Test + Subjective Test - Transactional Analysis & Johari Window",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Time, Speed & Distance - Class 2 (Trains)",
+    "p1_topic": "Objective Practice - Time, Speed & Distance - Class 2 (Trains)",
     "ca": ""
   },
   {
@@ -1301,7 +1301,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Conflict - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 16): Objective Test \u2014 Time, Speed & Distance + Trains",
+    "p1_topic": "Chapter Test (Ch 16): Objective Test - Time, Speed & Distance + Trains",
     "ca": ""
   },
   {
@@ -1320,7 +1320,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Conflict - Class 3",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 21"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 21"
   },
   {
     "day": 148,
@@ -1329,7 +1329,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Conflict - Class 4",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 21)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 21)"
   },
   {
     "day": 149,
@@ -1337,16 +1337,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Conflict - Descriptive Class",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Boats and Streams",
+    "p1_topic": "Objective Practice - Boats and Streams",
     "ca": ""
   },
   {
     "day": 150,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 8): Objective Test + Subjective Test \u2014 Conflict",
+    "p2_topic": "Chapter Test (Ch 8): Objective Test + Subjective Test - Conflict",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 17): Objective Test \u2014 Boats and Streams",
+    "p1_topic": "Chapter Test (Ch 17): Objective Test - Boats and Streams",
     "ca": ""
   },
   {
@@ -1364,7 +1364,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Organisational Change - Class 2",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Mensuration",
+    "p1_topic": "Objective Practice - Mensuration",
     "ca": ""
   },
   {
@@ -1373,34 +1373,34 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Organisational Change - Descriptive Class",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 18): Objective Test \u2014 Mensuration",
+    "p1_topic": "Chapter Test (Ch 18): Objective Test - Mensuration",
     "ca": ""
   },
   {
     "day": 154,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 9): Objective Test + Subjective Test \u2014 Organisational Change",
+    "p2_topic": "Chapter Test (Ch 9): Objective Test + Subjective Test - Organisational Change",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 22"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 22"
   },
   {
     "day": 155,
     "dayType": "buffer-day",
     "p2_subject": "Management",
-    "p2_topic": "Buffer Day (Ch 7\u20139) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 7-9) - Revision",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 22)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 22)"
   },
   {
     "day": 156,
     "dayType": "mix-test",
     "p2_subject": "Management",
-    "p2_topic": "Mix Test (Ch 7\u20139): Objective Test + Subjective Test \u2014 Transactional Analysis & Johari Window, Conflict, Organisational Change",
+    "p2_topic": "Mix Test (Ch 7-9): Objective Test + Subjective Test - Transactional Analysis & Johari Window, Conflict, Organisational Change",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Buffer Day (Ch 16\u201318) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 16-18) - Revision",
     "ca": ""
   },
   {
@@ -1409,7 +1409,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Organisational Development - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Mix Test (Ch 16\u201318): Objective Test \u2014 Time, Speed & Distance + Trains, Boats and Streams, Mensuration",
+    "p1_topic": "Mix Test (Ch 16-18): Objective Test - Time, Speed & Distance + Trains, Boats and Streams, Mensuration",
     "ca": ""
   },
   {
@@ -1427,7 +1427,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Organisational Development - Class 3",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Data Interpretation - Class 1",
+    "p1_topic": "Objective Practice - Data Interpretation - Class 1",
     "ca": ""
   },
   {
@@ -1446,7 +1446,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Organisational Development - Class 5",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 23"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 23"
   },
   {
     "day": 162,
@@ -1455,7 +1455,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Organisational Development - Class 6",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 23)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 23)"
   },
   {
     "day": 163,
@@ -1463,7 +1463,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Organisational Development - Class 7",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Data Interpretation - Class 2",
+    "p1_topic": "Objective Practice - Data Interpretation - Class 2",
     "ca": ""
   },
   {
@@ -1479,9 +1479,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 165,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 10): Objective Test + Subjective Test \u2014 Organisational Development",
+    "p2_topic": "Chapter Test (Ch 10): Objective Test + Subjective Test - Organisational Development",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Data Interpretation - Class 3",
+    "p1_topic": "Objective Practice - Data Interpretation - Class 3",
     "ca": ""
   },
   {
@@ -1490,7 +1490,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Ethics - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 19): Objective Test \u2014 Data Interpretation",
+    "p1_topic": "Chapter Test (Ch 19): Objective Test - Data Interpretation",
     "ca": ""
   },
   {
@@ -1509,7 +1509,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Ethics - Class 3",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 24"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 24"
   },
   {
     "day": 169,
@@ -1518,7 +1518,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Ethics - Class 4",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 24)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 24)"
   },
   {
     "day": 170,
@@ -1526,7 +1526,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Ethics - Class 5",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Quantity Comparison",
+    "p1_topic": "Objective Practice - Quantity Comparison",
     "ca": ""
   },
   {
@@ -1535,14 +1535,14 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Ethics - Descriptive Class",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 20): Objective Test \u2014 Quantity Comparison",
+    "p1_topic": "Chapter Test (Ch 20): Objective Test - Quantity Comparison",
     "ca": ""
   },
   {
     "day": 172,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 11): Objective Test + Subjective Test \u2014 Ethics",
+    "p2_topic": "Chapter Test (Ch 11): Objective Test + Subjective Test - Ethics",
     "p1_subject": "Quantitative Aptitude",
     "p1_topic": "Data Sufficiency",
     "ca": ""
@@ -1553,7 +1553,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Corporate Governance - Class 1",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 Data Sufficiency",
+    "p1_topic": "Objective Practice - Data Sufficiency",
     "ca": ""
   },
   {
@@ -1562,7 +1562,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Corporate Governance - Class 2",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 21): Objective Test \u2014 Data Sufficiency",
+    "p1_topic": "Chapter Test (Ch 21): Objective Test - Data Sufficiency",
     "ca": ""
   },
   {
@@ -1572,22 +1572,22 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Corporate Governance - Descriptive Class",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 25"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 25"
   },
   {
     "day": 176,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 12): Objective Test + Subjective Test \u2014 Corporate Governance",
+    "p2_topic": "Chapter Test (Ch 12): Objective Test + Subjective Test - Corporate Governance",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 25)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 25)"
   },
   {
     "day": 177,
     "dayType": "buffer-day",
     "p2_subject": "Management",
-    "p2_topic": "Buffer Day (Ch 10\u201312) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 10-12) - Revision",
     "p1_subject": "Quantitative Aptitude",
     "p1_topic": "P n C, Probability - Class 1",
     "ca": ""
@@ -1596,9 +1596,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 178,
     "dayType": "mix-test",
     "p2_subject": "Management",
-    "p2_topic": "Mix Test (Ch 10\u201312): Objective Test + Subjective Test \u2014 Organisational Development, Ethics, Corporate Governance",
+    "p2_topic": "Mix Test (Ch 10-12): Objective Test + Subjective Test - Organisational Development, Ethics, Corporate Governance",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 P n C, Probability - Class 1",
+    "p1_topic": "Objective Practice - P n C, Probability - Class 1",
     "ca": ""
   },
   {
@@ -1616,7 +1616,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Communication - Class 2",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Objective Practice \u2014 P n C, Probability - Class 2",
+    "p1_topic": "Objective Practice - P n C, Probability - Class 2",
     "ca": ""
   },
   {
@@ -1625,7 +1625,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Communication - Class 3",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Chapter Test (Ch 22): Objective Test \u2014 P n C, Probability",
+    "p1_topic": "Chapter Test (Ch 22): Objective Test - P n C, Probability",
     "ca": ""
   },
   {
@@ -1635,7 +1635,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Communication - Class 4",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 26"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 26"
   },
   {
     "day": 183,
@@ -1644,7 +1644,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Communication - Class 5",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 26)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 26)"
   },
   {
     "day": 184,
@@ -1652,7 +1652,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Communication - Class 6",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Buffer Day (Ch 19\u201322) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 19-22) - Revision",
     "ca": ""
   },
   {
@@ -1661,7 +1661,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Communication - Class 7",
     "p1_subject": "Quantitative Aptitude",
-    "p1_topic": "Mix Test (Ch 19\u201322): Objective Test \u2014 Data Interpretation, Quantity Comparison, Data Sufficiency, P n C, Probability",
+    "p1_topic": "Mix Test (Ch 19-22): Objective Test - Data Interpretation, Quantity Comparison, Data Sufficiency, P n C, Probability",
     "ca": ""
   },
   {
@@ -1677,9 +1677,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 187,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 13): Objective Test + Subjective Test \u2014 Communication",
+    "p2_topic": "Chapter Test (Ch 13): Objective Test + Subjective Test - Communication",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Inequalities",
+    "p1_topic": "Objective Practice - Inequalities",
     "ca": ""
   },
   {
@@ -1688,7 +1688,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Evolution of Management Thought - Class 1",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 1): Objective Test \u2014 Inequalities",
+    "p1_topic": "Chapter Test (Ch 1): Objective Test - Inequalities",
     "ca": ""
   },
   {
@@ -1698,7 +1698,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Evolution of Management Thought - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 27"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 27"
   },
   {
     "day": 190,
@@ -1707,7 +1707,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Evolution of Management Thought - Class 3 (Part 1)",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 27)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 27)"
   },
   {
     "day": 191,
@@ -1724,7 +1724,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Evolution of Management Thought - Class 4",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Alphabet Test",
+    "p1_topic": "Objective Practice - Alphabet Test",
     "ca": ""
   },
   {
@@ -1733,7 +1733,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Evolution of Management Thought - Class 5",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 2): Objective Test \u2014 Alphabet Test",
+    "p1_topic": "Chapter Test (Ch 2): Objective Test - Alphabet Test",
     "ca": ""
   },
   {
@@ -1751,7 +1751,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Evolution of Management Thought - Class 7",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Alphanumeric Series",
+    "p1_topic": "Objective Practice - Alphanumeric Series",
     "ca": ""
   },
   {
@@ -1761,16 +1761,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Evolution of Management Thought - Descriptive Class",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 28"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 28"
   },
   {
     "day": 197,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 14): Objective Test + Subjective Test \u2014 Evolution of Management Thought",
+    "p2_topic": "Chapter Test (Ch 14): Objective Test + Subjective Test - Evolution of Management Thought",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 28)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 28)"
   },
   {
     "day": 198,
@@ -1778,7 +1778,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Management Functions and Managerial Roles - Class 1",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 3): Objective Test \u2014 Alphanumeric Series",
+    "p1_topic": "Chapter Test (Ch 3): Objective Test - Alphanumeric Series",
     "ca": ""
   },
   {
@@ -1787,7 +1787,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Management Functions and Managerial Roles - Class 2",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Buffer Day (Ch 1\u20133) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 1-3) - Revision",
     "ca": ""
   },
   {
@@ -1796,7 +1796,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Management Functions and Managerial Roles - Class 3",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Mix Test (Ch 1\u20133): Objective Test \u2014 Inequalities, Alphabet Test, Alphanumeric Series",
+    "p1_topic": "Mix Test (Ch 1-3): Objective Test - Inequalities, Alphabet Test, Alphanumeric Series",
     "ca": ""
   },
   {
@@ -1814,7 +1814,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Management Functions and Managerial Roles - Class 5",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Coding & Decoding",
+    "p1_topic": "Objective Practice - Coding & Decoding",
     "ca": ""
   },
   {
@@ -1824,7 +1824,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Management Functions and Managerial Roles - Class 6",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 29"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 29"
   },
   {
     "day": 204,
@@ -1833,7 +1833,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Management Functions and Managerial Roles - Class 7",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 29)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 29)"
   },
   {
     "day": 205,
@@ -1841,7 +1841,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Management Functions and Managerial Roles - Class 8",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 4): Objective Test \u2014 Coding & Decoding",
+    "p1_topic": "Chapter Test (Ch 4): Objective Test - Coding & Decoding",
     "ca": ""
   },
   {
@@ -1859,7 +1859,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Management Functions and Managerial Roles - Class 10",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Syllogism",
+    "p1_topic": "Objective Practice - Syllogism",
     "ca": ""
   },
   {
@@ -1868,14 +1868,14 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Management",
     "p2_topic": "Management Functions and Managerial Roles - Descriptive Class",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 5): Objective Test \u2014 Syllogism",
+    "p1_topic": "Chapter Test (Ch 5): Objective Test - Syllogism",
     "ca": ""
   },
   {
     "day": 209,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 15): Objective Test + Subjective Test \u2014 Management Functions and Managerial Roles",
+    "p2_topic": "Chapter Test (Ch 15): Objective Test + Subjective Test - Management Functions and Managerial Roles",
     "p1_subject": "Reasoning Ability",
     "p1_topic": "Order & Ranking",
     "ca": ""
@@ -1887,7 +1887,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Nudge Theory - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 30"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 30"
   },
   {
     "day": 211,
@@ -1896,33 +1896,33 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Nudge Theory - Descriptive Class",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 30)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 30)"
   },
   {
     "day": 212,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Chapter Test (Ch 16): Objective Test + Subjective Test \u2014 Nudge Theory",
+    "p2_topic": "Chapter Test (Ch 16): Objective Test + Subjective Test - Nudge Theory",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Order & Ranking",
+    "p1_topic": "Objective Practice - Order & Ranking",
     "ca": ""
   },
   {
     "day": 213,
     "dayType": "chapter-test",
     "p2_subject": "Management",
-    "p2_topic": "Buffer Day (Ch 13\u201316) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 13-16) - Revision",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 6): Objective Test \u2014 Order & Ranking",
+    "p1_topic": "Chapter Test (Ch 6): Objective Test - Order & Ranking",
     "ca": ""
   },
   {
     "day": 214,
     "dayType": "mix-test",
     "p2_subject": "Management",
-    "p2_topic": "Mix Test (Ch 13\u201316): Objective Test + Subjective Test \u2014 Communication, Evolution of Management Thought, Management Functions and Managerial Roles, Nudge Theory",
+    "p2_topic": "Mix Test (Ch 13-16): Objective Test + Subjective Test - Communication, Evolution of Management Thought, Management Functions and Managerial Roles, Nudge Theory",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Buffer Day (Ch 4\u20136) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 4-6) - Revision",
     "ca": ""
   },
   {
@@ -1931,7 +1931,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Introduction to Financial System",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Mix Test (Ch 4\u20136): Objective Test \u2014 Coding & Decoding, Syllogism, Order & Ranking",
+    "p1_topic": "Mix Test (Ch 4-6): Objective Test - Coding & Decoding, Syllogism, Order & Ranking",
     "ca": ""
   },
   {
@@ -1947,10 +1947,10 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 217,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 1): Objective Test + Subjective Test \u2014 Introduction, Structure and Functions of Financial Institutions",
+    "p2_topic": "Chapter Test (Ch 1): Objective Test + Subjective Test - Introduction, Structure and Functions of Financial Institutions",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 31"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 31"
   },
   {
     "day": 218,
@@ -1959,7 +1959,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "RBI - Introduction, Structure & Board of Directors",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 31)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 31)"
   },
   {
     "day": 219,
@@ -1967,7 +1967,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "RBI Functions - 1",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Seating Arrangement - Class 1",
+    "p1_topic": "Objective Practice - Seating Arrangement - Class 1",
     "ca": ""
   },
   {
@@ -1985,7 +1985,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "RBI Functions - 3",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Seating Arrangement - Class 2",
+    "p1_topic": "Objective Practice - Seating Arrangement - Class 2",
     "ca": ""
   },
   {
@@ -2003,7 +2003,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "RBI Subsidiaries - 1",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Seating Arrangement - Class 3",
+    "p1_topic": "Objective Practice - Seating Arrangement - Class 3",
     "ca": ""
   },
   {
@@ -2013,7 +2013,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "RBI Subsidiaries - 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 32"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 32"
   },
   {
     "day": 225,
@@ -2022,7 +2022,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "RBI Ombudsman",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 32)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 32)"
   },
   {
     "day": 226,
@@ -2030,14 +2030,14 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "RBI - Descriptive Class",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 7): Objective Test \u2014 Seating Arrangement",
+    "p1_topic": "Chapter Test (Ch 7): Objective Test - Seating Arrangement",
     "ca": ""
   },
   {
     "day": 227,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 2): Objective Test + Subjective Test \u2014 RBI - Structure, Functions & Subsidiaries",
+    "p2_topic": "Chapter Test (Ch 2): Objective Test + Subjective Test - RBI - Structure, Functions & Subsidiaries",
     "p1_subject": "Reasoning Ability",
     "p1_topic": "Blood Relations",
     "ca": ""
@@ -2048,7 +2048,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Inflation - Introduction & Structure",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Blood Relations",
+    "p1_topic": "Objective Practice - Blood Relations",
     "ca": ""
   },
   {
@@ -2057,7 +2057,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Measurement of Inflation - 1",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 8): Objective Test \u2014 Blood Relations",
+    "p1_topic": "Chapter Test (Ch 8): Objective Test - Blood Relations",
     "ca": ""
   },
   {
@@ -2076,33 +2076,33 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Inflation - Descriptive Class",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 33"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 33"
   },
   {
     "day": 232,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 3): Objective Test + Subjective Test \u2014 Inflation",
+    "p2_topic": "Chapter Test (Ch 3): Objective Test + Subjective Test - Inflation",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 33)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 33)"
   },
   {
     "day": 233,
     "dayType": "buffer-day",
     "p2_subject": "Finance",
-    "p2_topic": "Buffer Day (Ch 1\u20133) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 1-3) - Revision",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Direction & Distance",
+    "p1_topic": "Objective Practice - Direction & Distance",
     "ca": ""
   },
   {
     "day": 234,
     "dayType": "mix-test",
     "p2_subject": "Finance",
-    "p2_topic": "Mix Test (Ch 1\u20133): Objective Test + Subjective Test \u2014 Introduction, Structure and Functions of Financial Institutions, RBI - Structure, Functions & Subsidiaries, Inflation",
+    "p2_topic": "Mix Test (Ch 1-3): Objective Test + Subjective Test - Introduction, Structure and Functions of Financial Institutions, RBI - Structure, Functions & Subsidiaries, Inflation",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 9): Objective Test \u2014 Direction & Distance",
+    "p1_topic": "Chapter Test (Ch 9): Objective Test - Direction & Distance",
     "ca": ""
   },
   {
@@ -2111,7 +2111,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Monetary Policy - Intro & MPC",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Buffer Day (Ch 7\u20139) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 7-9) - Revision",
     "ca": ""
   },
   {
@@ -2120,7 +2120,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Monetary Policy - Quantitative Tools",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Mix Test (Ch 7\u20139): Objective Test \u2014 Seating Arrangement, Blood Relations, Direction & Distance",
+    "p1_topic": "Mix Test (Ch 7-9): Objective Test - Seating Arrangement, Blood Relations, Direction & Distance",
     "ca": ""
   },
   {
@@ -2139,7 +2139,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Monetary Policy - PSL",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 34"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 34"
   },
   {
     "day": 239,
@@ -2148,15 +2148,15 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Monetary Policy - Descriptive Class",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 34)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 34)"
   },
   {
     "day": 240,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 4): Objective Test + Subjective Test \u2014 Monetary Policy",
+    "p2_topic": "Chapter Test (Ch 4): Objective Test + Subjective Test - Monetary Policy",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Puzzle - Class 1",
+    "p1_topic": "Objective Practice - Puzzle - Class 1",
     "ca": ""
   },
   {
@@ -2174,7 +2174,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Classification of Banking System",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Puzzle - Class 2",
+    "p1_topic": "Objective Practice - Puzzle - Class 2",
     "ca": ""
   },
   {
@@ -2192,7 +2192,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "KYC & Inoperative Accounts & DEAF",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Puzzle - Class 3",
+    "p1_topic": "Objective Practice - Puzzle - Class 3",
     "ca": ""
   },
   {
@@ -2202,7 +2202,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Functions of Commercial Banks - Loans",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 35"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 35"
   },
   {
     "day": 246,
@@ -2211,7 +2211,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Methods Used by Banks to Decide Lending Rates",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 35)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 35)"
   },
   {
     "day": 247,
@@ -2228,7 +2228,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Methods to Control & Counter NPA - SARFAESI Act",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Puzzle - Class 4",
+    "p1_topic": "Objective Practice - Puzzle - Class 4",
     "ca": ""
   },
   {
@@ -2237,7 +2237,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Basel Norms",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 10): Objective Test \u2014 Puzzle",
+    "p1_topic": "Chapter Test (Ch 10): Objective Test - Puzzle",
     "ca": ""
   },
   {
@@ -2253,9 +2253,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 251,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 5): Objective Test + Subjective Test \u2014 Banking System in India",
+    "p2_topic": "Chapter Test (Ch 5): Objective Test + Subjective Test - Banking System in India",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Data Sufficiency",
+    "p1_topic": "Objective Practice - Data Sufficiency",
     "ca": ""
   },
   {
@@ -2265,7 +2265,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "NBFC - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 36"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 36"
   },
   {
     "day": 253,
@@ -2274,7 +2274,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "NBFC - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 36)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 36)"
   },
   {
     "day": 254,
@@ -2282,14 +2282,14 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "NBFC - Descriptive Class",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 11): Objective Test \u2014 Data Sufficiency",
+    "p1_topic": "Chapter Test (Ch 11): Objective Test - Data Sufficiency",
     "ca": ""
   },
   {
     "day": 255,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 6): Objective Test + Subjective Test \u2014 NBFC",
+    "p2_topic": "Chapter Test (Ch 6): Objective Test + Subjective Test - NBFC",
     "p1_subject": "Reasoning Ability",
     "p1_topic": "Machine Input - Output",
     "ca": ""
@@ -2298,18 +2298,18 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 256,
     "dayType": "buffer-day",
     "p2_subject": "Finance",
-    "p2_topic": "Buffer Day (Ch 4\u20136) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 4-6) - Revision",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Machine Input - Output",
+    "p1_topic": "Objective Practice - Machine Input - Output",
     "ca": ""
   },
   {
     "day": 257,
     "dayType": "mix-test",
     "p2_subject": "Finance",
-    "p2_topic": "Mix Test (Ch 4\u20136): Objective Test + Subjective Test \u2014 Monetary Policy, Banking System in India, NBFC",
+    "p2_topic": "Mix Test (Ch 4-6): Objective Test + Subjective Test - Monetary Policy, Banking System in India, NBFC",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 12): Objective Test \u2014 Machine Input - Output",
+    "p1_topic": "Chapter Test (Ch 12): Objective Test - Machine Input - Output",
     "ca": ""
   },
   {
@@ -2328,7 +2328,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "AIFI - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 37"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 37"
   },
   {
     "day": 260,
@@ -2337,7 +2337,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "AIFI - Class 3",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 37)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 37)"
   },
   {
     "day": 261,
@@ -2345,14 +2345,14 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "AIFI - Descriptive Class",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Logical Reasoning - Class 1",
+    "p1_topic": "Objective Practice - Logical Reasoning - Class 1",
     "ca": ""
   },
   {
     "day": 262,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 7): Objective Test + Subjective Test \u2014 AIFI",
+    "p2_topic": "Chapter Test (Ch 7): Objective Test + Subjective Test - AIFI",
     "p1_subject": "Reasoning Ability",
     "p1_topic": "Logical Reasoning - Class 2 (Inferences, Conclusions & Course of Action)",
     "ca": ""
@@ -2363,7 +2363,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Regulatory Bodies - PFRDA",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Objective Practice \u2014 Logical Reasoning - Class 2",
+    "p1_topic": "Objective Practice - Logical Reasoning - Class 2",
     "ca": ""
   },
   {
@@ -2372,7 +2372,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Regulatory Bodies - IRDAI",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Chapter Test (Ch 13): Objective Test \u2014 Logical Reasoning (Critical Reasoning)",
+    "p1_topic": "Chapter Test (Ch 13): Objective Test - Logical Reasoning (Critical Reasoning)",
     "ca": ""
   },
   {
@@ -2381,17 +2381,17 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Regulatory Bodies - Descriptive Class",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Buffer Day (Ch 10\u201313) \u2014 Revision",
+    "p1_topic": "Buffer Day (Ch 10-13) - Revision",
     "ca": ""
   },
   {
     "day": 266,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 8): Objective Test + Subjective Test \u2014 Regulatory Bodies",
+    "p2_topic": "Chapter Test (Ch 8): Objective Test + Subjective Test - Regulatory Bodies",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 38"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 38"
   },
   {
     "day": 267,
@@ -2400,7 +2400,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Developments in Digital Payments - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 38)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 38)"
   },
   {
     "day": 268,
@@ -2408,7 +2408,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Developments in Digital Payments - Class 2",
     "p1_subject": "Reasoning Ability",
-    "p1_topic": "Mix Test (Ch 10\u201313): Objective Test \u2014 Puzzle, Data Sufficiency, Machine Input - Output, Logical Reasoning (Critical Reasoning)",
+    "p1_topic": "Mix Test (Ch 10-13): Objective Test - Puzzle, Data Sufficiency, Machine Input - Output, Logical Reasoning (Critical Reasoning)",
     "ca": ""
   },
   {
@@ -2426,7 +2426,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Developments in Digital Payments - Class 4",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Essay Writing - Class 1",
+    "p1_topic": "Descriptive Practice - English Essay Writing - Class 1",
     "ca": ""
   },
   {
@@ -2444,7 +2444,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Role of IT in Banking & Finance - Class 1",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Essay Writing - Class 2",
+    "p1_topic": "Descriptive Practice - English Essay Writing - Class 2",
     "ca": ""
   },
   {
@@ -2454,7 +2454,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Role of IT in Banking & Finance - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 39"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 39"
   },
   {
     "day": 274,
@@ -2463,7 +2463,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Fintech - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 39)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 39)"
   },
   {
     "day": 275,
@@ -2480,7 +2480,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Digital Payments - Descriptive Class 1",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Essay Writing - Class 3",
+    "p1_topic": "Descriptive Practice - English Essay Writing - Class 3",
     "ca": ""
   },
   {
@@ -2496,16 +2496,16 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 278,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 9): Objective Test + Subjective Test \u2014 Developments in Digital Payments, Role of IT & Fintech",
+    "p2_topic": "Chapter Test (Ch 9): Objective Test + Subjective Test - Developments in Digital Payments, Role of IT & Fintech",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Essay Writing - Class 4",
+    "p1_topic": "Descriptive Practice - English Essay Writing - Class 4",
     "ca": ""
   },
   {
     "day": 279,
     "dayType": "buffer-day",
     "p2_subject": "Finance",
-    "p2_topic": "Buffer Day (Ch 7\u20139) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 7-9) - Revision",
     "p1_subject": "English Descriptive (Phase-2)",
     "p1_topic": "English Essay Writing - Class 5",
     "ca": ""
@@ -2514,10 +2514,10 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 280,
     "dayType": "mix-test",
     "p2_subject": "Finance",
-    "p2_topic": "Mix Test (Ch 7\u20139): Objective Test + Subjective Test \u2014 AIFI, Regulatory Bodies, Developments in Digital Payments, Role of IT & Fintech",
+    "p2_topic": "Mix Test (Ch 7-9): Objective Test + Subjective Test - AIFI, Regulatory Bodies, Developments in Digital Payments, Role of IT & Fintech",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 40"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 40"
   },
   {
     "day": 281,
@@ -2526,7 +2526,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Primary Market",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 40)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 40)"
   },
   {
     "day": 282,
@@ -2534,7 +2534,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Capital Market",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Essay Writing - Class 5",
+    "p1_topic": "Descriptive Practice - English Essay Writing - Class 5",
     "ca": ""
   },
   {
@@ -2543,7 +2543,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Equity & Preference Shares",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Chapter Test (Ch 1): Revision + Descriptive Writing Test \u2014 English Essay Writing",
+    "p1_topic": "Chapter Test (Ch 1): Revision + Descriptive Writing Test - English Essay Writing",
     "ca": ""
   },
   {
@@ -2561,7 +2561,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Derivatives",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Precis Writing - Class 1",
+    "p1_topic": "Descriptive Practice - English Precis Writing - Class 1",
     "ca": ""
   },
   {
@@ -2580,7 +2580,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "SEBI - Intro & Functions",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 41"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 41"
   },
   {
     "day": 288,
@@ -2589,15 +2589,15 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Financial Market - Descriptive Class",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 41)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 41)"
   },
   {
     "day": 289,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 10): Objective Test + Subjective Test \u2014 Financial Market",
+    "p2_topic": "Chapter Test (Ch 10): Objective Test + Subjective Test - Financial Market",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Precis Writing - Class 2",
+    "p1_topic": "Descriptive Practice - English Precis Writing - Class 2",
     "ca": ""
   },
   {
@@ -2615,7 +2615,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Forex Market - Class 2",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Precis Writing - Class 3",
+    "p1_topic": "Descriptive Practice - English Precis Writing - Class 3",
     "ca": ""
   },
   {
@@ -2631,9 +2631,9 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 293,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 11): Objective Test + Subjective Test \u2014 Forex Market",
+    "p2_topic": "Chapter Test (Ch 11): Objective Test + Subjective Test - Forex Market",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Precis Writing - Class 4",
+    "p1_topic": "Descriptive Practice - English Precis Writing - Class 4",
     "ca": ""
   },
   {
@@ -2643,7 +2643,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Financial Risk Management - Class 1",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 42"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 42"
   },
   {
     "day": 295,
@@ -2652,7 +2652,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Financial Risk Management - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 42)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 42)"
   },
   {
     "day": 296,
@@ -2660,7 +2660,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Financial Inclusion",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Chapter Test (Ch 2): Revision + Descriptive Writing Test \u2014 English Precis Writing",
+    "p1_topic": "Chapter Test (Ch 2): Revision + Descriptive Writing Test - English Precis Writing",
     "ca": ""
   },
   {
@@ -2678,7 +2678,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Alternate Source of Finance (ASF) - Class 2",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Reading Comprehension Writing - Class 1",
+    "p1_topic": "Descriptive Practice - English Reading Comprehension Writing - Class 1",
     "ca": ""
   },
   {
@@ -2694,28 +2694,28 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 300,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 12): Objective Test + Subjective Test \u2014 Financial Risk Management, Financial Inclusion & Alternate Source of Finance",
+    "p2_topic": "Chapter Test (Ch 12): Objective Test + Subjective Test - Financial Risk Management, Financial Inclusion & Alternate Source of Finance",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Reading Comprehension Writing - Class 2",
+    "p1_topic": "Descriptive Practice - English Reading Comprehension Writing - Class 2",
     "ca": ""
   },
   {
     "day": 301,
     "dayType": "buffer-day",
     "p2_subject": "Finance",
-    "p2_topic": "Buffer Day (Ch 10\u201312) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 10-12) - Revision",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 43"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 43"
   },
   {
     "day": 302,
     "dayType": "mix-test",
     "p2_subject": "Finance",
-    "p2_topic": "Mix Test (Ch 10\u201312): Objective Test + Subjective Test \u2014 Financial Market, Forex Market, Financial Risk Management, Financial Inclusion & Alternate Source of Finance",
+    "p2_topic": "Mix Test (Ch 10-12): Objective Test + Subjective Test - Financial Market, Forex Market, Financial Risk Management, Financial Inclusion & Alternate Source of Finance",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 43)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 43)"
   },
   {
     "day": 303,
@@ -2732,7 +2732,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "PPP & PSB - Class 2",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 English Reading Comprehension Writing - Class 3",
+    "p1_topic": "Descriptive Practice - English Reading Comprehension Writing - Class 3",
     "ca": ""
   },
   {
@@ -2741,14 +2741,14 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "PPP & PSB - Descriptive Class",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Chapter Test (Ch 3): Revision + Descriptive Writing Test \u2014 English Reading Comprehension Writing",
+    "p1_topic": "Chapter Test (Ch 3): Revision + Descriptive Writing Test - English Reading Comprehension Writing",
     "ca": ""
   },
   {
     "day": 306,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 13): Objective Test + Subjective Test \u2014 PPP & PSB",
+    "p2_topic": "Chapter Test (Ch 13): Objective Test + Subjective Test - PPP & PSB",
     "p1_subject": "English Descriptive (Phase-2)",
     "p1_topic": "Timed Descriptive Simulation - Set 1 (Essay + Pr\u00e9cis + RC, 90-min Typed)",
     "ca": ""
@@ -2759,7 +2759,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Corporate Governance in Banking Sector - Class 1",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 Descriptive Simulation - Set 1 (Self-Evaluation & Rewrite)",
+    "p1_topic": "Descriptive Practice - Descriptive Simulation - Set 1 (Self-Evaluation & Rewrite)",
     "ca": ""
   },
   {
@@ -2769,7 +2769,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Corporate Governance in Banking Sector - Class 2",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 44"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 44"
   },
   {
     "day": 309,
@@ -2778,13 +2778,13 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "Corporate Governance in Banking Sector - Descriptive Class",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 44)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 44)"
   },
   {
     "day": 310,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 14): Objective Test + Subjective Test \u2014 Corporate Governance in Banking Sector",
+    "p2_topic": "Chapter Test (Ch 14): Objective Test + Subjective Test - Corporate Governance in Banking Sector",
     "p1_subject": "English Descriptive (Phase-2)",
     "p1_topic": "Timed Descriptive Simulation - Set 2 (Essay + Pr\u00e9cis + RC, 90-min Typed)",
     "ca": ""
@@ -2795,7 +2795,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Basics of Accounting & Financial Statements - Class 1",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 Descriptive Simulation - Set 2 (Self-Evaluation & Rewrite)",
+    "p1_topic": "Descriptive Practice - Descriptive Simulation - Set 2 (Self-Evaluation & Rewrite)",
     "ca": ""
   },
   {
@@ -2813,41 +2813,41 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "Finance",
     "p2_topic": "Basics of Accounting & Financial Statements - Class 3",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Descriptive Practice \u2014 Descriptive Simulation - Set 3 (Self-Evaluation & Rewrite)",
+    "p1_topic": "Descriptive Practice - Descriptive Simulation - Set 3 (Self-Evaluation & Rewrite)",
     "ca": ""
   },
   {
     "day": 314,
     "dayType": "chapter-test",
     "p2_subject": "Finance",
-    "p2_topic": "Chapter Test (Ch 15): Objective Test + Subjective Test \u2014 Basics of Accounting & Financial Statements",
+    "p2_topic": "Chapter Test (Ch 15): Objective Test + Subjective Test - Basics of Accounting & Financial Statements",
     "p1_subject": "English Descriptive (Phase-2)",
-    "p1_topic": "Chapter Test (Ch 4): Revision + Descriptive Writing Test \u2014 Timed Full-Paper Descriptive Simulations (Essay + Pr\u00e9cis + RC)",
+    "p1_topic": "Chapter Test (Ch 4): Revision + Descriptive Writing Test - Timed Full-Paper Descriptive Simulations (Essay + Pr\u00e9cis + RC)",
     "ca": ""
   },
   {
     "day": 315,
     "dayType": "buffer-day",
     "p2_subject": "Finance",
-    "p2_topic": "Buffer Day (Ch 13\u201315) \u2014 Revision",
+    "p2_topic": "Buffer Day (Ch 13-15) - Revision",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 45"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 45"
   },
   {
     "day": 316,
     "dayType": "mix-test",
     "p2_subject": "Finance",
-    "p2_topic": "Mix Test (Ch 13\u201315): Objective Test + Subjective Test \u2014 PPP & PSB, Corporate Governance in Banking Sector, Basics of Accounting & Financial Statements",
+    "p2_topic": "Mix Test (Ch 13-15): Objective Test + Subjective Test - PPP & PSB, Corporate Governance in Banking Sector, Basics of Accounting & Financial Statements",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 45)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 45)"
   },
   {
     "day": 317,
     "dayType": "normal-day",
     "p2_subject": "Finance",
-    "p2_topic": "[Syllabus Gap] Money Market Instruments (Call Money, T-Bills, CP, CD, Tri-Party Repo, CMBs) \u2014 Study + MCQs",
+    "p2_topic": "[Syllabus Gap] Money Market Instruments (Call Money, T-Bills, CP, CD, Tri-Party Repo, CMBs) - Study + MCQs",
     "p1_subject": "Static GK",
     "p1_topic": "National Parks, Biosphere Reserves & Wildlife Sanctuaries (In News)",
     "ca": ""
@@ -2856,7 +2856,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 318,
     "dayType": "normal-day",
     "p2_subject": "Finance",
-    "p2_topic": "[Syllabus Gap] Global Financial System & International Banking (Fed/ECB, SWIFT, BIS, Sovereign Debt) \u2014 Study + MCQs",
+    "p2_topic": "[Syllabus Gap] Global Financial System & International Banking (Fed/ECB, SWIFT, BIS, Sovereign Debt) - Study + MCQs",
     "p1_subject": "Static GK",
     "p1_topic": "Tiger Reserves, Elephant Reserves & Ramsar Wetlands",
     "ca": ""
@@ -2865,7 +2865,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 319,
     "dayType": "normal-day",
     "p2_subject": "Finance",
-    "p2_topic": "[Syllabus Gap] Accounting Ratio Analysis & Cash Flow Statements (Debt-Equity, Turnover, ROA/ROE) \u2014 Study + Numericals",
+    "p2_topic": "[Syllabus Gap] Accounting Ratio Analysis & Cash Flow Statements (Debt-Equity, Turnover, ROA/ROE) - Study + Numericals",
     "p1_subject": "Static GK",
     "p1_topic": "Important Rivers, Dams, Thermal & Nuclear Power Plants",
     "ca": ""
@@ -2874,7 +2874,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 320,
     "dayType": "normal-day",
     "p2_subject": "Finance",
-    "p2_topic": "[Syllabus Gap] Private & Social Cost-Benefit Analysis \u2014 Study + Descriptive Practice",
+    "p2_topic": "[Syllabus Gap] Private & Social Cost-Benefit Analysis - Study + Descriptive Practice",
     "p1_subject": "Static GK",
     "p1_topic": "International Organizations, Headquarters & Summits",
     "ca": ""
@@ -2883,7 +2883,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "day": 321,
     "dayType": "normal-day",
     "p2_subject": "Finance",
-    "p2_topic": "[Syllabus Gap] Direct RBI Master Directions & SEBI Circulars (PSL, ECL, NBFC SBR, Digital Lending, PCA) \u2014 Study + MCQs",
+    "p2_topic": "[Syllabus Gap] Direct RBI Master Directions & SEBI Circulars (PSL, ECL, NBFC SBR, Digital Lending, PCA) - Study + MCQs",
     "p1_subject": "Static GK",
     "p1_topic": "Countries, Capitals, Currencies & International Borders",
     "ca": ""
@@ -2895,7 +2895,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 46"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 46"
   },
   {
     "day": 323,
@@ -2904,7 +2904,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 46)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 46)"
   },
   {
     "day": 324,
@@ -2958,7 +2958,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 47"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 47"
   },
   {
     "day": 330,
@@ -2967,7 +2967,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 47)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 47)"
   },
   {
     "day": 331,
@@ -3011,7 +3011,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Government Schemes",
-    "p1_topic": "Revision + MCQs \u2014 Government Schemes Set 1 (Ministries 01\u201306)",
+    "p1_topic": "Revision + MCQs - Government Schemes Set 1 (Ministries 01-06)",
     "ca": ""
   },
   {
@@ -3021,7 +3021,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 48"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 48"
   },
   {
     "day": 337,
@@ -3030,7 +3030,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 48)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 48)"
   },
   {
     "day": 338,
@@ -3084,7 +3084,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 49"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 49"
   },
   {
     "day": 344,
@@ -3093,7 +3093,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 49)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 49)"
   },
   {
     "day": 345,
@@ -3119,7 +3119,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Government Schemes",
-    "p1_topic": "Revision + MCQs \u2014 Government Schemes Set 2 (Ministries 07\u201313)",
+    "p1_topic": "Revision + MCQs - Government Schemes Set 2 (Ministries 07-13)",
     "ca": ""
   },
   {
@@ -3147,7 +3147,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 50"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 50"
   },
   {
     "day": 351,
@@ -3156,7 +3156,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 50)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 50)"
   },
   {
     "day": 352,
@@ -3210,7 +3210,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 51"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 51"
   },
   {
     "day": 358,
@@ -3219,7 +3219,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 51)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 51)"
   },
   {
     "day": 359,
@@ -3254,7 +3254,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Government Schemes",
-    "p1_topic": "Revision + MCQs \u2014 Government Schemes Set 3 (Ministries 14\u201323)",
+    "p1_topic": "Revision + MCQs - Government Schemes Set 3 (Ministries 14-23)",
     "ca": ""
   },
   {
@@ -3263,7 +3263,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Government Schemes",
-    "p1_topic": "Revision + MCQs \u2014 Full Government Schemes Consolidated Drill (All 23 Ministries)",
+    "p1_topic": "Revision + MCQs - Full Government Schemes Consolidated Drill (All 23 Ministries)",
     "ca": ""
   },
   {
@@ -3273,7 +3273,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 52"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 52"
   },
   {
     "day": 365,
@@ -3282,7 +3282,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 52)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 52)"
   },
   {
     "day": 366,
@@ -3308,7 +3308,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "ESI Reports",
-    "p1_topic": "ARD Reports (4 Modules \u2014 Agriculture & Rural Development Reports)",
+    "p1_topic": "ARD Reports (4 Modules - Agriculture & Rural Development Reports)",
     "ca": ""
   },
   {
@@ -3336,7 +3336,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 53"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 53"
   },
   {
     "day": 372,
@@ -3345,7 +3345,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 53)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 53)"
   },
   {
     "day": 373,
@@ -3389,7 +3389,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "ESI Reports",
-    "p1_topic": "Revision + MCQs \u2014 International ESI Reports (IMF, World Bank, WEF, UN, SDG, Migration)",
+    "p1_topic": "Revision + MCQs - International ESI Reports (IMF, World Bank, WEF, UN, SDG, Migration)",
     "ca": ""
   },
   {
@@ -3399,7 +3399,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 54"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 54"
   },
   {
     "day": 379,
@@ -3408,7 +3408,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 54)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 54)"
   },
   {
     "day": 380,
@@ -3416,7 +3416,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "ESI Reports",
-    "p1_topic": "Revision + MCQs \u2014 National ESI Reports (NITI Aayog MPI, ARD, DPI@2047, SDG-NIF, MOSPI)",
+    "p1_topic": "Revision + MCQs - National ESI Reports (NITI Aayog MPI, ARD, DPI@2047, SDG-NIF, MOSPI)",
     "ca": ""
   },
   {
@@ -3425,7 +3425,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "ESI Reports",
-    "p1_topic": "Revision + MCQs \u2014 Consolidated ESI Reports Objective & Data Drill",
+    "p1_topic": "Revision + MCQs - Consolidated ESI Reports Objective & Data Drill",
     "ca": ""
   },
   {
@@ -3434,7 +3434,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Annual Surveys",
-    "p1_topic": "Union Budget 2026-27 (2 Modules \u2014 Macro Estimates, Receipts, Expenditure & Fiscal Glide Path)",
+    "p1_topic": "Union Budget 2026-27 (2 Modules - Macro Estimates, Receipts, Expenditure & Fiscal Glide Path)",
     "ca": ""
   },
   {
@@ -3462,7 +3462,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 55"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 55"
   },
   {
     "day": 386,
@@ -3471,7 +3471,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 55)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 55)"
   },
   {
     "day": 387,
@@ -3525,7 +3525,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 56"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 56"
   },
   {
     "day": 393,
@@ -3534,7 +3534,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 56)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 56)"
   },
   {
     "day": 394,
@@ -3542,7 +3542,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Annual Surveys",
-    "p1_topic": "Revision + MCQs \u2014 Union Budget 2026-27, Economic Survey 2025-26, 16th FC & FTP 2023",
+    "p1_topic": "Revision + MCQs - Union Budget 2026-27, Economic Survey 2025-26, 16th FC & FTP 2023",
     "ca": ""
   },
   {
@@ -3551,7 +3551,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Annual Surveys",
-    "p1_topic": "Revision + MCQs \u2014 NFHS-6, ISFR 2023, PLFS, HCES, ASER, UDISE+, AISHE & Census",
+    "p1_topic": "Revision + MCQs - NFHS-6, ISFR 2023, PLFS, HCES, ASER, UDISE+, AISHE & Census",
     "ca": ""
   },
   {
@@ -3560,7 +3560,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Annual Surveys",
-    "p1_topic": "Revision + MCQs \u2014 Master Annual Surveys Fact Sheet & Consolidated Drill",
+    "p1_topic": "Revision + MCQs - Master Annual Surveys Fact Sheet & Consolidated Drill",
     "ca": ""
   },
   {
@@ -3578,7 +3578,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Finance Reports",
-    "p1_topic": "RBI Annual Report 2025-26 - Part 1 (Modules 1\u20132: Macro Assessment, Monetary Policy & Credit Delivery)",
+    "p1_topic": "RBI Annual Report 2025-26 - Part 1 (Modules 1-2: Macro Assessment, Monetary Policy & Credit Delivery)",
     "ca": ""
   },
   {
@@ -3588,7 +3588,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 57"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 57"
   },
   {
     "day": 400,
@@ -3597,7 +3597,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 57)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 57)"
   },
   {
     "day": 401,
@@ -3651,7 +3651,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 58"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 58"
   },
   {
     "day": 407,
@@ -3660,7 +3660,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 58)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 58)"
   },
   {
     "day": 408,
@@ -3695,7 +3695,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Finance Reports",
-    "p1_topic": "Revision + MCQs \u2014 RBI Annual Reports (2024-25 & 2025-26) & Financial Stability Report June 2026",
+    "p1_topic": "Revision + MCQs - RBI Annual Reports (2024-25 & 2025-26) & Financial Stability Report June 2026",
     "ca": ""
   },
   {
@@ -3704,7 +3704,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Finance Reports",
-    "p1_topic": "Revision + MCQs \u2014 NABARD Annual Report 2025-26, RTPBI, Currency & Finance & State Finances",
+    "p1_topic": "Revision + MCQs - NABARD Annual Report 2025-26, RTPBI, Currency & Finance & State Finances",
     "ca": ""
   },
   {
@@ -3714,7 +3714,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) \u2014 Week 59"
+    "ca": "Weekly Spotlight + Weekly PIB + Weekly RBI Magazines (Reading) - Week 59"
   },
   {
     "day": 414,
@@ -3723,7 +3723,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_topic": "",
     "p1_subject": "",
     "p1_topic": "",
-    "ca": "Objective Tests \u2014 Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 59)"
+    "ca": "Objective Tests - Weekly Spotlight, Weekly PIB & Weekly RBI Magazines (Week 59)"
   },
   {
     "day": 415,
@@ -3731,7 +3731,7 @@ const RBI_OFFICIAL_SCHEDULE_DATA = [
     "p2_subject": "",
     "p2_topic": "",
     "p1_subject": "Finance Reports",
-    "p1_topic": "Revision + MCQs \u2014 SEBI, IRDAI, PFRDA, FI-Index & DPI + Consolidated Finance Reports Drill",
+    "p1_topic": "Revision + MCQs - SEBI, IRDAI, PFRDA, FI-Index & DPI + Consolidated Finance Reports Drill",
     "ca": ""
   }
 ];

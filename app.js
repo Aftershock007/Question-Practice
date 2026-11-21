@@ -3,6 +3,12 @@
 // Shortcut for document.getElementById
 function $(id) { return document.getElementById(id); }
 
+// Remove all en-dashes and em-dashes across strings
+function sanitizeDashes(str) {
+  if (!str) return "";
+  return String(str).replace(/[\u2013\u2014\u2012\u2015]/g, "-");
+}
+
 // Count words: split on any whitespace, ignore empty pieces
 function countWords(text) {
   const t = (text || "").trim();
@@ -84,8 +90,8 @@ function getCombinedFilename(test) {
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.hidden = true);
   let targetId = "screen-" + name;
-  if (name === "setup" || name === "exam" || name === "result" || name === "bank" || name === "history") {
-    targetId = state.phase === "phase1" ? `screen-${name}-p1` : `screen-${name}`;
+  if (name === "setup" || name === "exam" || name === "result" || name === "bank" || name === "history" || name === "calendar") {
+    targetId = state.phase === "phase1" ? `screen-${name}-p1` : (name === "calendar" ? "screen-calendar-p2" : `screen-${name}`);
   }
   const target = $(targetId) || $(name) || $("screen-" + name);
   if (target) target.hidden = false;
@@ -101,8 +107,12 @@ function showScreen(name) {
   const activeNavBtn = $("nav-" + name);
   if (activeNavBtn) activeNavBtn.classList.add("active");
 
-  if (name === "calendar") {
-    renderCalendar();
+  if (name === "calendar" || name === "calendar-p1" || name === "calendar-p2") {
+    if (state.phase === "phase1") {
+      renderP1Calendar();
+    } else {
+      renderP2Calendar();
+    }
   }
 
   window.scrollTo(0, 0);
@@ -186,7 +196,23 @@ const state = {
   calendar_filterStatus: "all",
   calendar_filterDayType: "all",
   calendar_view: "month",
-  calendar_day_metadata: {}
+  calendar_day_metadata: {},
+
+  // Phase-1 Dedicated Calendar State
+  p1_calendar_currentDate: new Date(),
+  p1_calendar_selectedDate: getLocalDateString(new Date()),
+  p1_calendar_view: "month",
+  p1_calendar_filterDayType: "all",
+  p1_calendar_filterStatus: "all",
+  p1_calendar_daysFinished: loadJSON("rbi_p1_days_finished", 0),
+
+  // Phase-2 Dedicated Calendar State
+  p2_calendar_currentDate: new Date(),
+  p2_calendar_selectedDate: getLocalDateString(new Date()),
+  p2_calendar_view: "month",
+  p2_calendar_filterDayType: "all",
+  p2_calendar_filterStatus: "all",
+  p2_calendar_daysFinished: loadJSON("rbi_p2_days_finished", 0)
 };
 
 // Render reusable pagination controls (50 items per page; hidden if totalPages <= 1)
@@ -260,12 +286,34 @@ function setPhase(phase) {
     }
   }
 
-  if (state.phase === "phase1") {
-    renderP1SetupList();
-  } else {
-    renderSetupList();
+  const navCalendar = $("nav-calendar");
+  if (navCalendar) {
+    navCalendar.textContent = (state.phase === "phase1") ? "📅 Phase-1 Calendar" : "📅 Phase-2 Calendar";
   }
-  showScreen("setup");
+
+  // Detect current active screen to stay on the same screen context
+  const curScreen = document.querySelector(".screen:not([hidden])");
+  let activeScreenType = "setup";
+  if (curScreen && curScreen.id) {
+    const sid = String(curScreen.id);
+    if (sid.includes("calendar")) activeScreenType = "calendar";
+    else if (sid.includes("history")) activeScreenType = "history";
+    else if (sid.includes("bank")) activeScreenType = "bank";
+  }
+
+  if (state.phase === "phase1") {
+    if (activeScreenType === "calendar") renderP1Calendar();
+    else if (activeScreenType === "history") renderP1History();
+    else if (activeScreenType === "bank") renderP1Bank();
+    else renderP1SetupList();
+  } else {
+    if (activeScreenType === "calendar") renderP2Calendar();
+    else if (activeScreenType === "history") renderHistory();
+    else if (activeScreenType === "bank") renderBank();
+    else renderSetupList();
+  }
+
+  showScreen(activeScreenType);
 }
 
 
@@ -944,6 +992,8 @@ function finishTest(auto) {
   test.autoSubmitted = !!auto;
   const elapsed = Math.round((Date.now() - new Date(test.date).getTime()) / 1000);
   test.usedSeconds = Math.min(test.totalMinutes * 60, Math.max(0, elapsed));
+  test.maxMarks = (test.questions || []).reduce((acc, q) => acc + (Number(q.marks) || 10), 0);
+  test.scores = test.scores || {};
 
   const history = loadJSON("rbi_history", []);
   history.unshift(test);
@@ -968,44 +1018,50 @@ function finishTest(auto) {
     alert("Time is up! Your test has been submitted.");
   }
 
-  renderResult(test);
+    renderResult(test);
   showScreen("result");
-}
 
-// Check for and resume an interrupted test on page load
+  if (typeof renderP2Calendar === "function") {
+    renderP2Calendar();
+  }
+}// Check for and resume an interrupted test on page load
 function checkResumeActiveTest() {
-  if (state.phase === "phase1") {
-    const active = loadJSON("rbi_p1_active_test", null);
-    if (!active || !active.endTime) return;
-    const now = Date.now();
-    state.p1_test = active;
-    state.p1_endTime = active.endTime;
-    if (active.endTime > now) {
+  const p1Active = loadJSON("rbi_p1_active_test", null);
+  const p2Active = loadJSON("rbi_active_test", null);
+  const now = Date.now();
+
+  if (p1Active && p1Active.endTime) {
+    state.p1_test = p1Active;
+    state.p1_endTime = p1Active.endTime;
+    if (p1Active.endTime > now) {
       if (confirm("You have a Phase-1 objective test in progress. Resume it?")) {
+        setPhase("phase1");
         startP1ExamTimer();
         showP1Question(state.p1_test.currentIndex || 0);
         renderP1Palette();
         updateP1ExamSummary();
         showScreen("exam");
+        return;
       } else {
         localStorage.removeItem("rbi_p1_active_test");
         state.p1_test = null;
       }
     } else {
       alert("Your previous Phase-1 test session has expired.");
+      setPhase("phase1");
       finishP1Test(true);
+      return;
     }
-  } else {
-    const active = loadJSON("rbi_active_test", null);
-    if (!active || !active.endTime) return;
+  }
 
-    const now = Date.now();
-    state.test = active;
-    state.endTime = active.endTime;
-
-    if (active.endTime > now) {
-      if (confirm("You have a test in progress. Resume it?")) {
+  if (p2Active && p2Active.endTime) {
+    state.test = p2Active;
+    state.endTime = p2Active.endTime;
+    if (p2Active.endTime > now) {
+      if (confirm("You have a Phase-2 descriptive test in progress. Resume it?")) {
+        setPhase("phase2");
         resumeExam();
+        return;
       } else {
         finishTest(false);
       }
@@ -1059,7 +1115,7 @@ function buildQuestionText(test, question, index) {
     DATE: new Date(test.date).toLocaleString(),
     QUESTION: question.text,
     ANSWER: answerText || "[NO ANSWER WRITTEN]",
-    MODEL_ANSWER: modelText || "[No model answer provided – evaluate using your own expert knowledge of the topic.]"
+    MODEL_ANSWER: modelText || "[No model answer provided - evaluate using your own expert knowledge of the topic.]"
   };
 
   const filled = fillTemplate(EVAL_PROMPT_TEMPLATE, values);
@@ -1271,18 +1327,34 @@ function renderHistory() {
   history.forEach(t => {
     const card = document.createElement("div");
     card.className = "history-card";
+    card.id = `history-card-${t.id}`;
 
     const dateStr = new Date(t.date).toLocaleString();
     const usedStr = formatDuration(t.usedSeconds || 0);
     const totalMin = t.totalMinutes || 30;
     const autoNote = t.autoSubmitted ? " (auto-submitted)" : "";
 
+    let totalScore = 0;
+    let hasAnyScore = false;
+    let totalMax = 0;
+    let totalWords = 0;
+
     let rowsHTML = "";
+    let reviewCardsHTML = "";
+
     (t.questions || []).forEach((q, idx) => {
-      const ans = (t.answers && t.answers[q.id]) || { wordCount: 0 };
+      totalMax += Number(q.marks) || 10;
+      const ans = (t.answers && t.answers[q.id]) || { text: "", wordCount: 0 };
+      if (ans.wordCount) totalWords += ans.wordCount;
+
       const currentScore = (t.scores && t.scores[q.id] !== null && t.scores[q.id] !== undefined)
         ? t.scores[q.id]
         : "";
+
+      if (currentScore !== "" && !isNaN(currentScore)) {
+        totalScore += Number(currentScore);
+        hasAnyScore = true;
+      }
 
       rowsHTML += `
         <tr>
@@ -1300,14 +1372,47 @@ function renderHistory() {
           </td>
         </tr>
       `;
+
+      reviewCardsHTML += `
+        <div class="question-review-card">
+          <div class="q-review-header">
+            <span class="q-review-badge">Q${idx + 1} · ${escapeHTML(q.paper)}</span>
+            <span class="q-review-marks-tag">${escapeHTML(q.marks)} Marks · Target: ${escapeHTML(q.wordLimit)} Words</span>
+          </div>
+          <div class="q-review-prompt">${escapeHTML(q.text)}</div>
+          <div class="q-review-answer-box">
+            <div class="q-review-answer-title">
+              <span>✍️ My Written Answer (${ans.wordCount || 0} words)</span>
+              <button type="button" class="btn-copy-ans-mini" data-test-id="${escapeHTML(t.id)}" data-idx="${idx}">Copy Answer</button>
+            </div>
+            <div class="q-review-answer-text">${escapeHTML(ans.text || "(No answer recorded for this question)")}</div>
+          </div>
+          <div class="q-review-score-row">
+            <label>
+              <strong>Marks Scored:</strong>
+              <input type="number" step="0.5" min="0" max="${escapeHTML(q.marks)}" class="score-input score-input-inline"
+                     data-test-id="${escapeHTML(t.id)}" data-qid="${escapeHTML(q.id)}" value="${currentScore}">
+              <span>/ ${escapeHTML(q.marks)} Marks</span>
+            </label>
+            ${q.modelAnswer ? `<button type="button" class="btn-toggle-model-mini" data-test-id="${escapeHTML(t.id)}" data-idx="${idx}">Toggle Model Answer</button>` : ""}
+          </div>
+          ${q.modelAnswer ? `<div class="q-review-model-box" id="model-${escapeHTML(t.id)}-${idx}" style="display:none;"><strong>Model Answer:</strong><br>${escapeHTML(q.modelAnswer)}</div>` : ""}
+        </div>
+      `;
     });
+
+    const scoreBadge = hasAnyScore
+      ? `<span class="popover-type-badge normal-day" style="font-size:12px; font-weight:700; margin-left:6px;">🏆 Score: ${totalScore.toFixed(1)} / ${totalMax} Marks</span>`
+      : `<span style="font-size:11.5px; color:var(--muted); margin-left:6px;">(${totalWords} words written · Pending score)</span>`;
 
     card.innerHTML = `
       <div class="history-card-header">
-        <div>
-          <strong>${escapeHTML(dateStr)}</strong> – ${t.questions.length} question(s) · Time used: ${usedStr} of ${totalMin} min${autoNote}
+        <div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
+          <strong>${escapeHTML(dateStr)}</strong> - ${t.questions.length} question(s) · Time used: ${usedStr} of ${totalMin} min${autoNote}
+          ${scoreBadge}
         </div>
         <div class="actions">
+          <button type="button" class="btn-toggle-answer-review" data-test-id="${escapeHTML(t.id)}">📖 Review Answers &amp; Marks</button>
           <button type="button" class="btn-open-results" data-test-id="${escapeHTML(t.id)}">Open results</button>
           <button type="button" class="btn-retake secondary" data-test-id="${escapeHTML(t.id)}">Retake</button>
           <button type="button" class="btn-delete-test danger" data-test-id="${escapeHTML(t.id)}">Delete</button>
@@ -1328,6 +1433,13 @@ function renderHistory() {
           ${rowsHTML}
         </tbody>
       </table>
+      <div class="test-answers-review-container" id="review-container-${escapeHTML(t.id)}" style="display: none;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #003366; display: flex; align-items: center; justify-content: space-between;">
+          <span>📝 Candidate Written Answers &amp; Evaluation</span>
+          <span style="font-size: 12px; font-weight: normal; color: var(--muted);">${totalWords} total words</span>
+        </h4>
+        ${reviewCardsHTML}
+      </div>
     `;
 
     listElem.appendChild(card);
@@ -1347,8 +1459,19 @@ function handleScoreChange(testId, qid, newScoreVal) {
     test.scores[qid] = Math.max(0, Number(newScoreVal));
   }
 
+  test.totalScore = Object.values(test.scores).reduce((a, b) => a + (Number(b) || 0), 0);
   saveJSON("rbi_history", history);
   renderHistoryStats(history);
+
+  // Sync inputs with same testId and qid (table and expanded review)
+  document.querySelectorAll(`.score-input[data-test-id="${testId}"][data-qid="${qid}"]`).forEach(inp => {
+    inp.value = (test.scores[qid] !== null && test.scores[qid] !== undefined) ? test.scores[qid] : "";
+  });
+
+  // Re-render Phase-2 calendar to reflect updated marks badge immediately!
+  if (state.phase === "phase2") {
+    renderP2Calendar();
+  }
 }
 
 // Load questions from an old test into the setup screen for re-practice
@@ -1371,6 +1494,7 @@ function deleteTest(testId) {
     history = history.filter(t => t.id !== testId);
     saveJSON("rbi_history", history);
     renderHistory();
+    if (typeof renderP2Calendar === "function") renderP2Calendar();
   }
 }
 
@@ -1381,6 +1505,7 @@ function clearAllHistory() {
     if (confirmation === "DELETE") {
       localStorage.removeItem("rbi_history");
       renderHistory();
+      if (typeof renderP2Calendar === "function") renderP2Calendar();
     }
   }
 }
@@ -1879,14 +2004,18 @@ async function extractPdfText(arrayBuffer) {
 
   for (const pos of streamPositions) {
     let streamText = "";
-    const rawChunk = bytes.slice(pos.start, pos.end);
+    let actualEnd = pos.end;
+    while (actualEnd > pos.start && (bytes[actualEnd - 1] === 10 || bytes[actualEnd - 1] === 13)) {
+      actualEnd--;
+    }
+    const rawChunk = bytes.slice(pos.start, actualEnd);
 
     if (pos.isFlate) {
       try {
         const ds = new DecompressionStream("deflate");
         const writer = ds.writable.getWriter();
-        writer.write(rawChunk);
-        writer.close();
+        await writer.write(rawChunk);
+        await writer.close();
         const reader = ds.readable.getReader();
         const chunks = [];
         while (true) {
@@ -1903,8 +2032,8 @@ async function extractPdfText(arrayBuffer) {
         try {
           const ds = new DecompressionStream("deflate-raw");
           const writer = ds.writable.getWriter();
-          writer.write(rawChunk);
-          writer.close();
+          await writer.write(rawChunk);
+          await writer.close();
           const reader = ds.readable.getReader();
           const chunks = [];
           while (true) {
@@ -2658,8 +2787,8 @@ function renderP1SetupList() {
           <div class="p1-opts-preview">${optsPreview}</div>
         </div>
         <div style="display:flex; flex-direction:column; gap:4px;">
-          ${globalIdx > 0 ? `<button type="button" class="btn-p1-move-up" data-index="${globalIdx}" style="padding:2px 6px; font-size:11px;">▲</button>` : ""}
-          ${globalIdx < questions.length - 1 ? `<button type="button" class="btn-p1-move-down" data-index="${globalIdx}" style="padding:2px 6px; font-size:11px;">▼</button>` : ""}
+          ${globalIdx > 0 ? `<button type="button" class="btn-p1-move-up" data-index="${globalIdx}" style="padding:2px 6px; font-size:11px;">▲</button>` : `<span style="display:inline-block; width:20px; height:18px;"></span>`}
+          ${globalIdx < questions.length - 1 ? `<button type="button" class="btn-p1-move-down" data-index="${globalIdx}" style="padding:2px 6px; font-size:11px;">▼</button>` : `<span style="display:inline-block; width:20px; height:18px;"></span>`}
           <button type="button" class="danger btn-p1-delete-q" data-id="${q.id}" style="padding:2px 6px; font-size:11px;">✕</button>
         </div>
       </li>
@@ -3140,10 +3269,22 @@ function finishP1Test(auto = false) {
   test.maxScore = Number(maxScore);
   test.accuracy = Number(accuracy);
   test.completedAt = Date.now();
+  const totalSec = (test.totalMinutes || 25) * 60;
+  test.timeSpent = test.timeSpent || Math.max(0, totalSec - (test.remainingSeconds || 0));
+  test.durationSeconds = test.timeSpent;
 
   const history = loadJSON("rbi_p1_history", []);
   history.unshift(test);
   saveJSON("rbi_p1_history", history);
+
+  if (typeof renderP1Calendar === "function") {
+    renderP1Calendar();
+  }
+
+  if (state.p1_timerId) {
+    clearInterval(state.p1_timerId);
+    state.p1_timerId = null;
+  }
 
   localStorage.removeItem("rbi_p1_active_test");
 
@@ -3610,6 +3751,7 @@ function deleteP1HistoryItem(id) {
   history = history.filter(t => t.id !== id);
   saveJSON("rbi_p1_history", history);
   renderP1History();
+  if (typeof renderP1Calendar === "function") renderP1Calendar();
 }
 
 // Clear all Phase-1 History
@@ -3619,7 +3761,12 @@ function clearP1History() {
   if (!confirm("Are you sure you want to delete all Phase-1 test history?")) return;
   saveJSON("rbi_p1_history", []);
   renderP1History();
+  if (typeof renderP1Calendar === "function") renderP1Calendar();
 }
+
+// ============================================================
+// STUDY PLAN & CALENDAR INFRASTRUCTURE (EXCEL / CSV IMPORT)
+// ============================================================
 
 // ============================================================
 // STUDY PLAN & CALENDAR INFRASTRUCTURE (EXCEL / CSV IMPORT)
@@ -3635,78 +3782,88 @@ async function extractZipEntries(buf) {
       break;
     }
   }
-  if (eocdOffset === -1) throw new Error("Invalid or uncompressed archive format.");
 
-  const totalEntries = view.getUint16(eocdOffset + 10, true);
+  if (eocdOffset === -1) {
+    throw new Error("Invalid archive file format (end-of-central-directory signature not found).");
+  }
+
   const cdOffset = view.getUint32(eocdOffset + 16, true);
+  const cdEntries = view.getUint16(eocdOffset + 8, true);
 
   const entries = {};
-  let curr = cdOffset;
-  for (let i = 0; i < totalEntries; i++) {
-    if (view.getUint32(curr, true) !== 0x02014b50) break;
-    const compMethod = view.getUint16(curr + 10, true);
-    const compSize = view.getUint32(curr + 20, true);
-    const nameLen = view.getUint16(curr + 28, true);
-    const extraLen = view.getUint16(curr + 30, true);
-    const commLen = view.getUint16(curr + 32, true);
-    const localOffset = view.getUint32(curr + 42, true);
+  let p = cdOffset;
 
-    const nameBytes = new Uint8Array(buf.buffer, buf.byteOffset + curr + 46, nameLen);
-    const name = new TextDecoder().decode(nameBytes);
+  for (let i = 0; i < cdEntries; i++) {
+    if (p + 46 > buf.byteLength || view.getUint32(p, true) !== 0x02014b50) break;
 
-    // Read local header
-    const localNameLen = view.getUint16(localOffset + 26, true);
-    const localExtraLen = view.getUint16(localOffset + 28, true);
-    const dataOffset = localOffset + 30 + localNameLen + localExtraLen;
+    const compression = view.getUint16(p + 10, true);
+    const compressedSize = view.getUint32(p + 20, true);
+    const fileNameLen = view.getUint16(p + 28, true);
+    const extraLen = view.getUint16(p + 30, true);
+    const commentLen = view.getUint16(p + 32, true);
+    const localHeaderOffset = view.getUint32(p + 42, true);
 
-    const compBytes = new Uint8Array(buf.buffer, buf.byteOffset + dataOffset, compSize);
-    let decompressed;
-    if (compMethod === 0) {
-      decompressed = compBytes;
-    } else if (compMethod === 8) {
-      if (typeof DecompressionStream !== "undefined") {
+    const fileNameBytes = buf.subarray(p + 46, p + 46 + fileNameLen);
+    const fileName = new TextDecoder("utf-8").decode(fileNameBytes);
+
+    p += 46 + fileNameLen + extraLen + commentLen;
+
+    // Read local file header to locate exact compressed payload
+    if (localHeaderOffset + 30 > buf.byteLength) continue;
+    const localView = new DataView(buf.buffer, buf.byteOffset + localHeaderOffset, 30);
+    if (localView.getUint32(0, true) !== 0x04034b50) continue;
+
+    const localNameLen = localView.getUint16(26, true);
+    const localExtraLen = localView.getUint16(28, true);
+    const dataStart = localHeaderOffset + 30 + localNameLen + localExtraLen;
+    const dataEnd = dataStart + compressedSize;
+
+    if (dataEnd > buf.byteLength) continue;
+    const compressedData = buf.subarray(dataStart, dataEnd);
+
+    if (compression === 0) {
+      entries[fileName] = new TextDecoder("utf-8").decode(compressedData);
+    } else if (compression === 8) {
+      try {
         const ds = new DecompressionStream("deflate-raw");
         const writer = ds.writable.getWriter();
-        writer.write(compBytes);
-        writer.close();
+        await writer.write(compressedData);
+        await writer.close();
         const reader = ds.readable.getReader();
         const chunks = [];
-        let totalLen = 0;
         while (true) {
-          const { done, value } = await reader.read();
+          const { value, done } = await reader.read();
           if (done) break;
           chunks.push(value);
-          totalLen += value.length;
         }
-        decompressed = new Uint8Array(totalLen);
+        const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+        const merged = new Uint8Array(totalLen);
         let pos = 0;
-        for (const ch of chunks) {
-          decompressed.set(ch, pos);
-          pos += ch.length;
+        for (const c of chunks) {
+          merged.set(c, pos);
+          pos += c.length;
         }
-      } else {
-        throw new Error("DecompressionStream is not supported in this environment.");
+        entries[fileName] = new TextDecoder("utf-8").decode(merged);
+      } catch (e) {
+        // Continue if a single zip entry fails decompression
       }
-    } else {
-      throw new Error(`Unsupported compression method: ${compMethod}`);
     }
-
-    entries[name] = new TextDecoder().decode(decompressed);
-    curr += 46 + nameLen + extraLen + commLen;
   }
+
   return entries;
 }
 
-// Convert Excel column letters (A, B, AA...) to zero-based column index
-function colLettersToIndex(col) {
-  let idx = 0;
-  for (let i = 0; i < col.length; i++) {
-    idx = idx * 26 + (col.charCodeAt(i) - 64);
+// Convert Excel column letters (A, B, ..., Z, AA, AB) to 0-based index
+function colLettersToIndex(letters) {
+  let col = 0;
+  const str = String(letters).toUpperCase();
+  for (let i = 0; i < str.length; i++) {
+    col = col * 26 + (str.charCodeAt(i) - 64);
   }
-  return idx - 1;
+  return col - 1;
 }
 
-// Parse an XLSX ArrayBuffer completely offline in pure vanilla JS
+// Native client-side parser for modern XLSX files (without external dependencies)
 async function parseXLSX(arrayBuffer) {
   const buf = new Uint8Array(arrayBuffer);
   const entries = await extractZipEntries(buf);
@@ -3779,7 +3936,7 @@ async function parseXLSX(arrayBuffer) {
         cellValue = val;
       }
 
-      row[colIdx] = String(cellValue).trim();
+      row[colIdx] = sanitizeDashes(String(cellValue).trim());
     }
 
     if (row.length > 0 && row.some(cell => String(cell).trim().length > 0)) {
@@ -3807,11 +3964,11 @@ function parseCSV(text) {
         insideQuotes = !insideQuotes;
       }
     } else if ((c === ',' || c === '\t') && !insideQuotes) {
-      row.push(curr.trim());
+      row.push(sanitizeDashes(curr.trim()));
       curr = "";
     } else if ((c === '\r' || c === '\n') && !insideQuotes) {
       if (c === '\r' && next === '\n') i++;
-      row.push(curr.trim());
+      row.push(sanitizeDashes(curr.trim()));
       if (row.length > 0 && row.some(cell => cell.length > 0)) {
         rows.push(row);
       }
@@ -3822,7 +3979,7 @@ function parseCSV(text) {
     }
   }
   if (curr.length > 0 || row.length > 0) {
-    row.push(curr.trim());
+    row.push(sanitizeDashes(curr.trim()));
     if (row.some(cell => cell.length > 0)) rows.push(row);
   }
   return rows;
@@ -3835,27 +3992,28 @@ function parseScheduleDate(raw) {
 
   // Excel serial number (e.g. 46347)
   const num = Number(str);
-  if (!isNaN(num) && num > 20000 && num < 80000) {
-    try {
-      const date = new Date((num - 25569) * 86400 * 1000);
-      return getLocalDateString(date);
-    } catch (e) {}
+  if (!isNaN(num) && num > 25000 && num < 75000) {
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    epoch.setUTCDate(epoch.getUTCDate() + Math.floor(num));
+    const year = epoch.getUTCFullYear();
+    const month = String(epoch.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(epoch.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
 
-  // Already standard YYYY-MM-DD
+  // ISO "YYYY-MM-DD"
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
-    const [y, m, d] = str.split("-");
-    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const parts = str.split("-");
+    return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
   }
 
   // DD-MM-YYYY or DD/MM/YYYY
-  if (/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/.test(str)) {
-    const delim = str.includes("-") ? "-" : "/";
-    const [d, m, y] = str.split(delim);
-    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const dmyMatch = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/.exec(str);
+  if (dmyMatch) {
+    return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
   }
 
-  // Standard Date parse fallback
+  // Standard Date parsing fallback
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     return getLocalDateString(parsed);
@@ -3864,7 +4022,7 @@ function parseScheduleDate(raw) {
   return getLocalDateString(new Date());
 }
 
-// Classify day into normal, chapter-test, mix-test, or buffer-day
+// Classifies a day into: "chapter-test", "mix-test", "buffer-day", or "normal-day"
 function classifyDayType(p2Topic = "", p1Topic = "", ca = "") {
   const combined = `${p2Topic || ""} ${p1Topic || ""} ${ca || ""}`.toLowerCase();
   if (combined.includes("mix test")) return "mix-test";
@@ -3902,11 +4060,11 @@ function getDayMetadata(dateStr) {
     const meta = {
       dayNum,
       dayType,
-      p2_subject: p2Sub || "",
-      p2_topic: p2Top || "",
-      p1_subject: p1Sub || "",
-      p1_topic: p1Top || "",
-      ca: caTop || ""
+      p2_subject: sanitizeDashes(p2Sub || ""),
+      p2_topic: sanitizeDashes(p2Top || ""),
+      p1_subject: sanitizeDashes(p1Sub || ""),
+      p1_topic: sanitizeDashes(p1Top || ""),
+      ca: sanitizeDashes(caTop || "")
     };
     state.calendar_day_metadata[dateStr] = meta;
     return meta;
@@ -3917,10 +4075,11 @@ function getDayMetadata(dateStr) {
 
 // Rebuild day metadata from official schedule data or calendar tasks
 function rebuildCalendarMetadata() {
-  state.calendar_day_metadata = state.calendar_day_metadata || {};
+  state.calendar_day_metadata = {};
   const startStr = state.calendar_planStartDate || "2026-11-01";
   const [sYear, sMonth, sDay] = startStr.split("-").map(Number);
 
+  // Base: official schedule data
   if (typeof RBI_OFFICIAL_SCHEDULE_DATA !== "undefined" && Array.isArray(RBI_OFFICIAL_SCHEDULE_DATA)) {
     for (const item of RBI_OFFICIAL_SCHEDULE_DATA) {
       const targetDate = new Date(sYear, sMonth - 1, sDay + (item.day - 1));
@@ -3928,37 +4087,56 @@ function rebuildCalendarMetadata() {
       state.calendar_day_metadata[dateStr] = {
         dayNum: item.day,
         dayType: item.dayType || classifyDayType(item.p2_topic, item.p1_topic, item.ca),
-        p2_subject: item.p2_subject || "",
-        p2_topic: item.p2_topic || "",
-        p1_subject: item.p1_subject || "",
-        p1_topic: item.p1_topic || "",
-        ca: item.ca || ""
+        p2_subject: sanitizeDashes(item.p2_subject || ""),
+        p2_topic: sanitizeDashes(item.p2_topic || ""),
+        p1_subject: sanitizeDashes(item.p1_subject || ""),
+        p1_topic: sanitizeDashes(item.p1_topic || ""),
+        ca: sanitizeDashes(item.ca || "")
       };
     }
   }
 
-  // Overlay tasks from state.calendar
+  // Overlay tasks from state.calendar so custom spreadsheet imports take full precedence
   for (const t of (state.calendar || [])) {
     if (!state.calendar_day_metadata[t.date]) {
       state.calendar_day_metadata[t.date] = {
         dayNum: t.dayNum || null,
-        dayType: t.dayType || classifyDayType(t.topic, t.subject, ""),
-        p2_subject: t.phase === "Phase-2" ? t.subject : (t.p2_subject || ""),
-        p2_topic: t.phase === "Phase-2" ? t.topic : (t.p2_topic || ""),
-        p1_subject: t.phase === "Phase-1" ? t.subject : (t.p1_subject || ""),
-        p1_topic: t.phase === "Phase-1" ? t.topic : (t.p1_topic || ""),
-        ca: t.ca || (t.type === "Current Affairs" ? t.topic : "")
+        dayType: t.dayType || "normal-day",
+        p2_subject: t.phase === "Phase-2" ? sanitizeDashes(t.subject) : (t.p2_subject || ""),
+        p2_topic: t.phase === "Phase-2" ? sanitizeDashes(t.topic) : (t.p2_topic || ""),
+        p1_subject: t.phase === "Phase-1" ? sanitizeDashes(t.subject) : (t.p1_subject || ""),
+        p1_topic: t.phase === "Phase-1" ? sanitizeDashes(t.topic) : (t.p1_topic || ""),
+        ca: t.phase === "General" ? sanitizeDashes(t.topic) : (t.ca || "")
       };
+    } else {
+      const m = state.calendar_day_metadata[t.date];
+      if (t.dayType) m.dayType = t.dayType;
+      if (t.dayNum) m.dayNum = t.dayNum;
+      if (t.phase === "Phase-2") {
+        m.p2_subject = sanitizeDashes(t.subject || m.p2_subject);
+        m.p2_topic = sanitizeDashes(t.topic || m.p2_topic);
+      } else if (t.phase === "Phase-1") {
+        m.p1_subject = sanitizeDashes(t.subject || m.p1_subject);
+        m.p1_topic = sanitizeDashes(t.topic || m.p1_topic);
+      } else if (t.phase === "General") {
+        m.ca = sanitizeDashes(t.topic || m.ca);
+      }
     }
   }
 }
 
 // Convert 2D spreadsheet rows into structured task objects
-function mapScheduleRowsToTasks(rows) {
+function mapScheduleRowsToTasks(rows, startStr = null, daysFinished = 0) {
   if (!rows || rows.length < 2) return [];
 
   const headers = rows[0].map(h => String(h || "").trim().toLowerCase());
   const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+
+  const planStart = startStr || state.calendar_planStartDate || "2026-11-01";
+  state.calendar_planStartDate = planStart;
+  saveJSON("rbi_calendar_start_date", planStart);
+  const [sYear, sMonth, sDay] = planStart.split("-").map(Number);
+  const numFinished = parseInt(daysFinished, 10) || 0;
 
   // Check if this is the multi-phase RBI Study Schedule format
   const isMultiPhase = headers.some(h => h.includes("phase-2") || h.includes("phase 2") || h.includes("phase-1") || h.includes("phase 1"));
@@ -3970,9 +4148,6 @@ function mapScheduleRowsToTasks(rows) {
     const p1SubCol = findCol(["subject (phase-1)", "phase-1 subject", "subject p1", "p1 subject"]);
     const p1TopCol = findCol(["topic (phase-1)", "phase-1 topic", "topic p1", "p1 topic"]);
     const caCol = findCol(["current affairs", "ca", "general awareness", "spotlight"]);
-
-    const startStr = state.calendar_planStartDate || "2026-11-01";
-    const [sYear, sMonth, sDay] = startStr.split("-").map(Number);
 
     const tasks = [];
     state.calendar_day_metadata = state.calendar_day_metadata || {};
@@ -3987,13 +4162,14 @@ function mapScheduleRowsToTasks(rows) {
       const targetDate = new Date(sYear, sMonth - 1, sDay + (dayNum - 1));
       const dateStr = getLocalDateString(targetDate);
 
-      const p2Subject = p2SubCol !== -1 ? String(r[p2SubCol] || "").trim() : "";
-      const p2Topic = p2TopCol !== -1 ? String(r[p2TopCol] || "").trim() : "";
-      const p1Subject = p1SubCol !== -1 ? String(r[p1SubCol] || "").trim() : "";
-      const p1Topic = p1TopCol !== -1 ? String(r[p1TopCol] || "").trim() : "";
-      const caTopic = caCol !== -1 ? String(r[caCol] || "").trim() : "";
+      const p2Subject = sanitizeDashes(p2SubCol !== -1 ? String(r[p2SubCol] || "").trim() : "");
+      const p2Topic = sanitizeDashes(p2TopCol !== -1 ? String(r[p2TopCol] || "").trim() : "");
+      const p1Subject = sanitizeDashes(p1SubCol !== -1 ? String(r[p1SubCol] || "").trim() : "");
+      const p1Topic = sanitizeDashes(p1TopCol !== -1 ? String(r[p1TopCol] || "").trim() : "");
+      const caTopic = sanitizeDashes(caCol !== -1 ? String(r[caCol] || "").trim() : "");
 
       const dayType = classifyDayType(p2Topic, p1Topic, caTopic);
+      const isCompleted = (numFinished > 0 && dayNum <= numFinished);
 
       // Save day metadata
       state.calendar_day_metadata[dateStr] = {
@@ -4017,7 +4193,7 @@ function mapScheduleRowsToTasks(rows) {
           topic: p2Topic,
           type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "Descriptive Writing")),
           time: "10:00 AM",
-          status: "pending",
+          status: isCompleted ? "completed" : "pending",
           p2_subject: p2Subject,
           p2_topic: p2Topic,
           p1_subject: p1Subject,
@@ -4037,7 +4213,7 @@ function mapScheduleRowsToTasks(rows) {
           topic: p1Topic,
           type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "MCQ Practice")),
           time: "02:00 PM",
-          status: "pending",
+          status: isCompleted ? "completed" : "pending",
           p2_subject: p2Subject,
           p2_topic: p2Topic,
           p1_subject: p1Subject,
@@ -4057,7 +4233,7 @@ function mapScheduleRowsToTasks(rows) {
           topic: caTopic,
           type: "Current Affairs",
           time: "06:00 PM",
-          status: "pending",
+          status: isCompleted ? "completed" : "pending",
           p2_subject: p2Subject,
           p2_topic: p2Topic,
           p1_subject: p1Subject,
@@ -4086,9 +4262,9 @@ function mapScheduleRowsToTasks(rows) {
 
     const rawDate = dateCol !== -1 ? r[dateCol] : "";
     const rawPhase = phaseCol !== -1 ? String(r[phaseCol] || "").trim() : "";
-    const rawSubject = subjectCol !== -1 ? String(r[subjectCol] || "").trim() : "";
-    const rawTopic = topicCol !== -1 ? String(r[topicCol] || "").trim() : (r[0] || "Study Session");
-    const rawType = typeCol !== -1 ? String(r[typeCol] || "").trim() : "";
+    const rawSubject = sanitizeDashes(subjectCol !== -1 ? String(r[subjectCol] || "").trim() : "");
+    const rawTopic = sanitizeDashes(topicCol !== -1 ? String(r[topicCol] || "").trim() : (r[0] || "Study Session"));
+    const rawType = sanitizeDashes(typeCol !== -1 ? String(r[typeCol] || "").trim() : "");
     const rawTime = timeCol !== -1 ? String(r[timeCol] || "").trim() : "";
     const rawStatus = statusCol !== -1 ? String(r[statusCol] || "").trim().toLowerCase() : "";
 
@@ -4121,12 +4297,13 @@ function mapScheduleRowsToTasks(rows) {
       }
     }
 
-    const isCompleted = ["completed", "done", "yes", "true", "1", "finished"].includes(rawStatus);
+    const isCompleted = (numFinished > 0 && i <= numFinished) || ["completed", "done", "yes", "true", "1", "finished"].includes(rawStatus);
     const dateStr = parseScheduleDate(rawDate);
 
     tasks.push({
       id: makeId("task"),
       date: dateStr,
+      dayNum: i,
       phase: phase,
       subject: rawSubject || (phase === "Phase-1" ? "General Awareness" : "ESI"),
       topic: rawTopic || "Scheduled Preparation Task",
@@ -4141,11 +4318,12 @@ function mapScheduleRowsToTasks(rows) {
 }
 
 // Generate RBI Grade B Exam Study Plan (loads 415-Day Official Schedule if available)
-function generateDefaultSchedule(startDateStr = null) {
+function generateDefaultSchedule(startDateStr = null, daysFinished = 0) {
   const startStr = startDateStr || state.calendar_planStartDate || "2026-11-01";
   state.calendar_planStartDate = startStr;
   saveJSON("rbi_calendar_start_date", startStr);
 
+  const numFinished = parseInt(daysFinished, 10) || 0;
   const [sYear, sMonth, sDay] = startStr.split("-").map(Number);
 
   // If official 415-day schedule data is present
@@ -4162,12 +4340,14 @@ function generateDefaultSchedule(startDateStr = null) {
       state.calendar_day_metadata[dateStr] = {
         dayNum: dayNum,
         dayType: dayType,
-        p2_subject: item.p2_subject || "",
-        p2_topic: item.p2_topic || "",
-        p1_subject: item.p1_subject || "",
-        p1_topic: item.p1_topic || "",
-        ca: item.ca || ""
+        p2_subject: sanitizeDashes(item.p2_subject || ""),
+        p2_topic: sanitizeDashes(item.p2_topic || ""),
+        p1_subject: sanitizeDashes(item.p1_subject || ""),
+        p1_topic: sanitizeDashes(item.p1_topic || ""),
+        ca: sanitizeDashes(item.ca || "")
       };
+
+      const isCompleted = (numFinished > 0 && dayNum <= numFinished);
 
       if (item.p2_topic) {
         tasks.push({
@@ -4176,16 +4356,16 @@ function generateDefaultSchedule(startDateStr = null) {
           dayNum: dayNum,
           dayType: dayType,
           phase: "Phase-2",
-          subject: item.p2_subject || "Phase-2",
-          topic: item.p2_topic,
+          subject: sanitizeDashes(item.p2_subject || "Phase-2"),
+          topic: sanitizeDashes(item.p2_topic),
           type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "Descriptive Writing")),
           time: "10:00 AM",
-          status: "pending",
-          p2_subject: item.p2_subject,
-          p2_topic: item.p2_topic,
-          p1_subject: item.p1_subject,
-          p1_topic: item.p1_topic,
-          ca: item.ca
+          status: isCompleted ? "completed" : "pending",
+          p2_subject: sanitizeDashes(item.p2_subject),
+          p2_topic: sanitizeDashes(item.p2_topic),
+          p1_subject: sanitizeDashes(item.p1_subject),
+          p1_topic: sanitizeDashes(item.p1_topic),
+          ca: sanitizeDashes(item.ca)
         });
       }
 
@@ -4196,16 +4376,16 @@ function generateDefaultSchedule(startDateStr = null) {
           dayNum: dayNum,
           dayType: dayType,
           phase: "Phase-1",
-          subject: item.p1_subject || "Phase-1",
-          topic: item.p1_topic,
+          subject: sanitizeDashes(item.p1_subject || "Phase-1"),
+          topic: sanitizeDashes(item.p1_topic),
           type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "MCQ Practice")),
           time: "02:00 PM",
-          status: "pending",
-          p2_subject: item.p2_subject,
-          p2_topic: item.p2_topic,
-          p1_subject: item.p1_subject,
-          p1_topic: item.p1_topic,
-          ca: item.ca
+          status: isCompleted ? "completed" : "pending",
+          p2_subject: sanitizeDashes(item.p2_subject),
+          p2_topic: sanitizeDashes(item.p2_topic),
+          p1_subject: sanitizeDashes(item.p1_subject),
+          p1_topic: sanitizeDashes(item.p1_topic),
+          ca: sanitizeDashes(item.ca)
         });
       }
 
@@ -4217,15 +4397,15 @@ function generateDefaultSchedule(startDateStr = null) {
           dayType: dayType,
           phase: "General",
           subject: "Current Affairs & Reports",
-          topic: item.ca,
+          topic: sanitizeDashes(item.ca),
           type: "Current Affairs",
           time: "06:00 PM",
-          status: "pending",
-          p2_subject: item.p2_subject,
-          p2_topic: item.p2_topic,
-          p1_subject: item.p1_subject,
-          p1_topic: item.p1_topic,
-          ca: item.ca
+          status: isCompleted ? "completed" : "pending",
+          p2_subject: sanitizeDashes(item.p2_subject),
+          p2_topic: sanitizeDashes(item.p2_topic),
+          p1_subject: sanitizeDashes(item.p1_subject),
+          p1_topic: sanitizeDashes(item.p1_topic),
+          ca: sanitizeDashes(item.ca)
         });
       }
     }
@@ -4249,38 +4429,58 @@ function generateDefaultSchedule(startDateStr = null) {
   for (let i = 0; i < 30; i++) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
     const item = sampleTopics[i % sampleTopics.length];
+    const dayNum = i + 1;
+    const isCompleted = (numFinished > 0 && dayNum <= numFinished);
     plan.push({
       id: makeId("task"),
       date: getLocalDateString(d),
-      dayNum: i + 1,
+      dayNum: dayNum,
       dayType: i % 7 === 4 ? "chapter-test" : (i % 7 === 6 ? "buffer-day" : "normal-day"),
       phase: item.phase,
-      subject: item.subject,
-      topic: item.topic,
+      subject: sanitizeDashes(item.subject),
+      topic: sanitizeDashes(item.topic),
       type: item.type,
       time: item.time,
-      status: i === 0 ? "completed" : "pending"
+      status: isCompleted ? "completed" : "pending"
     });
   }
 
   return plan;
 }
 
-// Load official 415-Day Schedule
-function loadOfficialSchedule() {
-  if (state.calendar && state.calendar.length > 0) {
-    if (!confirm("Load the official 415-Day RBI Grade B Preparation Schedule? This will update your calendar schedule.")) return;
+// Retrieve dictionary of Phase-1 exams mapped by YYYY-MM-DD
+function getPhase1ExamsByDate() {
+  const history = loadJSON("rbi_p1_history", []);
+  const map = {};
+  for (const item of history) {
+    const raw = item.completedAt || item.date;
+    if (!raw) continue;
+    const dStr = getLocalDateString(new Date(raw));
+    if (!map[dStr]) map[dStr] = [];
+    map[dStr].push(item);
   }
-  const startStr = ($("cal-plan-start-date")?.value) || state.calendar_planStartDate || "2026-11-01";
-  state.calendar_planStartDate = startStr;
-  saveJSON("rbi_calendar_start_date", startStr);
-  state.calendar = generateDefaultSchedule(startStr);
-  saveCalendarSchedule();
-  renderCalendar();
-  const statusElem = $("calendar-import-status");
-  if (statusElem) {
-    statusElem.textContent = `✓ Loaded Official 415-Day RBI Grade B Schedule (88 Chapter Tests, 30 Mix Tests, 23 Buffer Days)!`;
-    setTimeout(() => { statusElem.textContent = ""; }, 5000);
+  return map;
+}
+
+// Retrieve dictionary of Phase-2 written tests mapped by YYYY-MM-DD
+function getPhase2ExamsByDate() {
+  const history = loadJSON("rbi_history", []);
+  const map = {};
+  for (const item of history) {
+    if (!item.date) continue;
+    const dStr = getLocalDateString(new Date(item.date));
+    if (!map[dStr]) map[dStr] = [];
+    map[dStr].push(item);
+  }
+  return map;
+}
+
+// Generic routing function: routes to active phase calendar
+function renderCalendar() {
+  if (state.phase === "phase1") {
+    renderP1Calendar();
+  } else {
+    renderP2Calendar();
   }
 }
 
@@ -4289,60 +4489,63 @@ function saveCalendarSchedule() {
   saveJSON("rbi_study_schedule", state.calendar || []);
 }
 
-// Renders the overall calendar screen
-function renderCalendar() {
-  if (!state.calendar || state.calendar.length < 50) {
+// ============================================================
+// PHASE 1 CALENDAR: OBJECTIVE DRILLS & EXAM MARKS
+// ============================================================
+
+function renderP1Calendar() {
+  if (!state.calendar || state.calendar.length < 30) {
     state.calendar = generateDefaultSchedule();
     saveCalendarSchedule();
   }
 
   rebuildCalendarMetadata();
-  renderCalendarSummary();
-  renderCalendarControls();
+  renderP1CalendarSummary();
+  renderP1CalendarControls();
 
-  const monthView = $("calendar-month-view");
-  const agendaView = $("calendar-agenda-view");
-  const viewMonthBtn = $("cal-view-month");
-  const viewAgendaBtn = $("cal-view-agenda");
+  const monthView = $("p1-calendar-month-view");
+  const agendaView = $("p1-calendar-agenda-view");
+  const viewMonthBtn = $("p1-cal-view-month");
+  const viewAgendaBtn = $("p1-cal-view-agenda");
 
-  if (state.calendar_view === "month") {
+  if (state.p1_calendar_view === "month") {
     if (monthView) monthView.style.display = "";
     if (agendaView) agendaView.style.display = "none";
     if (viewMonthBtn) viewMonthBtn.classList.add("active");
     if (viewAgendaBtn) viewAgendaBtn.classList.remove("active");
-    renderMonthGrid();
+    renderP1MonthGrid();
   } else {
     if (monthView) monthView.style.display = "none";
     if (agendaView) agendaView.style.display = "";
     if (viewMonthBtn) viewMonthBtn.classList.remove("active");
     if (viewAgendaBtn) viewAgendaBtn.classList.add("active");
-    renderAgendaView();
+    renderP1AgendaView();
   }
 
-  renderSelectedDayTasks();
+  renderP1SelectedDayTasks();
 }
 
-// Renders stats progress bar
-function renderCalendarSummary() {
-  const container = $("calendar-progress-bar");
+function renderP1CalendarSummary() {
+  const container = $("p1-calendar-progress-bar");
   if (!container) return;
 
-  const tasks = state.calendar || [];
+  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-1" || t.phase === "General");
   const total = tasks.length;
   const completed = tasks.filter(t => t.status === "completed").length;
   const pending = total - completed;
-  const todayStr = getLocalDateString(new Date());
-  const todayTasks = tasks.filter(t => t.date === todayStr);
-
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  const p1History = loadJSON("rbi_p1_history", []);
+  const examsCount = p1History.length;
+  const avgAcc = examsCount > 0 ? (p1History.reduce((a, b) => a + (Number(b.accuracy) || 0), 0) / examsCount).toFixed(1) : "0.0";
 
   container.innerHTML = `
     <div class="summary-stat-card">
       <div class="val">${total}</div>
-      <div class="lbl">Total Scheduled Tasks</div>
+      <div class="lbl">Phase-1 Scheduled Tasks</div>
     </div>
     <div class="summary-stat-card">
-      <div class="val" style="color:#16a34a;">${completed} <span style="font-size:14px; font-weight:normal;">(${pct}%)</span></div>
+      <div class="val" style="color:#16a34a;">${completed} <span style="font-size:13px; font-weight:normal;">(${pct}%)</span></div>
       <div class="lbl">Tasks Completed</div>
     </div>
     <div class="summary-stat-card">
@@ -4350,37 +4553,35 @@ function renderCalendarSummary() {
       <div class="lbl">Tasks Pending</div>
     </div>
     <div class="summary-stat-card">
-      <div class="val" style="color:#2563eb;">${todayTasks.length}</div>
-      <div class="lbl">Today's Schedule</div>
+      <div class="val" style="color:#003366;">${examsCount} <span style="font-size:13px; font-weight:normal;">(${avgAcc}% Acc)</span></div>
+      <div class="lbl">Objective Exams Logged</div>
     </div>
   `;
 }
 
-// Updates month/year heading & controls
-function renderCalendarControls() {
-  const heading = $("cal-month-year-display");
+function renderP1CalendarControls() {
+  const heading = $("p1-cal-month-year-display");
   if (!heading) return;
 
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
   ];
-  const year = state.calendar_currentDate.getFullYear();
-  const month = state.calendar_currentDate.getMonth();
+  const year = state.p1_calendar_currentDate.getFullYear();
+  const month = state.p1_calendar_currentDate.getMonth();
   heading.textContent = `${monthNames[month]} ${year}`;
 
-  const planStartInput = $("cal-plan-start-date");
+  const planStartInput = $("p1-cal-upload-start-date");
   if (planStartInput && state.calendar_planStartDate) {
     planStartInput.value = state.calendar_planStartDate;
   }
 }
 
-// Renders the 7-column Month Grid
-function renderMonthGrid() {
-  const grid = $("calendar-days-grid");
+function renderP1MonthGrid() {
+  const grid = $("p1-calendar-days-grid");
   if (!grid) return;
 
-  const cur = state.calendar_currentDate;
+  const cur = state.p1_calendar_currentDate;
   const year = cur.getFullYear();
   const month = cur.getMonth();
 
@@ -4389,24 +4590,22 @@ function renderMonthGrid() {
   const daysInPrevMonth = new Date(year, month, 0).getDate();
 
   const todayStr = getLocalDateString(new Date());
-  const selectedStr = state.calendar_selectedDate;
+  const selectedStr = state.p1_calendar_selectedDate;
 
-  const tasks = state.calendar || [];
+  const p1ExamsMap = getPhase1ExamsByDate();
+  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-1" || t.phase === "General");
 
-  // Filter tasks by phase, status, and day type
+  // Filter tasks by status and day type
   const filteredTasks = tasks.filter(t => {
-    if (state.calendar_filterPhase === "phase1" && t.phase !== "Phase-1") return false;
-    if (state.calendar_filterPhase === "phase2" && t.phase !== "Phase-2") return false;
-    if (state.calendar_filterStatus === "pending" && t.status === "completed") return false;
-    if (state.calendar_filterStatus === "completed" && t.status !== "completed") return false;
-    if (state.calendar_filterDayType && state.calendar_filterDayType !== "all") {
+    if (state.p1_calendar_filterStatus === "pending" && t.status === "completed") return false;
+    if (state.p1_calendar_filterStatus === "completed" && t.status !== "completed") return false;
+    if (state.p1_calendar_filterDayType && state.p1_calendar_filterDayType !== "all") {
       const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
-      if (dType !== state.calendar_filterDayType) return false;
+      if (dType !== state.p1_calendar_filterDayType) return false;
     }
     return true;
   });
 
-  // Group tasks by date string
   const taskMap = {};
   for (const t of filteredTasks) {
     if (!taskMap[t.date]) taskMap[t.date] = [];
@@ -4420,13 +4619,16 @@ function renderMonthGrid() {
     const dayNum = daysInPrevMonth - i;
     const prevDate = new Date(year, month - 1, dayNum);
     const dateStr = getLocalDateString(prevDate);
-    html += renderDayCell(dayNum, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || []);
+    const dayExams = p1ExamsMap[dateStr] || [];
+    html += renderP1DayCell(dayNum, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
   }
 
   // 2. Current month days
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    html += renderDayCell(d, dateStr, false, todayStr, selectedStr, taskMap[dateStr] || []);
+    const dayExams = p1ExamsMap[dateStr] || [];
+    if (state.p1_calendar_filterStatus === "exams" && dayExams.length === 0) continue;
+    html += renderP1DayCell(d, dateStr, false, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
   }
 
   // 3. Trailing days from next month
@@ -4435,21 +4637,20 @@ function renderMonthGrid() {
   for (let d = 1; d <= remainder; d++) {
     const nextDate = new Date(year, month + 1, d);
     const dateStr = getLocalDateString(nextDate);
-    html += renderDayCell(d, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || []);
+    const dayExams = p1ExamsMap[dateStr] || [];
+    html += renderP1DayCell(d, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
   }
 
   grid.innerHTML = html;
 }
 
-// Render individual day cell HTML with distinct markers for normal, chapter test, mix test, buffer days
-function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, dayTasks) {
+function renderP1DayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, dayTasks, exams) {
   const isToday = dateStr === todayStr;
   const isSelected = dateStr === selectedStr;
 
   const dayMeta = getDayMetadata(dateStr);
   const dayType = dayMeta?.dayType || (dayTasks[0]?.dayType) || "normal-day";
 
-  // Build badge tag
   let badgeHtml = "";
   if (dayType === "chapter-test") {
     badgeHtml = `<span class="day-badge-tag tag-chapter" title="Chapter Test">📝 Ch Test</span>`;
@@ -4461,16 +4662,28 @@ function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, day
     badgeHtml = `<span class="day-badge-tag tag-normal" title="Normal Study Day">D-${dayMeta.dayNum}</span>`;
   }
 
+  // Phase-1 Exam Score Badge Pill
+  let examScorePill = "";
+  const hasExam = exams && exams.length > 0;
+  if (hasExam) {
+    const latest = exams[0];
+    const scoreVal = Number(latest.score || 0).toFixed(1);
+    const maxVal = Number(latest.maxScore || latest.totalQuestions || 50).toFixed(0);
+    const pctVal = latest.percentage || Math.round((Number(latest.score || 0) / Number(maxVal)) * 100);
+    examScorePill = `
+      <div class="cal-exam-score-pill p1-score-pill" title="Phase-1 Exam Taken: ${scoreVal}/${maxVal} Marks (${pctVal}% Accuracy)">
+        <span>🏆 ${scoreVal}/${maxVal} (${pctVal}%)</span>
+      </div>
+    `;
+  }
+
   const countBadge = dayTasks.length > 0 ? `<span class="cal-day-task-count">${dayTasks.length}</span>` : "";
 
-  // Display top 3 task pills
-  const maxPills = 3;
+  const maxPills = hasExam ? 2 : 3;
   let pillsHtml = "";
   for (let i = 0; i < Math.min(dayTasks.length, maxPills); i++) {
     const t = dayTasks[i];
-    let phaseClass = "general";
-    if (t.phase === "Phase-1") phaseClass = "phase-1";
-    if (t.phase === "Phase-2") phaseClass = "phase-2";
+    let phaseClass = t.phase === "Phase-1" ? "phase-1" : "general";
     if (t.type === "Revision") phaseClass = "revision";
     if (t.type === "Mock Test" || t.type === "Chapter Test" || t.type === "Mix Test") phaseClass = "mock";
 
@@ -4478,7 +4691,7 @@ function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, day
     const doneCheck = t.status === "completed" ? "✓ " : "• ";
     pillsHtml += `
       <div class="cal-event-pill ${phaseClass} ${doneClass}" title="${escapeHTML(t.subject + ': ' + t.topic)}">
-        <span>${doneCheck}<strong>${escapeHTML(t.phase)}</strong> ${escapeHTML(t.topic)}</span>
+        <span>${doneCheck}<strong>${escapeHTML(t.subject)}</strong> ${escapeHTML(t.topic)}</span>
       </div>
     `;
   }
@@ -4487,7 +4700,7 @@ function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, day
   }
 
   return `
-    <div class="cal-day-cell day-type-${dayType} ${isOtherMonth ? 'is-other-month' : ''} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''}" data-date="${dateStr}" data-day-type="${dayType}">
+    <div class="cal-day-cell day-type-${dayType} ${isOtherMonth ? 'is-other-month' : ''} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''} ${hasExam ? 'has-exam-score' : ''}" data-date="${dateStr}" data-day-type="${dayType}">
       <div class="cal-day-header">
         <div style="display:flex; align-items:center; gap:4px;">
           <span class="cal-day-num">${dayNum}</span>
@@ -4495,6 +4708,7 @@ function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, day
         </div>
         ${countBadge}
       </div>
+      ${examScorePill}
       <div class="cal-day-events">
         ${pillsHtml}
       </div>
@@ -4502,8 +4716,7 @@ function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, day
   `;
 }
 
-// Build floating Hover Popover HTML showing today's Phase-1 and Phase-2 chapters and topics
-function buildPopoverHTML(dateStr, dayMeta) {
+function buildP1PopoverHTML(dateStr, dayMeta, exams) {
   const dateObj = new Date(dateStr + "T00:00:00");
   const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
   const formattedDate = dateObj.toLocaleDateString(undefined, options);
@@ -4515,12 +4728,35 @@ function buildPopoverHTML(dateStr, dayMeta) {
   if (dayType === "buffer-day") badgeLabel = "⏳ Buffer Day";
 
   const dayTitle = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} • ${formattedDate}` : formattedDate;
-
-  const p2Subject = dayMeta?.p2_subject || "";
-  const p2Topic = dayMeta?.p2_topic || "";
   const p1Subject = dayMeta?.p1_subject || "";
   const p1Topic = dayMeta?.p1_topic || "";
   const caTopic = dayMeta?.ca || "";
+  const p2Subject = dayMeta?.p2_subject || "";
+  const p2Topic = dayMeta?.p2_topic || "";
+
+  let examSectionHTML = "";
+  if (exams && exams.length > 0) {
+    const latest = exams[0];
+    const scoreVal = Number(latest.score || 0).toFixed(1);
+    const maxVal = Number(latest.maxScore || latest.totalQuestions || 50).toFixed(0);
+    const pctVal = latest.percentage || Math.round((Number(latest.score || 0) / Number(maxVal)) * 100);
+    examSectionHTML = `
+      <div class="popover-sec marks-sec">
+        <div class="popover-sec-label" style="color:#065f46;">
+          <span>🏆</span>
+          <span>TODAY'S PHASE-1 EXAM SCORE LOG</span>
+        </div>
+        <div class="popover-marks-row">
+          <span class="marks-val">${scoreVal} / ${maxVal} Marks</span>
+          <span style="font-size:12.5px; font-weight:700; color:#047857;">(${pctVal}%)</span>
+          <span style="font-size:11.5px; color:#065f46;">· ${latest.accuracy}% Accuracy</span>
+        </div>
+        <div style="font-size:11px; color:#047857; margin-top:2px;">
+          🟩 ${latest.correctCount || 0} Correct · 🟥 ${latest.incorrectCount || 0} Incorrect · ⬜ ${latest.unattemptedCount || 0} Skipped
+        </div>
+      </div>
+    `;
+  }
 
   return `
     <div class="popover-header">
@@ -4528,27 +4764,19 @@ function buildPopoverHTML(dateStr, dayMeta) {
       <span class="popover-type-badge ${dayType}">${escapeHTML(badgeLabel)}</span>
     </div>
 
-    <!-- Phase 2 Details -->
-    <div class="popover-sec p2">
-      <div class="popover-sec-label">
-        <span>📖</span>
-        <span>PHASE-2 (Descriptive / Subjective)</span>
-        ${p2Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p2Subject)}</span>` : ""}
-      </div>
-      <div class="popover-topic-text">${escapeHTML(p2Topic || "No Phase-2 topic scheduled for today")}</div>
-    </div>
+    ${examSectionHTML}
 
-    <!-- Phase 1 Details -->
+    <!-- Phase 1 Drill Details -->
     <div class="popover-sec p1">
       <div class="popover-sec-label">
         <span>🎯</span>
-        <span>PHASE-1 (Objective / MCQ)</span>
+        <span>PHASE-1 OBJECTIVE DRILL</span>
         ${p1Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p1Subject)}</span>` : ""}
       </div>
       <div class="popover-topic-text">${escapeHTML(p1Topic || "No Phase-1 topic scheduled for today")}</div>
     </div>
 
-    <!-- Current Affairs if present -->
+    <!-- Current Affairs -->
     ${caTopic ? `
     <div class="popover-sec ca">
       <div class="popover-sec-label">
@@ -4559,73 +4787,57 @@ function buildPopoverHTML(dateStr, dayMeta) {
     </div>
     ` : ""}
 
+    <!-- Overall Phase 2 Subject Context -->
+    ${p2Topic ? `
+    <div class="popover-sec p2" style="opacity:0.85;">
+      <div class="popover-sec-label">
+        <span>📖</span>
+        <span>PHASE-2 STUDY CONTEXT</span>
+        ${p2Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p2Subject)}</span>` : ""}
+      </div>
+      <div class="popover-topic-text" style="font-size:12px;">${escapeHTML(p2Topic)}</div>
+    </div>
+    ` : ""}
+
     <div class="popover-hint">Click day to view or mark tasks completed</div>
   `;
 }
 
-// Show hover popover on calendar cell
-function showCalendarHoverPopover(e, cell) {
-  const popover = $("calendar-hover-popover");
+function showP1CalendarHoverPopover(e, cell) {
+  const popover = $("p1-calendar-hover-popover");
   if (!popover) return;
 
   const dateStr = cell.dataset.date;
   if (!dateStr) return;
 
   const dayMeta = getDayMetadata(dateStr);
-  if (!dayMeta && !cell.querySelector(".cal-event-pill")) {
-    hideCalendarHoverPopover();
+  const p1ExamsMap = getPhase1ExamsByDate();
+  const dayExams = p1ExamsMap[dateStr] || [];
+
+  if (!dayMeta && !cell.querySelector(".cal-event-pill") && dayExams.length === 0) {
+    hideP1CalendarHoverPopover();
     return;
   }
 
-  popover.innerHTML = buildPopoverHTML(dateStr, dayMeta);
+  popover.innerHTML = buildP1PopoverHTML(dateStr, dayMeta, dayExams);
   popover.style.display = "block";
   popover.style.opacity = "1";
 
   positionCalendarPopover(e.clientX, e.clientY, popover);
 }
 
-// Dynamically position hover popover keeping it inside viewport
-function positionCalendarPopover(mouseX, mouseY, popover) {
-  const pad = 14;
-  const popRect = popover.getBoundingClientRect();
-  const popW = popRect.width || 350;
-  const popH = popRect.height || 220;
-
-  let left = mouseX + pad;
-  let top = mouseY + pad;
-
-  // Viewport horizontal boundary check
-  if (left + popW > window.innerWidth - 12) {
-    left = mouseX - popW - pad;
-  }
-  if (left < 10) left = 10;
-
-  // Viewport vertical boundary check
-  if (top + popH > window.innerHeight - 12) {
-    top = mouseY - popH - pad;
-  }
-  if (top < 10) top = 10;
-
-  popover.style.left = `${left}px`;
-  popover.style.top = `${top}px`;
+function hideP1CalendarHoverPopover() {
+  const popover = $("p1-calendar-hover-popover");
+  if (popover) popover.style.display = "none";
 }
 
-// Hide hover popover
-function hideCalendarHoverPopover() {
-  const popover = $("calendar-hover-popover");
-  if (popover) {
-    popover.style.display = "none";
-  }
-}
-
-// Renders right-hand day detail panel
-function renderSelectedDayTasks() {
-  const heading = $("cal-selected-date-heading");
-  const sub = $("cal-selected-date-sub");
-  const list = $("cal-selected-day-tasks");
+function renderP1SelectedDayTasks() {
+  const heading = $("p1-cal-selected-date-heading");
+  const sub = $("p1-cal-selected-date-sub");
+  const list = $("p1-cal-selected-day-tasks");
   if (!heading || !list) return;
 
-  const selDateStr = state.calendar_selectedDate;
+  const selDateStr = state.p1_calendar_selectedDate;
   const dateObj = new Date(selDateStr + "T00:00:00");
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const humanDate = dateObj.toLocaleDateString(undefined, options);
@@ -4649,33 +4861,57 @@ function renderSelectedDayTasks() {
 
   heading.innerHTML = `${escapeHTML(humanDate)}${metaBadge}`;
 
-  const tasks = state.calendar || [];
-  const dayTasks = tasks.filter(t => t.date === selDateStr);
-  sub.textContent = `${dayTasks.length} task${dayTasks.length === 1 ? '' : 's'} scheduled`;
+  const tasks = (state.calendar || []).filter(t => t.date === selDateStr && (t.phase === "Phase-1" || t.phase === "General"));
+  const p1ExamsMap = getPhase1ExamsByDate();
+  const dayExams = p1ExamsMap[selDateStr] || [];
 
-  if (dayTasks.length === 0) {
+  sub.textContent = `${tasks.length} task(s) scheduled · ${dayExams.length} exam(s) taken`;
+
+  let examCardsHTML = "";
+  if (dayExams.length > 0) {
+    examCardsHTML = dayExams.map(ex => {
+      const scoreVal = Number(ex.score || 0).toFixed(1);
+      const maxVal = Number(ex.maxScore || ex.totalQuestions || 50).toFixed(0);
+      const pctVal = ex.percentage || Math.round((Number(ex.score || 0) / Number(maxVal)) * 100);
+      return `
+        <div class="task-card" style="border-left: 3.5px solid #10b981; background: #f0fdf4; margin-bottom: 10px;">
+          <div class="task-card-top">
+            <span class="task-phase-badge" style="background:#10b981; color:#fff;">🏆 Phase-1 Exam Score</span>
+            <span style="font-size:11.5px; font-weight:700; color:#047857;">${ex.accuracy}% Accuracy</span>
+          </div>
+          <div class="task-title" style="color:#065f46; font-size:15px; margin:4px 0;">
+            Score: ${scoreVal} / ${maxVal} Marks (${pctVal}%)
+          </div>
+          <div style="font-size:12px; color:#047857; line-height:1.4;">
+            🟩 ${ex.correctCount || 0} Correct · 🟥 ${ex.incorrectCount || 0} Incorrect · ⬜ ${ex.unattemptedCount || 0} Skipped<br>
+            ⏱️ Duration: ${formatDuration(ex.durationSeconds || ex.timeSpent || 0)}
+          </div>
+          <div style="margin-top:8px;">
+            <button type="button" class="btn-minimal-primary p1-review-exam-btn" data-id="${escapeHTML(ex.id)}" style="font-size:11.5px; padding:4px 10px;">📊 View in Phase-1 History</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  if (tasks.length === 0 && dayExams.length === 0) {
     list.innerHTML = `
       <div style="text-align: center; padding: 36px 16px; color: var(--muted); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px;">
         <span style="font-size: 24px; display: block; margin-bottom: 6px;">📅</span>
-        <strong style="color: #334155; font-size: 13.5px; display: block;">No tasks scheduled for this day</strong>
-        <p style="font-size: 12px; margin: 4px 0 12px 0;">Stay consistent with your RBI Grade B prep!</p>
-        <button type="button" id="btn-empty-add-task" class="btn-minimal-primary" style="font-size: 12.5px; padding: 6px 14px;">+ Add Task</button>
+        <strong style="color: #334155; font-size: 13.5px; display: block;">No Phase-1 tasks scheduled for this day</strong>
+        <p style="font-size: 12px; margin: 4px 0 12px 0;">Stay consistent with your RBI Grade B objective drills!</p>
+        <button type="button" id="btn-p1-empty-add-task" class="btn-minimal-primary" style="font-size: 12.5px; padding: 6px 14px;">+ Add Task</button>
       </div>
     `;
-    const emptyBtn = $("btn-empty-add-task");
-    if (emptyBtn) emptyBtn.addEventListener("click", () => openTaskModal());
+    const emptyBtn = $("btn-p1-empty-add-task");
+    if (emptyBtn) emptyBtn.addEventListener("click", () => openTaskModal(null, "Phase-1"));
     return;
   }
 
-  list.innerHTML = dayTasks.map(t => {
+  const taskCardsHTML = tasks.map(t => {
     const isDone = t.status === "completed";
-    let phaseClass = "general";
-    if (t.phase === "Phase-1") phaseClass = "phase-1";
-    if (t.phase === "Phase-2") phaseClass = "phase-2";
-
-    const practiceAction = (t.phase === "Phase-1" || t.phase === "Phase-2")
-      ? `<button type="button" class="task-action-btn practice-btn" data-action="practice" data-phase="${t.phase}">▶ Practice</button>`
-      : "";
+    let phaseClass = t.phase === "Phase-1" ? "phase-1" : "general";
+    const practiceAction = `<button type="button" class="task-action-btn practice-btn" data-action="practice" data-phase="${t.phase}">▶ Practice</button>`;
 
     return `
       <div class="task-card ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
@@ -4702,22 +4938,21 @@ function renderSelectedDayTasks() {
       </div>
     `;
   }).join("");
+
+  list.innerHTML = examCardsHTML + taskCardsHTML;
 }
 
-// Renders the Agenda / List View
-function renderAgendaView() {
-  const container = $("calendar-agenda-list");
+function renderP1AgendaView() {
+  const container = $("p1-calendar-agenda-list");
   if (!container) return;
 
-  const tasks = state.calendar || [];
+  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-1" || t.phase === "General");
   const filteredTasks = tasks.filter(t => {
-    if (state.calendar_filterPhase === "phase1" && t.phase !== "Phase-1") return false;
-    if (state.calendar_filterPhase === "phase2" && t.phase !== "Phase-2") return false;
-    if (state.calendar_filterStatus === "pending" && t.status === "completed") return false;
-    if (state.calendar_filterStatus === "completed" && t.status !== "completed") return false;
-    if (state.calendar_filterDayType && state.calendar_filterDayType !== "all") {
+    if (state.p1_calendar_filterStatus === "pending" && t.status === "completed") return false;
+    if (state.p1_calendar_filterStatus === "completed" && t.status !== "completed") return false;
+    if (state.p1_calendar_filterDayType && state.p1_calendar_filterDayType !== "all") {
       const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
-      if (dType !== state.calendar_filterDayType) return false;
+      if (dType !== state.p1_calendar_filterDayType) return false;
     }
     return true;
   });
@@ -4725,28 +4960,27 @@ function renderAgendaView() {
   if (filteredTasks.length === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 40px; color: var(--muted);">
-        No tasks match your selected phase, status, or day type filter.
+        No Phase-1 tasks match your selected status or day type filter.
       </div>
     `;
     return;
   }
 
-  // Sort chronologically by date
   filteredTasks.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Group by date
   const groups = {};
   for (const t of filteredTasks) {
     if (!groups[t.date]) groups[t.date] = [];
     groups[t.date].push(t);
   }
 
+  const p1ExamsMap = getPhase1ExamsByDate();
   let html = "";
   for (const [dateStr, dateTasks] of Object.entries(groups)) {
     const dateObj = new Date(dateStr + "T00:00:00");
     const humanDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-
     const dayMeta = getDayMetadata(dateStr);
+
     let agendaBadge = "";
     if (dayMeta) {
       let typeLabel = "📘 Normal Day";
@@ -4757,12 +4991,20 @@ function renderAgendaView() {
       agendaBadge = `<span class="popover-type-badge ${dayMeta.dayType}" style="font-size:10px; margin-left:8px; padding:1px 6px;">${dayNumStr}${typeLabel}</span>`;
     }
 
+    const dayExams = p1ExamsMap[dateStr] || [];
+    let examTag = "";
+    if (dayExams.length > 0) {
+      const ex = dayExams[0];
+      examTag = `<span class="cal-exam-score-pill p1-score-pill" style="display:inline-flex; margin-left:8px;">🏆 ${Number(ex.score).toFixed(1)}/${Number(ex.maxScore || 50).toFixed(0)} (${ex.accuracy}%)</span>`;
+    }
+
     html += `
       <div class="agenda-date-group">
         <div class="agenda-date-header">
-          <div>
+          <div style="display:flex; align-items:center;">
             <span>📅 ${humanDate}</span>
             ${agendaBadge}
+            ${examTag}
           </div>
           <span style="font-size:12px; font-weight:normal; color:var(--muted);">${dateTasks.length} task(s)</span>
         </div>
@@ -4771,9 +5013,7 @@ function renderAgendaView() {
 
     for (const t of dateTasks) {
       const isDone = t.status === "completed";
-      let phaseClass = "general";
-      if (t.phase === "Phase-1") phaseClass = "phase-1";
-      if (t.phase === "Phase-2") phaseClass = "phase-2";
+      let phaseClass = t.phase === "Phase-1" ? "phase-1" : "general";
 
       html += `
         <div class="agenda-task-item ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
@@ -4798,9 +5038,601 @@ function renderAgendaView() {
   container.innerHTML = html;
 }
 
-// Handle Excel or CSV import
-async function handleCalendarExcelImport(event) {
-  const statusElem = $("calendar-import-status");
+// ============================================================
+// PHASE 2 CALENDAR: DESCRIPTIVE WRITING & EXAM MARKS
+// ============================================================
+
+function renderP2Calendar() {
+  if (!state.calendar || state.calendar.length < 30) {
+    state.calendar = generateDefaultSchedule();
+    saveCalendarSchedule();
+  }
+
+  rebuildCalendarMetadata();
+  renderP2CalendarSummary();
+  renderP2CalendarControls();
+
+  const monthView = $("p2-calendar-month-view");
+  const agendaView = $("p2-calendar-agenda-view");
+  const viewMonthBtn = $("p2-cal-view-month");
+  const viewAgendaBtn = $("p2-cal-view-agenda");
+
+  if (state.p2_calendar_view === "month") {
+    if (monthView) monthView.style.display = "";
+    if (agendaView) agendaView.style.display = "none";
+    if (viewMonthBtn) viewMonthBtn.classList.add("active");
+    if (viewAgendaBtn) viewAgendaBtn.classList.remove("active");
+    renderP2MonthGrid();
+  } else {
+    if (monthView) monthView.style.display = "none";
+    if (agendaView) agendaView.style.display = "";
+    if (viewMonthBtn) viewMonthBtn.classList.remove("active");
+    if (viewAgendaBtn) viewAgendaBtn.classList.add("active");
+    renderP2AgendaView();
+  }
+
+  renderP2SelectedDayTasks();
+}
+
+function renderP2CalendarSummary() {
+  const container = $("p2-calendar-progress-bar");
+  if (!container) return;
+
+  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-2");
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.status === "completed").length;
+  const pending = total - completed;
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  const p2History = loadJSON("rbi_history", []);
+  const testsCount = p2History.length;
+  const scoredCount = p2History.filter(t => t.totalScore !== undefined && t.totalScore !== null && !isNaN(t.totalScore) && Number(t.totalScore) > 0).length;
+
+  container.innerHTML = `
+    <div class="summary-stat-card">
+      <div class="val">${total}</div>
+      <div class="lbl">Phase-2 Scheduled Tasks</div>
+    </div>
+    <div class="summary-stat-card">
+      <div class="val" style="color:#16a34a;">${completed} <span style="font-size:13px; font-weight:normal;">(${pct}%)</span></div>
+      <div class="lbl">Tasks Completed</div>
+    </div>
+    <div class="summary-stat-card">
+      <div class="val" style="color:#d97706;">${pending}</div>
+      <div class="lbl">Tasks Pending</div>
+    </div>
+    <div class="summary-stat-card">
+      <div class="val" style="color:#7e22ce;">${testsCount} <span style="font-size:13px; font-weight:normal;">(${scoredCount} Scored)</span></div>
+      <div class="lbl">Descriptive Tests Written</div>
+    </div>
+  `;
+}
+
+function renderP2CalendarControls() {
+  const heading = $("p2-cal-month-year-display");
+  if (!heading) return;
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const year = state.p2_calendar_currentDate.getFullYear();
+  const month = state.p2_calendar_currentDate.getMonth();
+  heading.textContent = `${monthNames[month]} ${year}`;
+
+  const planStartInput = $("p2-cal-upload-start-date");
+  if (planStartInput && state.calendar_planStartDate) {
+    planStartInput.value = state.calendar_planStartDate;
+  }
+}
+
+function renderP2MonthGrid() {
+  const grid = $("p2-calendar-days-grid");
+  if (!grid) return;
+
+  const cur = state.p2_calendar_currentDate;
+  const year = cur.getFullYear();
+  const month = cur.getMonth();
+
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  const todayStr = getLocalDateString(new Date());
+  const selectedStr = state.p2_calendar_selectedDate;
+
+  const p2ExamsMap = getPhase2ExamsByDate();
+  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-2");
+
+  // Filter tasks by status and day type
+  const filteredTasks = tasks.filter(t => {
+    if (state.p2_calendar_filterStatus === "pending" && t.status === "completed") return false;
+    if (state.p2_calendar_filterStatus === "completed" && t.status !== "completed") return false;
+    if (state.p2_calendar_filterDayType && state.p2_calendar_filterDayType !== "all") {
+      const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
+      if (dType !== state.p2_calendar_filterDayType) return false;
+    }
+    return true;
+  });
+
+  const taskMap = {};
+  for (const t of filteredTasks) {
+    if (!taskMap[t.date]) taskMap[t.date] = [];
+    taskMap[t.date].push(t);
+  }
+
+  let html = "";
+
+  // 1. Preceding days from previous month
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    const dayNum = daysInPrevMonth - i;
+    const prevDate = new Date(year, month - 1, dayNum);
+    const dateStr = getLocalDateString(prevDate);
+    const dayExams = p2ExamsMap[dateStr] || [];
+    html += renderP2DayCell(dayNum, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
+  }
+
+  // 2. Current month days
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const dayExams = p2ExamsMap[dateStr] || [];
+    if (state.p2_calendar_filterStatus === "written" && dayExams.length === 0) continue;
+    html += renderP2DayCell(d, dateStr, false, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
+  }
+
+  // 3. Trailing days from next month
+  const totalCells = firstDayOfWeek + daysInMonth;
+  const remainder = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let d = 1; d <= remainder; d++) {
+    const nextDate = new Date(year, month + 1, d);
+    const dateStr = getLocalDateString(nextDate);
+    const dayExams = p2ExamsMap[dateStr] || [];
+    html += renderP2DayCell(d, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
+  }
+
+  grid.innerHTML = html;
+}
+
+function renderP2DayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, dayTasks, exams) {
+  const isToday = dateStr === todayStr;
+  const isSelected = dateStr === selectedStr;
+
+  const dayMeta = getDayMetadata(dateStr);
+  const dayType = dayMeta?.dayType || (dayTasks[0]?.dayType) || "normal-day";
+
+  let badgeHtml = "";
+  if (dayType === "chapter-test") {
+    badgeHtml = `<span class="day-badge-tag tag-chapter" title="Chapter Test">📝 Ch Test</span>`;
+  } else if (dayType === "mix-test") {
+    badgeHtml = `<span class="day-badge-tag tag-mix" title="Mix Test">🔥 Mix Test</span>`;
+  } else if (dayType === "buffer-day") {
+    badgeHtml = `<span class="day-badge-tag tag-buffer" title="Buffer Day / Revision">⏳ Buffer</span>`;
+  } else if (dayMeta?.dayNum) {
+    badgeHtml = `<span class="day-badge-tag tag-normal" title="Normal Study Day">D-${dayMeta.dayNum}</span>`;
+  }
+
+  // Phase-2 Exam / Writing Badge Pill
+  let examScorePill = "";
+  const hasExam = exams && exams.length > 0;
+  if (hasExam) {
+    const test = exams[0];
+    const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
+    if (hasScore) {
+      const scoreVal = Number(test.totalScore).toFixed(1);
+      const maxVal = Number(test.maxMarks || 25).toFixed(0);
+      examScorePill = `
+        <div class="cal-exam-score-pill p2-score-pill" title="Phase-2 Writing: ${scoreVal}/${maxVal} Marks Scored">
+          <span>🏆 ${scoreVal}/${maxVal} M</span>
+        </div>
+      `;
+    } else {
+      const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
+      examScorePill = `
+        <div class="cal-exam-score-pill p2-written-pill" title="Phase-2 Test Written (${totalWords} words · Pending score)">
+          <span>✍️ Written (${totalWords}w)</span>
+        </div>
+      `;
+    }
+  }
+
+  const countBadge = dayTasks.length > 0 ? `<span class="cal-day-task-count">${dayTasks.length}</span>` : "";
+
+  const maxPills = hasExam ? 2 : 3;
+  let pillsHtml = "";
+  for (let i = 0; i < Math.min(dayTasks.length, maxPills); i++) {
+    const t = dayTasks[i];
+    let phaseClass = "phase-2";
+    if (t.type === "Revision") phaseClass = "revision";
+    if (t.type === "Mock Test" || t.type === "Chapter Test" || t.type === "Mix Test") phaseClass = "mock";
+
+    const doneClass = t.status === "completed" ? "is-completed" : "";
+    const doneCheck = t.status === "completed" ? "✓ " : "• ";
+    pillsHtml += `
+      <div class="cal-event-pill ${phaseClass} ${doneClass}" title="${escapeHTML(t.subject + ': ' + t.topic)}">
+        <span>${doneCheck}<strong>${escapeHTML(t.subject)}</strong> ${escapeHTML(t.topic)}</span>
+      </div>
+    `;
+  }
+  if (dayTasks.length > maxPills) {
+    pillsHtml += `<div class="cal-more-pill">+${dayTasks.length - maxPills} more</div>`;
+  }
+
+  return `
+    <div class="cal-day-cell day-type-${dayType} ${isOtherMonth ? 'is-other-month' : ''} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''} ${hasExam ? 'has-exam-score' : ''}" data-date="${dateStr}" data-day-type="${dayType}">
+      <div class="cal-day-header">
+        <div style="display:flex; align-items:center; gap:4px;">
+          <span class="cal-day-num">${dayNum}</span>
+          ${badgeHtml}
+        </div>
+        ${countBadge}
+      </div>
+      ${examScorePill}
+      <div class="cal-day-events">
+        ${pillsHtml}
+      </div>
+    </div>
+  `;
+}
+
+function buildP2PopoverHTML(dateStr, dayMeta, exams) {
+  const dateObj = new Date(dateStr + "T00:00:00");
+  const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+  const formattedDate = dateObj.toLocaleDateString(undefined, options);
+
+  const dayType = dayMeta?.dayType || "normal-day";
+  let badgeLabel = "📘 Normal Class";
+  if (dayType === "chapter-test") badgeLabel = "📝 Chapter Test";
+  if (dayType === "mix-test") badgeLabel = "🔥 Mix Test";
+  if (dayType === "buffer-day") badgeLabel = "⏳ Buffer Day";
+
+  const dayTitle = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} • ${formattedDate}` : formattedDate;
+  const p2Subject = dayMeta?.p2_subject || "";
+  const p2Topic = dayMeta?.p2_topic || "";
+  const p1Subject = dayMeta?.p1_subject || "";
+  const p1Topic = dayMeta?.p1_topic || "";
+  const caTopic = dayMeta?.ca || "";
+
+  let examSectionHTML = "";
+  if (exams && exams.length > 0) {
+    const test = exams[0];
+    const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
+    const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
+    const scoreVal = hasScore ? `${Number(test.totalScore).toFixed(1)} / ${Number(test.maxMarks || 25).toFixed(0)} Marks` : "Written (Score Pending)";
+
+    examSectionHTML = `
+      <div class="popover-sec marks-sec p2">
+        <div class="popover-sec-label" style="color:#6b21a8;">
+          <span>🏆</span>
+          <span>TODAY'S PHASE-2 WRITING LOG</span>
+        </div>
+        <div class="popover-marks-row">
+          <span class="marks-val">${scoreVal}</span>
+          <span style="font-size:12px; color:#6b21a8;">· ${totalWords} words written</span>
+        </div>
+        <div style="font-size:11px; color:#7e22ce; margin-top:2px;">
+          ${(test.questions || []).length} Question(s) · Time used: ${formatDuration(test.usedSeconds || 0)}
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="popover-header">
+      <span class="popover-day-title">${escapeHTML(dayTitle)}</span>
+      <span class="popover-type-badge ${dayType}">${escapeHTML(badgeLabel)}</span>
+    </div>
+
+    ${examSectionHTML}
+
+    <!-- Phase 2 Descriptive Writing Details -->
+    <div class="popover-sec p2">
+      <div class="popover-sec-label">
+        <span>📖</span>
+        <span>PHASE-2 DESCRIPTIVE WRITING</span>
+        ${p2Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p2Subject)}</span>` : ""}
+      </div>
+      <div class="popover-topic-text">${escapeHTML(p2Topic || "No Phase-2 topic scheduled for today")}</div>
+    </div>
+
+    <!-- Overall Phase 1 Subject Context -->
+    ${p1Topic ? `
+    <div class="popover-sec p1" style="opacity:0.85;">
+      <div class="popover-sec-label">
+        <span>🎯</span>
+        <span>PHASE-1 STUDY CONTEXT</span>
+        ${p1Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p1Subject)}</span>` : ""}
+      </div>
+      <div class="popover-topic-text" style="font-size:12px;">${escapeHTML(p1Topic)}</div>
+    </div>
+    ` : ""}
+
+    <!-- Current Affairs -->
+    ${caTopic ? `
+    <div class="popover-sec ca" style="opacity:0.85;">
+      <div class="popover-sec-label">
+        <span>📰</span>
+        <span>CURRENT AFFAIRS &amp; DRILLS</span>
+      </div>
+      <div class="popover-topic-text" style="font-size:12px;">${escapeHTML(caTopic)}</div>
+    </div>
+    ` : ""}
+
+    <div class="popover-hint">Click day to view or mark tasks completed</div>
+  `;
+}
+
+function showP2CalendarHoverPopover(e, cell) {
+  const popover = $("p2-calendar-hover-popover");
+  if (!popover) return;
+
+  const dateStr = cell.dataset.date;
+  if (!dateStr) return;
+
+  const dayMeta = getDayMetadata(dateStr);
+  const p2ExamsMap = getPhase2ExamsByDate();
+  const dayExams = p2ExamsMap[dateStr] || [];
+
+  if (!dayMeta && !cell.querySelector(".cal-event-pill") && dayExams.length === 0) {
+    hideP2CalendarHoverPopover();
+    return;
+  }
+
+  popover.innerHTML = buildP2PopoverHTML(dateStr, dayMeta, dayExams);
+  popover.style.display = "block";
+  popover.style.opacity = "1";
+
+  positionCalendarPopover(e.clientX, e.clientY, popover);
+}
+
+function hideP2CalendarHoverPopover() {
+  const popover = $("p2-calendar-hover-popover");
+  if (popover) popover.style.display = "none";
+}
+
+function renderP2SelectedDayTasks() {
+  const heading = $("p2-cal-selected-date-heading");
+  const sub = $("p2-cal-selected-date-sub");
+  const list = $("p2-cal-selected-day-tasks");
+  if (!heading || !list) return;
+
+  const selDateStr = state.p2_calendar_selectedDate;
+  const dateObj = new Date(selDateStr + "T00:00:00");
+  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  const humanDate = dateObj.toLocaleDateString(undefined, options);
+
+  const dayMeta = getDayMetadata(selDateStr);
+  let metaBadge = "";
+  if (dayMeta) {
+    let typeName = "📘 Normal Day";
+    if (dayMeta.dayType === "chapter-test") typeName = "📝 Chapter Test";
+    if (dayMeta.dayType === "mix-test") typeName = "🔥 Mix Test";
+    if (dayMeta.dayType === "buffer-day") typeName = "⏳ Buffer Day";
+    const dayNumStr = dayMeta.dayNum ? `Day ${dayMeta.dayNum} of 415 • ` : "";
+    metaBadge = `
+      <div style="margin-top: 4px;">
+        <span class="popover-type-badge ${dayMeta.dayType}" style="font-size:11px; padding:3px 9px;">
+          ${dayNumStr}${typeName}
+        </span>
+      </div>
+    `;
+  }
+
+  heading.innerHTML = `${escapeHTML(humanDate)}${metaBadge}`;
+
+  const tasks = (state.calendar || []).filter(t => t.date === selDateStr && t.phase === "Phase-2");
+  const p2ExamsMap = getPhase2ExamsByDate();
+  const dayExams = p2ExamsMap[selDateStr] || [];
+
+  sub.textContent = `${tasks.length} task(s) scheduled · ${dayExams.length} written test(s)`;
+
+  let examCardsHTML = "";
+  if (dayExams.length > 0) {
+    examCardsHTML = dayExams.map(test => {
+      const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
+      const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
+      const scoreLabel = hasScore ? `Score: ${Number(test.totalScore).toFixed(1)} / ${Number(test.maxMarks || 25).toFixed(0)} Marks` : "Score Pending Evaluation";
+
+      return `
+        <div class="task-card" style="border-left: 3.5px solid #9333ea; background: #faf5ff; margin-bottom: 10px;">
+          <div class="task-card-top">
+            <span class="task-phase-badge" style="background:#9333ea; color:#fff;">🏆 Phase-2 Submission</span>
+            <span style="font-size:11.5px; font-weight:700; color:#7e22ce;">${totalWords} Words Written</span>
+          </div>
+          <div class="task-title" style="color:#581c87; font-size:15px; margin:4px 0;">
+            ${escapeHTML(scoreLabel)}
+          </div>
+          <div style="font-size:12px; color:#6b21a8; line-height:1.4;">
+            ${(test.questions || []).length} Question(s) · Time used: ${formatDuration(test.usedSeconds || 0)} of ${test.totalMinutes || 30} min${test.autoSubmitted ? ' (auto-submitted)' : ''}
+          </div>
+          <div style="margin-top:8px;">
+            <button type="button" class="btn-minimal-primary p2-review-exam-btn" data-test-id="${escapeHTML(test.id)}" style="font-size:11.5px; padding:4px 10px;">📖 Review Answers &amp; Marks</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  if (tasks.length === 0 && dayExams.length === 0) {
+    list.innerHTML = `
+      <div style="text-align: center; padding: 36px 16px; color: var(--muted); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px;">
+        <span style="font-size: 24px; display: block; margin-bottom: 6px;">📅</span>
+        <strong style="color: #334155; font-size: 13.5px; display: block;">No Phase-2 tasks scheduled for this day</strong>
+        <p style="font-size: 12px; margin: 4px 0 12px 0;">Stay consistent with your RBI Grade B descriptive writing!</p>
+        <button type="button" id="btn-p2-empty-add-task" class="btn-minimal-primary" style="font-size: 12.5px; padding: 6px 14px;">+ Add Task</button>
+      </div>
+    `;
+    const emptyBtn = $("btn-p2-empty-add-task");
+    if (emptyBtn) emptyBtn.addEventListener("click", () => openTaskModal(null, "Phase-2"));
+    return;
+  }
+
+  const taskCardsHTML = tasks.map(t => {
+    const isDone = t.status === "completed";
+    const practiceAction = `<button type="button" class="task-action-btn practice-btn" data-action="practice" data-phase="${t.phase}">▶ Practice</button>`;
+
+    return `
+      <div class="task-card ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
+        <div class="task-card-top">
+          <div class="task-badges">
+            <span class="task-phase-badge phase-2">${escapeHTML(t.phase)}</span>
+            <span class="task-type-badge">${escapeHTML(t.type)}</span>
+          </div>
+          ${t.time ? `<span class="task-time-badge">⏱️ ${escapeHTML(t.time)}</span>` : ""}
+        </div>
+        <div class="task-title">${escapeHTML(t.topic)}</div>
+        <div class="task-subject">${escapeHTML(t.subject)}</div>
+        <div class="task-actions-row">
+          <label class="task-complete-toggle">
+            <input type="checkbox" class="task-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
+            <span>${isDone ? 'Completed' : 'Mark done'}</span>
+          </label>
+          <div class="task-btn-group">
+            ${practiceAction}
+            <button type="button" class="task-action-btn" data-action="edit" data-id="${t.id}">✏️</button>
+            <button type="button" class="task-action-btn danger-btn" data-action="delete" data-id="${t.id}">✕</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  list.innerHTML = examCardsHTML + taskCardsHTML;
+}
+
+function renderP2AgendaView() {
+  const container = $("p2-calendar-agenda-list");
+  if (!container) return;
+
+  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-2");
+  const filteredTasks = tasks.filter(t => {
+    if (state.p2_calendar_filterStatus === "pending" && t.status === "completed") return false;
+    if (state.p2_calendar_filterStatus === "completed" && t.status !== "completed") return false;
+    if (state.p2_calendar_filterDayType && state.p2_calendar_filterDayType !== "all") {
+      const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
+      if (dType !== state.p2_calendar_filterDayType) return false;
+    }
+    return true;
+  });
+
+  if (filteredTasks.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: var(--muted);">
+        No Phase-2 tasks match your selected status or day type filter.
+      </div>
+    `;
+    return;
+  }
+
+  filteredTasks.sort((a, b) => a.date.localeCompare(b.date));
+
+  const groups = {};
+  for (const t of filteredTasks) {
+    if (!groups[t.date]) groups[t.date] = [];
+    groups[t.date].push(t);
+  }
+
+  const p2ExamsMap = getPhase2ExamsByDate();
+  let html = "";
+  for (const [dateStr, dateTasks] of Object.entries(groups)) {
+    const dateObj = new Date(dateStr + "T00:00:00");
+    const humanDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const dayMeta = getDayMetadata(dateStr);
+
+    let agendaBadge = "";
+    if (dayMeta) {
+      let typeLabel = "📘 Normal Day";
+      if (dayMeta.dayType === "chapter-test") typeLabel = "📝 Chapter Test";
+      if (dayMeta.dayType === "mix-test") typeLabel = "🔥 Mix Test";
+      if (dayMeta.dayType === "buffer-day") typeLabel = "⏳ Buffer Day";
+      const dayNumStr = dayMeta.dayNum ? `Day ${dayMeta.dayNum} • ` : "";
+      agendaBadge = `<span class="popover-type-badge ${dayMeta.dayType}" style="font-size:10px; margin-left:8px; padding:1px 6px;">${dayNumStr}${typeLabel}</span>`;
+    }
+
+    const dayExams = p2ExamsMap[dateStr] || [];
+    let examTag = "";
+    if (dayExams.length > 0) {
+      const test = dayExams[0];
+      const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
+      if (hasScore) {
+        examTag = `<span class="cal-exam-score-pill p2-score-pill" style="display:inline-flex; margin-left:8px;">🏆 ${Number(test.totalScore).toFixed(1)}/${test.maxMarks || 25} M</span>`;
+      } else {
+        const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
+        examTag = `<span class="cal-exam-score-pill p2-written-pill" style="display:inline-flex; margin-left:8px;">✍️ Written (${totalWords}w)</span>`;
+      }
+    }
+
+    html += `
+      <div class="agenda-date-group">
+        <div class="agenda-date-header">
+          <div style="display:flex; align-items:center;">
+            <span>📅 ${humanDate}</span>
+            ${agendaBadge}
+            ${examTag}
+          </div>
+          <span style="font-size:12px; font-weight:normal; color:var(--muted);">${dateTasks.length} task(s)</span>
+        </div>
+        <div class="agenda-tasks-list">
+    `;
+
+    for (const t of dateTasks) {
+      const isDone = t.status === "completed";
+
+      html += `
+        <div class="agenda-task-item ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
+          <div class="agenda-task-left">
+            <input type="checkbox" class="task-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
+            <div>
+              <div style="font-weight: 600; font-size: 13.5px; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escapeHTML(t.topic)}</div>
+              <div style="font-size: 11.5px; color: var(--muted);">${escapeHTML(t.subject)} · <span class="task-phase-badge phase-2">${escapeHTML(t.phase)}</span> (${escapeHTML(t.type)})</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            ${t.time ? `<span style="font-size:11.5px; color:var(--muted);">⏱️ ${escapeHTML(t.time)}</span>` : ""}
+            <button type="button" class="task-action-btn danger-btn" data-action="delete" data-id="${t.id}">✕</button>
+          </div>
+        </div>
+      `;
+    }
+
+    html += `</div></div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// Dynamically position hover popover keeping it inside viewport
+function positionCalendarPopover(mouseX, mouseY, popover) {
+  const pad = 14;
+  const popRect = popover.getBoundingClientRect();
+  const popW = popRect.width || 350;
+  const popH = popRect.height || 220;
+
+  let left = mouseX + pad;
+  let top = mouseY + pad;
+
+  if (left + popW > window.innerWidth - 12) {
+    left = mouseX - popW - pad;
+  }
+  if (left < 10) left = 10;
+
+  if (top + popH > window.innerHeight - 12) {
+    top = mouseY - popH - pad;
+  }
+  if (top < 10) top = 10;
+
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+}
+
+// ============================================================
+// CALENDAR ACTIONS: UPLOAD, APPLY CONFIG, EXPORT, TEMPLATE
+// ============================================================
+
+// Dynamic Excel / CSV Import with start date and days finished config
+async function handleCalendarExcelImport(event, phaseType = null) {
+  const pType = phaseType || (state.phase === "phase1" ? "phase1" : "phase2");
+  const prefix = pType === "phase1" ? "p1" : "p2";
+  const statusElem = $(`${prefix}-calendar-import-status`);
   const file = event.target && event.target.files && event.target.files[0];
   if (!file) return;
 
@@ -4818,7 +5650,6 @@ async function handleCalendarExcelImport(event) {
       try {
         rows = await parseXLSX(buffer);
       } catch (xlsxErr) {
-        // Fallback in case user uploaded a CSV named .xls
         const text = await file.text();
         rows = parseCSV(text);
       }
@@ -4831,15 +5662,20 @@ async function handleCalendarExcelImport(event) {
       throw new Error("Spreadsheet contains no data rows or could not be parsed.");
     }
 
-    const importedTasks = mapScheduleRowsToTasks(rows);
+    const startDateInput = $(`${prefix}-cal-upload-start-date`);
+    const daysFinishedInput = $(`${prefix}-cal-upload-days-finished`);
+    const startStr = (startDateInput && startDateInput.value) || state.calendar_planStartDate || "2026-11-01";
+    const daysFinished = (daysFinishedInput && parseInt(daysFinishedInput.value, 10)) || 0;
+
+    const importedTasks = mapScheduleRowsToTasks(rows, startStr, daysFinished);
     if (importedTasks.length === 0) {
-      throw new Error("No tasks could be mapped. Please ensure columns include Date, Topic, and Subject.");
+      throw new Error("No tasks could be mapped. Please ensure columns include Day/Date, Topic, and Subject.");
     }
 
     // Merge or replace
     const existing = state.calendar || [];
     let merged = [];
-    if (existing.length > 0 && confirm(`Imported ${importedTasks.length} task(s). Do you want to REPLACE your existing schedule? (Click Cancel to MERGE with current schedule)`)) {
+    if (existing.length > 0 && confirm(`Imported ${importedTasks.length} task(s) from "${file.name}". Do you want to REPLACE your existing schedule? (Click Cancel to MERGE with current schedule)`)) {
       merged = importedTasks;
     } else {
       merged = existing.concat(importedTasks);
@@ -4849,14 +5685,17 @@ async function handleCalendarExcelImport(event) {
     saveCalendarSchedule();
 
     if (statusElem) {
-      statusElem.textContent = `✓ Successfully imported ${importedTasks.length} task(s) from ${file.name}!`;
+      statusElem.textContent = `✓ Successfully imported ${importedTasks.length} task(s) starting ${startStr} (first ${daysFinished} days marked completed)!`;
       setTimeout(() => { statusElem.textContent = ""; }, 5000);
     }
 
-    // Reset file input
     event.target.value = "";
 
-    renderCalendar();
+    if (pType === "phase1") {
+      renderP1Calendar();
+    } else {
+      renderP2Calendar();
+    }
   } catch (err) {
     console.error("Calendar import error:", err);
     if (statusElem) {
@@ -4866,17 +5705,102 @@ async function handleCalendarExcelImport(event) {
   }
 }
 
-// Load built-in 30-Day RBI Plan
-function loadSampleSchedule() {
+// Apply Starting Date and Finished Days configuration to schedule
+function applyCalendarConfig(phaseType = null) {
+  const pType = phaseType || (state.phase === "phase1" ? "phase1" : "phase2");
+  const prefix = pType === "phase1" ? "p1" : "p2";
+
+  const startDateInput = $(`${prefix}-cal-upload-start-date`);
+  const daysFinishedInput = $(`${prefix}-cal-upload-days-finished`);
+  const startStr = (startDateInput && startDateInput.value) || state.calendar_planStartDate || "2026-11-01";
+  const daysFinished = (daysFinishedInput && parseInt(daysFinishedInput.value, 10)) || 0;
+
+  state.calendar_planStartDate = startStr;
+  saveJSON("rbi_calendar_start_date", startStr);
+  if (pType === "phase1") {
+    state.p1_calendar_daysFinished = daysFinished;
+    saveJSON("rbi_p1_days_finished", daysFinished);
+  } else {
+    state.p2_calendar_daysFinished = daysFinished;
+    saveJSON("rbi_p2_days_finished", daysFinished);
+  }
+
+  // Reschedule official or existing schedule from new starting date
+  state.calendar = generateDefaultSchedule(startStr, daysFinished);
+  saveCalendarSchedule();
+
+  const statusElem = $(`${prefix}-calendar-import-status`);
+  if (statusElem) {
+    statusElem.textContent = `✓ Plan rescheduled starting from ${startStr} (Days 1-${daysFinished} marked completed)!`;
+    statusElem.style.color = "#059669";
+    setTimeout(() => { statusElem.textContent = ""; }, 5000);
+  }
+
+  // Sync inputs on both screens
+  const p1Start = $("p1-cal-upload-start-date");
+  const p2Start = $("p2-cal-upload-start-date");
+  if (p1Start) p1Start.value = startStr;
+  if (p2Start) p2Start.value = startStr;
+
+  if (pType === "phase1") {
+    renderP1Calendar();
+  } else {
+    renderP2Calendar();
+  }
+}
+
+// Load official 415-Day Schedule
+function loadOfficialSchedule(phaseType = null) {
+  const pType = phaseType || (state.phase === "phase1" ? "phase1" : "phase2");
+  const prefix = pType === "phase1" ? "p1" : "p2";
+
   if (state.calendar && state.calendar.length > 0) {
-    if (!confirm("Load the 30-Day RBI Grade B Exam Study Plan? This will update your calendar schedule.")) return;
+    if (!confirm("Load the official 415-Day RBI Grade B Preparation Schedule? This will update your calendar schedule.")) return;
+  }
+
+  const startDateInput = $(`${prefix}-cal-upload-start-date`);
+  const daysFinishedInput = $(`${prefix}-cal-upload-days-finished`);
+  const startStr = (startDateInput && startDateInput.value) || state.calendar_planStartDate || "2026-11-01";
+  const daysFinished = (daysFinishedInput && parseInt(daysFinishedInput.value, 10)) || 0;
+
+  state.calendar_planStartDate = startStr;
+  saveJSON("rbi_calendar_start_date", startStr);
+  state.calendar = generateDefaultSchedule(startStr, daysFinished);
+  saveCalendarSchedule();
+
+  if (pType === "phase1") {
+    renderP1Calendar();
+  } else {
+    renderP2Calendar();
+  }
+
+  const statusElem = $(`${prefix}-calendar-import-status`);
+  if (statusElem) {
+    statusElem.textContent = `✓ Loaded Official 415-Day RBI Schedule starting ${startStr} (88 Chapter Tests, 30 Mix Tests, 23 Buffer Days)!`;
+    setTimeout(() => { statusElem.textContent = ""; }, 5000);
+  }
+}
+
+// Load built-in sample schedule
+function loadSampleSchedule(phaseType = null) {
+  const pType = phaseType || (state.phase === "phase1" ? "phase1" : "phase2");
+  const prefix = pType === "phase1" ? "p1" : "p2";
+
+  if (state.calendar && state.calendar.length > 0) {
+    if (!confirm("Load the sample study plan? This will update your calendar schedule.")) return;
   }
   state.calendar = generateDefaultSchedule();
   saveCalendarSchedule();
-  renderCalendar();
-  const statusElem = $("calendar-import-status");
+
+  if (pType === "phase1") {
+    renderP1Calendar();
+  } else {
+    renderP2Calendar();
+  }
+
+  const statusElem = $(`${prefix}-calendar-import-status`);
   if (statusElem) {
-    statusElem.textContent = "✓ Loaded 30-Day RBI Grade B Preparation Schedule!";
+    statusElem.textContent = "✓ Loaded RBI Grade B Preparation Schedule!";
     setTimeout(() => { statusElem.textContent = ""; }, 4000);
   }
 }
@@ -4884,17 +5808,17 @@ function loadSampleSchedule() {
 // Download ready-to-use spreadsheet CSV template
 function downloadScheduleTemplate() {
   const csvContent =
-`Date,Phase,Subject,Topic,Type,Time,Status
-2026-11-21,Phase-1,General Awareness,Spotlight Nov 1-6 Current Affairs (50 MCQs),MCQ Practice,10:00 AM,completed
-2026-11-22,Phase-2,ESI,Chapter 1: National Income - Concepts & Measurement,Descriptive Writing,11:00 AM,pending
-2026-11-23,Phase-1,Reasoning Ability,Puzzles & Seating Arrangement (Circular & Floor),MCQ Practice,02:00 PM,pending
-2026-11-24,Phase-2,Finance,Financial System in India - Structure & RBI Functions,Descriptive Writing,10:00 AM,pending
-2026-11-25,Phase-1,Quantitative Aptitude,Data Interpretation & Percentage/Ratio,MCQ Practice,03:00 PM,pending
-2026-11-26,Phase-2,Management,Leadership Theories - Transformational vs Transactional,Descriptive Writing,11:00 AM,pending
-2026-11-27,General,Weekly Revision,Spotlight GA Week 1 & 2 Rapid Review,Revision,04:00 PM,pending
-2026-11-28,Phase-1,English Language,Reading Comprehension & Para Jumbles,MCQ Practice,10:00 AM,pending
-2026-11-29,Phase-2,English Descriptive,Essay: Digital Currency & Economic Inclusion,Descriptive Writing,11:00 AM,pending
-2026-11-30,Phase-1,Mock Test,Phase-1 Full Length Mock Speed Test 1,Mock Test,09:00 AM,pending`;
+`Day,Subject (Phase-2),Topic (Phase-2),Status,Subject (Phase-1),Topic (Phase-1),Status,Current Affairs,Status
+1,Economics,National Income - Class 1,completed,English Objective,Basics of Grammar - Class 1,completed,,
+2,Economics,National Income - Class 2,completed,English Objective,Basics of Grammar - Class 2,completed,,
+3,Economics,National Income - Class 3,pending,English Objective,Basics of Grammar - Class 3,pending,Spotlight Nov 1-6 Current Affairs (50 MCQs),pending
+4,Economics,National Income - Class 4,pending,English Objective,Subject Verb Agreement - Class 1,pending,,
+5,Economics,National Income Chapter Test 1,pending,English Objective,Subject Verb Agreement - Class 2,pending,,
+6,Economics,National Income Chapter Test 2,pending,Reasoning Ability,Puzzles & Circular Seating,pending,Spotlight Nov 7-12 Current Affairs,pending
+7,Buffer Day,Buffer Day (Economics & English Revision),pending,Buffer Day,Buffer Day (GA Drills & Vocabulary),pending,,
+8,Finance,Financial System in India - Structure & RBI Functions,pending,Quantitative Aptitude,Percentage & Ratio Proportion,pending,,
+9,Finance,Financial System in India - Banking Structure,pending,Quantitative Aptitude,Data Interpretation Basics,pending,,
+10,Phase-2 Mix,Economics & Finance Mix Test 1,pending,Phase-1 Mix,Reasoning & Quant Mix Speed Test 1,pending,Spotlight Nov 13-18 Current Affairs,pending`;
 
   downloadText("RBI_Grade_B_Schedule_Template.csv", csvContent);
 }
@@ -4907,43 +5831,58 @@ function exportScheduleCSV() {
     return;
   }
 
-  let csv = "Date,Phase,Subject,Topic,Type,Time,Status\n";
+  let csv = "Date,DayNum,Phase,Subject,Topic,Type,Time,Status\n";
   for (const t of tasks) {
     const escapeCsv = (str) => `"${String(str || "").replace(/"/g, '""')}"`;
-    csv += `${escapeCsv(t.date)},${escapeCsv(t.phase)},${escapeCsv(t.subject)},${escapeCsv(t.topic)},${escapeCsv(t.type)},${escapeCsv(t.time)},${escapeCsv(t.status)}\n`;
+    csv += `${escapeCsv(t.date)},${t.dayNum || ""},${escapeCsv(t.phase)},${escapeCsv(t.subject)},${escapeCsv(t.topic)},${escapeCsv(t.type)},${escapeCsv(t.time)},${escapeCsv(t.status)}\n`;
   }
 
   downloadText(`RBI_Study_Schedule_${getLocalDateString(new Date())}.csv`, csv);
 }
 
 // Clear all scheduled tasks
-function clearSchedule() {
-  if (!confirm("Are you sure you want to clear your entire study schedule?")) return;
+function clearSchedule(phaseType = null) {
+  if (!confirm("Are you sure you want to clear your study schedule?")) return;
   state.calendar = [];
   saveCalendarSchedule();
-  renderCalendar();
+
+  if (phaseType === "phase1" || state.phase === "phase1") {
+    renderP1Calendar();
+  } else {
+    renderP2Calendar();
+  }
 }
 
 // Toggle completion state of a task
-function toggleTaskComplete(id) {
+function toggleTaskComplete(id, phaseType = null) {
   const tasks = state.calendar || [];
   const task = tasks.find(t => t.id === id);
   if (!task) return;
   task.status = task.status === "completed" ? "pending" : "completed";
   saveCalendarSchedule();
-  renderCalendar();
+
+  if (phaseType === "phase1" || state.phase === "phase1") {
+    renderP1Calendar();
+  } else {
+    renderP2Calendar();
+  }
 }
 
 // Delete a single task
-function deleteTask(id) {
+function deleteTask(id, phaseType = null) {
   if (!confirm("Delete this scheduled task?")) return;
   state.calendar = (state.calendar || []).filter(t => t.id !== id);
   saveCalendarSchedule();
-  renderCalendar();
+
+  if (phaseType === "phase1" || state.phase === "phase1") {
+    renderP1Calendar();
+  } else {
+    renderP2Calendar();
+  }
 }
 
 // Open modal to add or edit task
-function openTaskModal(taskToEdit = null) {
+function openTaskModal(taskToEdit = null, phaseType = null) {
   const modal = $("modal-task");
   if (!modal) return;
 
@@ -4956,22 +5895,24 @@ function openTaskModal(taskToEdit = null) {
   const editIdInput = $("task-input-edit-id");
   const title = $("modal-task-title");
 
+  const defaultPhase = phaseType || (state.phase === "phase1" ? "Phase-1" : "Phase-2");
+
   if (taskToEdit) {
     title.textContent = "Edit Scheduled Task";
-    dateInput.value = taskToEdit.date || state.calendar_selectedDate;
-    phaseInput.value = taskToEdit.phase || "Phase-1";
-    typeInput.value = taskToEdit.type || "MCQ Practice";
+    dateInput.value = taskToEdit.date || (defaultPhase === "Phase-1" ? state.p1_calendar_selectedDate : state.p2_calendar_selectedDate);
+    phaseInput.value = taskToEdit.phase || defaultPhase;
+    typeInput.value = taskToEdit.type || (defaultPhase === "Phase-1" ? "MCQ Practice" : "Descriptive Writing");
     subjectInput.value = taskToEdit.subject || "";
     timeInput.value = taskToEdit.time || "";
     topicInput.value = taskToEdit.topic || "";
     editIdInput.value = taskToEdit.id;
   } else {
     title.textContent = "Add Scheduled Task";
-    dateInput.value = state.calendar_selectedDate || getLocalDateString(new Date());
-    phaseInput.value = state.phase === "phase2" ? "Phase-2" : "Phase-1";
-    typeInput.value = state.phase === "phase2" ? "Descriptive Writing" : "MCQ Practice";
-    subjectInput.value = state.phase === "phase2" ? "ESI" : "General Awareness";
-    timeInput.value = "10:00 AM";
+    dateInput.value = (defaultPhase === "Phase-1" ? state.p1_calendar_selectedDate : state.p2_calendar_selectedDate) || getLocalDateString(new Date());
+    phaseInput.value = defaultPhase;
+    typeInput.value = defaultPhase === "Phase-1" ? "MCQ Practice" : "Descriptive Writing";
+    subjectInput.value = defaultPhase === "Phase-1" ? "General Awareness" : "ESI";
+    timeInput.value = defaultPhase === "Phase-1" ? "02:00 PM" : "10:00 AM";
     topicInput.value = "";
     editIdInput.value = "";
   }
@@ -4991,9 +5932,9 @@ function handleTaskFormSubmit(e) {
   const date = $("task-input-date").value;
   const phase = $("task-input-phase").value;
   const type = $("task-input-type").value;
-  const subject = $("task-input-subject").value.trim();
+  const subject = sanitizeDashes($("task-input-subject").value.trim());
   const time = $("task-input-time").value.trim();
-  const topic = $("task-input-topic").value.trim();
+  const topic = sanitizeDashes($("task-input-topic").value.trim());
   const editId = $("task-input-edit-id").value;
 
   if (!date || !topic || !subject) {
@@ -5023,13 +5964,22 @@ function handleTaskFormSubmit(e) {
       topic: topic,
       status: "pending"
     });
-    state.calendar_selectedDate = date;
+    if (phase === "Phase-1") {
+      state.p1_calendar_selectedDate = date;
+    } else {
+      state.p2_calendar_selectedDate = date;
+    }
   }
 
   state.calendar = tasks;
   saveCalendarSchedule();
   closeTaskModal();
-  renderCalendar();
+
+  if (phase === "Phase-1" || state.phase === "phase1") {
+    renderP1Calendar();
+  } else {
+    renderP2Calendar();
+  }
 }
 
 // Wire all global DOM event listeners and initialize screen state
@@ -5395,7 +6345,55 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    historyList.addEventListener("paste", (e) => {
+      if (e.target.classList.contains("score-input")) {
+        const pasted = (e.clipboardData || window.clipboardData)?.getData("text") || "";
+        const m = pasted.match(/SCORE_LOG.*?\|\s*([\d\.]+)\s*\/\s*\d+/i) || pasted.match(/([\d\.]+)\s*\/\s*\d+/) || pasted.match(/([\d\.]+)/);
+        if (m) {
+          e.preventDefault();
+          const val = parseFloat(m[1]);
+          e.target.value = isNaN(val) ? "" : val;
+          handleScoreChange(e.target.dataset.testId, e.target.dataset.qid, e.target.value);
+        }
+      }
+    });
+
     historyList.addEventListener("click", (e) => {
+      const toggleRevBtn = e.target.closest(".btn-toggle-answer-review");
+      if (toggleRevBtn) {
+        const tid = toggleRevBtn.dataset.testId;
+        const container = $(`review-container-${tid}`);
+        if (container) {
+          const isHidden = container.style.display === "none";
+          container.style.display = isHidden ? "block" : "none";
+          toggleRevBtn.textContent = isHidden ? "📖 Hide Answers & Marks" : "📖 Review Answers & Marks";
+        }
+        return;
+      }
+
+      const copyAnsBtn = e.target.closest(".btn-copy-ans-mini");
+      if (copyAnsBtn) {
+        const history = loadJSON("rbi_history", []);
+        const test = history.find(t => t.id === copyAnsBtn.dataset.testId);
+        if (test) {
+          const idx = Number(copyAnsBtn.dataset.idx);
+          const q = test.questions[idx];
+          const ans = (test.answers && test.answers[q.id]) || { text: "" };
+          copyText(ans.text || "(No answer recorded)", copyAnsBtn);
+        }
+        return;
+      }
+
+      const toggleModelBtn = e.target.closest(".btn-toggle-model-mini");
+      if (toggleModelBtn) {
+        const tid = toggleModelBtn.dataset.testId;
+        const idx = toggleModelBtn.dataset.idx;
+        const box = $(`model-${tid}-${idx}`);
+        if (box) {
+          box.style.display = box.style.display === "none" ? "block" : "none";
+        }
+        return;
+      }
       const openBtn = e.target.closest(".btn-open-results");
       if (openBtn) {
         const history = loadJSON("rbi_history", []);
@@ -5867,207 +6865,406 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ==========================================
-  // CALENDAR & STUDY SCHEDULE EVENTS
+// ==========================================
+  // PHASE-1 CALENDAR EVENTS
   // ==========================================
-  const calExcelImport = $("calendar-excel-import");
-  if (calExcelImport) {
-    calExcelImport.addEventListener("change", handleCalendarExcelImport);
+  const p1CalExcelImport = $("p1-calendar-excel-import");
+  if (p1CalExcelImport) {
+    p1CalExcelImport.addEventListener("change", (e) => handleCalendarExcelImport(e, "phase1"));
   }
 
-  const btnLoadOfficialSchedule = $("btn-load-official-schedule");
-  if (btnLoadOfficialSchedule) {
-    btnLoadOfficialSchedule.addEventListener("click", loadOfficialSchedule);
+  const btnP1LoadOfficial = $("btn-p1-load-official-schedule");
+  if (btnP1LoadOfficial) {
+    btnP1LoadOfficial.addEventListener("click", () => loadOfficialSchedule("phase1"));
   }
 
-  const btnLoadSampleSchedule = $("btn-load-sample-schedule");
-  if (btnLoadSampleSchedule) {
-    btnLoadSampleSchedule.addEventListener("click", loadSampleSchedule);
+  const btnP1ApplyConfig = $("btn-p1-apply-config");
+  if (btnP1ApplyConfig) {
+    btnP1ApplyConfig.addEventListener("click", () => applyCalendarConfig("phase1"));
   }
 
-  const btnDownloadTemplate = $("btn-download-schedule-template");
-  if (btnDownloadTemplate) {
-    btnDownloadTemplate.addEventListener("click", downloadScheduleTemplate);
+  const btnP1DownloadTemplate = $("btn-p1-download-template");
+  if (btnP1DownloadTemplate) {
+    btnP1DownloadTemplate.addEventListener("click", downloadScheduleTemplate);
   }
 
-  const btnExportCSV = $("btn-export-schedule-csv");
-  if (btnExportCSV) {
-    btnExportCSV.addEventListener("click", exportScheduleCSV);
+  const btnP1ExportCSV = $("btn-p1-export-csv");
+  if (btnP1ExportCSV) {
+    btnP1ExportCSV.addEventListener("click", exportScheduleCSV);
   }
 
-  const btnClearSchedule = $("btn-clear-schedule");
-  if (btnClearSchedule) {
-    btnClearSchedule.addEventListener("click", clearSchedule);
+  const btnP1ClearSchedule = $("btn-p1-clear-schedule");
+  if (btnP1ClearSchedule) {
+    btnP1ClearSchedule.addEventListener("click", () => clearSchedule("phase1"));
   }
 
-  const btnApplyPlanStart = $("btn-apply-plan-start");
-  if (btnApplyPlanStart) {
-    btnApplyPlanStart.addEventListener("click", () => {
-      const input = $("cal-plan-start-date");
-      if (input && input.value) {
-        state.calendar_planStartDate = input.value;
-        saveJSON("rbi_calendar_start_date", input.value);
-        state.calendar = generateDefaultSchedule(input.value);
-        saveCalendarSchedule();
-        renderCalendar();
-        const statusElem = $("calendar-import-status");
-        if (statusElem) {
-          statusElem.textContent = `✓ Plan rescheduled starting from ${input.value}!`;
-          setTimeout(() => { statusElem.textContent = ""; }, 4000);
-        }
-      }
+  const p1CalBtnPrevMonth = $("p1-cal-btn-prev-month");
+  if (p1CalBtnPrevMonth) {
+    p1CalBtnPrevMonth.addEventListener("click", () => {
+      const cur = state.p1_calendar_currentDate;
+      state.p1_calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() - 1, 1);
+      renderP1Calendar();
     });
   }
 
-  const calBtnPrevMonth = $("cal-btn-prev-month");
-  if (calBtnPrevMonth) {
-    calBtnPrevMonth.addEventListener("click", () => {
-      const cur = state.calendar_currentDate;
-      state.calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() - 1, 1);
-      renderCalendar();
+  const p1CalBtnNextMonth = $("p1-cal-btn-next-month");
+  if (p1CalBtnNextMonth) {
+    p1CalBtnNextMonth.addEventListener("click", () => {
+      const cur = state.p1_calendar_currentDate;
+      state.p1_calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      renderP1Calendar();
     });
   }
 
-  const calBtnNextMonth = $("cal-btn-next-month");
-  if (calBtnNextMonth) {
-    calBtnNextMonth.addEventListener("click", () => {
-      const cur = state.calendar_currentDate;
-      state.calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      renderCalendar();
+  const p1CalBtnToday = $("p1-cal-btn-today");
+  if (p1CalBtnToday) {
+    p1CalBtnToday.addEventListener("click", () => {
+      state.p1_calendar_currentDate = new Date();
+      state.p1_calendar_selectedDate = getLocalDateString(new Date());
+      renderP1Calendar();
     });
   }
 
-  const calBtnToday = $("cal-btn-today");
-  if (calBtnToday) {
-    calBtnToday.addEventListener("click", () => {
-      state.calendar_currentDate = new Date();
-      state.calendar_selectedDate = getLocalDateString(new Date());
-      renderCalendar();
+  const p1CalFilterDayType = $("p1-cal-filter-day-type");
+  if (p1CalFilterDayType) {
+    p1CalFilterDayType.value = state.p1_calendar_filterDayType || "all";
+    p1CalFilterDayType.addEventListener("change", (e) => {
+      state.p1_calendar_filterDayType = e.target.value;
+      renderP1Calendar();
     });
   }
 
-  const calFilterDayType = $("cal-filter-day-type");
-  if (calFilterDayType) {
-    calFilterDayType.value = state.calendar_filterDayType || "all";
-    calFilterDayType.addEventListener("change", (e) => {
-      state.calendar_filterDayType = e.target.value;
-      renderCalendar();
+  const p1CalFilterStatus = $("p1-cal-filter-status");
+  if (p1CalFilterStatus) {
+    p1CalFilterStatus.value = state.p1_calendar_filterStatus || "all";
+    p1CalFilterStatus.addEventListener("change", (e) => {
+      state.p1_calendar_filterStatus = e.target.value;
+      renderP1Calendar();
     });
   }
 
-  const calFilterPhase = $("cal-filter-phase");
-  if (calFilterPhase) {
-    calFilterPhase.addEventListener("change", (e) => {
-      state.calendar_filterPhase = e.target.value;
-      renderCalendar();
+  const p1CalViewMonthBtn = $("p1-cal-view-month");
+  if (p1CalViewMonthBtn) {
+    p1CalViewMonthBtn.addEventListener("click", () => {
+      state.p1_calendar_view = "month";
+      renderP1Calendar();
     });
   }
 
-  const calFilterStatus = $("cal-filter-status");
-  if (calFilterStatus) {
-    calFilterStatus.addEventListener("change", (e) => {
-      state.calendar_filterStatus = e.target.value;
-      renderCalendar();
+  const p1CalViewAgendaBtn = $("p1-cal-view-agenda");
+  if (p1CalViewAgendaBtn) {
+    p1CalViewAgendaBtn.addEventListener("click", () => {
+      state.p1_calendar_view = "agenda";
+      renderP1Calendar();
     });
   }
 
-  const calViewMonthBtn = $("cal-view-month");
-  if (calViewMonthBtn) {
-    calViewMonthBtn.addEventListener("click", () => {
-      state.calendar_view = "month";
-      renderCalendar();
-    });
-  }
-
-  const calViewAgendaBtn = $("cal-view-agenda");
-  if (calViewAgendaBtn) {
-    calViewAgendaBtn.addEventListener("click", () => {
-      state.calendar_view = "agenda";
-      renderCalendar();
-    });
-  }
-
-  const daysGrid = $("calendar-days-grid");
-  if (daysGrid) {
-    daysGrid.addEventListener("mousemove", (e) => {
+  const p1DaysGrid = $("p1-calendar-days-grid");
+  if (p1DaysGrid) {
+    p1DaysGrid.addEventListener("mousemove", (e) => {
       const cell = e.target.closest(".cal-day-cell");
       if (cell) {
-        showCalendarHoverPopover(e, cell);
+        showP1CalendarHoverPopover(e, cell);
       } else {
-        hideCalendarHoverPopover();
+        hideP1CalendarHoverPopover();
       }
     });
 
-    daysGrid.addEventListener("mouseleave", () => {
-      hideCalendarHoverPopover();
+    p1DaysGrid.addEventListener("mouseleave", () => {
+      hideP1CalendarHoverPopover();
     });
 
-    daysGrid.addEventListener("click", (e) => {
-      hideCalendarHoverPopover();
+    p1DaysGrid.addEventListener("click", (e) => {
+      hideP1CalendarHoverPopover();
       const cell = e.target.closest(".cal-day-cell");
       if (cell && cell.dataset.date) {
-        state.calendar_selectedDate = cell.dataset.date;
-        renderCalendar();
+        state.p1_calendar_selectedDate = cell.dataset.date;
+        renderP1Calendar();
       }
     });
   }
 
-  window.addEventListener("scroll", hideCalendarHoverPopover, { passive: true });
-
-  const dayTasksList = $("cal-selected-day-tasks");
-  if (dayTasksList) {
-    dayTasksList.addEventListener("change", (e) => {
+  const p1DayTasksList = $("p1-cal-selected-day-tasks");
+  if (p1DayTasksList) {
+    p1DayTasksList.addEventListener("change", (e) => {
       if (e.target && e.target.classList.contains("task-status-check")) {
         const id = e.target.dataset.id;
-        toggleTaskComplete(id);
+        toggleTaskComplete(id, "phase1");
       }
     });
 
-    dayTasksList.addEventListener("click", (e) => {
+    p1DayTasksList.addEventListener("click", (e) => {
+      const reviewExamBtn = e.target.closest(".p1-review-exam-btn");
+      if (reviewExamBtn) {
+        reviewP1HistoricalTest(reviewExamBtn.dataset.id);
+        return;
+      }
+
       const btn = e.target.closest("button[data-action]");
       if (!btn) return;
       const action = btn.dataset.action;
       const id = btn.dataset.id;
       if (action === "practice") {
-        const phase = btn.dataset.phase;
-        if (phase === "Phase-1") {
-          setPhase("phase1");
-          renderP1SetupList();
-          showScreen("setup");
-        } else {
-          setPhase("phase2");
-          renderSetupList();
-          showScreen("setup");
-        }
+        setPhase("phase1");
+        renderP1SetupList();
+        showScreen("setup");
       } else if (action === "edit") {
         const t = (state.calendar || []).find(x => x.id === id);
-        if (t) openTaskModal(t);
+        if (t) openTaskModal(t, "Phase-1");
       } else if (action === "delete") {
-        deleteTask(id);
+        deleteTask(id, "phase1");
       }
     });
   }
 
-  const agendaList = $("calendar-agenda-list");
-  if (agendaList) {
-    agendaList.addEventListener("change", (e) => {
+  const p1AgendaList = $("p1-calendar-agenda-list");
+  if (p1AgendaList) {
+    p1AgendaList.addEventListener("change", (e) => {
       if (e.target && e.target.classList.contains("task-status-check")) {
         const id = e.target.dataset.id;
-        toggleTaskComplete(id);
+        toggleTaskComplete(id, "phase1");
       }
     });
 
-    agendaList.addEventListener("click", (e) => {
+    p1AgendaList.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-action='delete']");
       if (btn && btn.dataset.id) {
-        deleteTask(btn.dataset.id);
+        deleteTask(btn.dataset.id, "phase1");
       }
     });
   }
 
-  const btnOpenAddTask = $("btn-open-add-task-modal");
-  if (btnOpenAddTask) {
-    btnOpenAddTask.addEventListener("click", () => openTaskModal());
+  const btnP1OpenAddTask = $("p1-btn-open-add-task-modal");
+  if (btnP1OpenAddTask) {
+    btnP1OpenAddTask.addEventListener("click", () => openTaskModal(null, "Phase-1"));
   }
+
+  const p1CalUploadCard = document.querySelector("#screen-calendar-p1 .calendar-upload-card");
+  if (p1CalUploadCard) {
+    p1CalUploadCard.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      p1CalUploadCard.classList.add("drag-over");
+    });
+    p1CalUploadCard.addEventListener("dragleave", () => {
+      p1CalUploadCard.classList.remove("drag-over");
+    });
+    p1CalUploadCard.addEventListener("drop", (e) => {
+      e.preventDefault();
+      p1CalUploadCard.classList.remove("drag-over");
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleCalendarExcelImport({ target: { files: e.dataTransfer.files } }, "phase1");
+      }
+    });
+  }
+
+  // ==========================================
+  // PHASE-2 CALENDAR EVENTS
+  // ==========================================
+  const p2CalExcelImport = $("p2-calendar-excel-import");
+  if (p2CalExcelImport) {
+    p2CalExcelImport.addEventListener("change", (e) => handleCalendarExcelImport(e, "phase2"));
+  }
+
+  const btnP2LoadOfficial = $("btn-p2-load-official-schedule");
+  if (btnP2LoadOfficial) {
+    btnP2LoadOfficial.addEventListener("click", () => loadOfficialSchedule("phase2"));
+  }
+
+  const btnP2ApplyConfig = $("btn-p2-apply-config");
+  if (btnP2ApplyConfig) {
+    btnP2ApplyConfig.addEventListener("click", () => applyCalendarConfig("phase2"));
+  }
+
+  const btnP2DownloadTemplate = $("btn-p2-download-template");
+  if (btnP2DownloadTemplate) {
+    btnP2DownloadTemplate.addEventListener("click", downloadScheduleTemplate);
+  }
+
+  const btnP2ExportCSV = $("btn-p2-export-csv");
+  if (btnP2ExportCSV) {
+    btnP2ExportCSV.addEventListener("click", exportScheduleCSV);
+  }
+
+  const btnP2ClearSchedule = $("btn-p2-clear-schedule");
+  if (btnP2ClearSchedule) {
+    btnP2ClearSchedule.addEventListener("click", () => clearSchedule("phase2"));
+  }
+
+  const p2CalBtnPrevMonth = $("p2-cal-btn-prev-month");
+  if (p2CalBtnPrevMonth) {
+    p2CalBtnPrevMonth.addEventListener("click", () => {
+      const cur = state.p2_calendar_currentDate;
+      state.p2_calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() - 1, 1);
+      renderP2Calendar();
+    });
+  }
+
+  const p2CalBtnNextMonth = $("p2-cal-btn-next-month");
+  if (p2CalBtnNextMonth) {
+    p2CalBtnNextMonth.addEventListener("click", () => {
+      const cur = state.p2_calendar_currentDate;
+      state.p2_calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      renderP2Calendar();
+    });
+  }
+
+  const p2CalBtnToday = $("p2-cal-btn-today");
+  if (p2CalBtnToday) {
+    p2CalBtnToday.addEventListener("click", () => {
+      state.p2_calendar_currentDate = new Date();
+      state.p2_calendar_selectedDate = getLocalDateString(new Date());
+      renderP2Calendar();
+    });
+  }
+
+  const p2CalFilterDayType = $("p2-cal-filter-day-type");
+  if (p2CalFilterDayType) {
+    p2CalFilterDayType.value = state.p2_calendar_filterDayType || "all";
+    p2CalFilterDayType.addEventListener("change", (e) => {
+      state.p2_calendar_filterDayType = e.target.value;
+      renderP2Calendar();
+    });
+  }
+
+  const p2CalFilterStatus = $("p2-cal-filter-status");
+  if (p2CalFilterStatus) {
+    p2CalFilterStatus.value = state.p2_calendar_filterStatus || "all";
+    p2CalFilterStatus.addEventListener("change", (e) => {
+      state.p2_calendar_filterStatus = e.target.value;
+      renderP2Calendar();
+    });
+  }
+
+  const p2CalViewMonthBtn = $("p2-cal-view-month");
+  if (p2CalViewMonthBtn) {
+    p2CalViewMonthBtn.addEventListener("click", () => {
+      state.p2_calendar_view = "month";
+      renderP2Calendar();
+    });
+  }
+
+  const p2CalViewAgendaBtn = $("p2-cal-view-agenda");
+  if (p2CalViewAgendaBtn) {
+    p2CalViewAgendaBtn.addEventListener("click", () => {
+      state.p2_calendar_view = "agenda";
+      renderP2Calendar();
+    });
+  }
+
+  const p2DaysGrid = $("p2-calendar-days-grid");
+  if (p2DaysGrid) {
+    p2DaysGrid.addEventListener("mousemove", (e) => {
+      const cell = e.target.closest(".cal-day-cell");
+      if (cell) {
+        showP2CalendarHoverPopover(e, cell);
+      } else {
+        hideP2CalendarHoverPopover();
+      }
+    });
+
+    p2DaysGrid.addEventListener("mouseleave", () => {
+      hideP2CalendarHoverPopover();
+    });
+
+    p2DaysGrid.addEventListener("click", (e) => {
+      hideP2CalendarHoverPopover();
+      const cell = e.target.closest(".cal-day-cell");
+      if (cell && cell.dataset.date) {
+        state.p2_calendar_selectedDate = cell.dataset.date;
+        renderP2Calendar();
+      }
+    });
+  }
+
+  const p2DayTasksList = $("p2-cal-selected-day-tasks");
+  if (p2DayTasksList) {
+    p2DayTasksList.addEventListener("change", (e) => {
+      if (e.target && e.target.classList.contains("task-status-check")) {
+        const id = e.target.dataset.id;
+        toggleTaskComplete(id, "phase2");
+      }
+    });
+
+    p2DayTasksList.addEventListener("click", (e) => {
+      const reviewExamBtn = e.target.closest(".p2-review-exam-btn");
+      if (reviewExamBtn) {
+        const testId = reviewExamBtn.dataset.testId;
+        setPhase("phase2");
+        renderHistory();
+        showScreen("history");
+        setTimeout(() => {
+          const revContainer = $(`review-container-${testId}`);
+          if (revContainer) {
+            revContainer.style.display = "block";
+            const btn = document.querySelector(`.btn-toggle-answer-review[data-test-id="${testId}"]`);
+            if (btn) btn.textContent = "📖 Hide Answers & Marks";
+            revContainer.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 150);
+        return;
+      }
+
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === "practice") {
+        setPhase("phase2");
+        renderSetupList();
+        showScreen("setup");
+      } else if (action === "edit") {
+        const t = (state.calendar || []).find(x => x.id === id);
+        if (t) openTaskModal(t, "Phase-2");
+      } else if (action === "delete") {
+        deleteTask(id, "phase2");
+      }
+    });
+  }
+
+  const p2AgendaList = $("p2-calendar-agenda-list");
+  if (p2AgendaList) {
+    p2AgendaList.addEventListener("change", (e) => {
+      if (e.target && e.target.classList.contains("task-status-check")) {
+        const id = e.target.dataset.id;
+        toggleTaskComplete(id, "phase2");
+      }
+    });
+
+    p2AgendaList.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-action='delete']");
+      if (btn && btn.dataset.id) {
+        deleteTask(btn.dataset.id, "phase2");
+      }
+    });
+  }
+
+  const btnP2OpenAddTask = $("p2-btn-open-add-task-modal");
+  if (btnP2OpenAddTask) {
+    btnP2OpenAddTask.addEventListener("click", () => openTaskModal(null, "Phase-2"));
+  }
+
+  const p2CalUploadCard = document.querySelector("#screen-calendar-p2 .calendar-upload-card");
+  if (p2CalUploadCard) {
+    p2CalUploadCard.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      p2CalUploadCard.classList.add("drag-over");
+    });
+    p2CalUploadCard.addEventListener("dragleave", () => {
+      p2CalUploadCard.classList.remove("drag-over");
+    });
+    p2CalUploadCard.addEventListener("drop", (e) => {
+      e.preventDefault();
+      p2CalUploadCard.classList.remove("drag-over");
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleCalendarExcelImport({ target: { files: e.dataTransfer.files } }, "phase2");
+      }
+    });
+  }
+
+  window.addEventListener("scroll", () => {
+    hideP1CalendarHoverPopover();
+    hideP2CalendarHoverPopover();
+  }, { passive: true });
 
   const btnCloseTaskModal = $("btn-close-task-modal");
   if (btnCloseTaskModal) {
@@ -6084,25 +7281,7 @@ document.addEventListener("DOMContentLoaded", () => {
     formTaskModal.addEventListener("submit", handleTaskFormSubmit);
   }
 
-  const calUploadCard = document.querySelector(".calendar-upload-card");
-  if (calUploadCard) {
-    calUploadCard.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      calUploadCard.classList.add("drag-over");
-    });
-    calUploadCard.addEventListener("dragleave", () => {
-      calUploadCard.classList.remove("drag-over");
-    });
-    calUploadCard.addEventListener("drop", (e) => {
-      e.preventDefault();
-      calUploadCard.classList.remove("drag-over");
-      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        handleCalendarExcelImport({ target: { files: e.dataTransfer.files } });
-      }
-    });
-  }
-
-  // Initial load
+    // Initial load
   setPhase(state.phase);
   checkResumeActiveTest();
 });

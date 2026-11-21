@@ -3088,4 +3088,390 @@ button.secondary:hover {
   margin-top: 6px;
 }
 
+/* ============================================================
+   Upload Box Options: Start Date & Days Finished
+   ============================================================ */
+.upload-config-inputs {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+  padding: 8px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.upload-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 !important;
+}
+
+.upload-date-input {
+  width: auto !important;
+  margin: 0 !important;
+  padding: 5px 10px !important;
+  font-size: 12.5px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background: #f8fafc !important;
+}
+
+.upload-num-input {
+  width: 75px !important;
+  margin: 0 !important;
+  padding: 5px 10px !important;
+  font-size: 12.5px !important;
+  text-align: center;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background: #f8fafc !important;
+}
+
+.upload-excel-btn {
+  padding: 7px 18px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+/* ============================================================
+   Exam Marks Badges on Calendar Cells & Detail Cards
+   ============================================================ */
+.cal-exam-score-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2.5px 6px;
+  border-radius: 5px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.25;
+}
+
+.cal-exam-score-pill.p1-score-pill {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.1);
+}
+
+.cal-exam-score-pill.p2-score-pill {
+  background: #faf5ff;
+  color: #6b21a8;
+  border: 1px solid #e9d5ff;
+  box-shadow: 0 1px 2px rgba(147, 51, 234, 0.1);
+}
+
+.cal-exam-score-pill.p2-written-pill {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.cal-day-cell.has-exam-score {
+  box-shadow: inset 0 0 0 1.5px #10b981;
+}
+
+.popover-sec.marks-sec {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+}
+
+.popover-sec.marks-sec.p2 {
+  background: #faf5ff;
+  border: 1.5px solid #d8b4fe;
+}
+
+.popover-marks-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.marks-val {
+  font-size: 16px;
+  font-weight: 800;
+  color: #047857;
+}
+
+.popover-sec.marks-sec.p2 .marks-val {
+  color: #7e22ce;
+}
+
+.marks-pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: #065f46;
+}
+
+.popover-sec.marks-sec.p2 .marks-pct {
+  color: #6b21a8;
+}
+
+.cal-exam-result-card {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.cal-exam-result-card.p2 {
+  background: #faf5ff;
+  border: 1.5px solid #d8b4fe;
+}
+
+.exam-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.exam-result-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #15803d;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cal-exam-result-card.p2 .exam-result-title {
+  color: #7e22ce;
+}
+
+.exam-result-score {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.exam-result-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   Phase-2 History: Test Review & Written Answers Inspection
+   ============================================================ */
+.btn-toggle-answer-review {
+  background: #003366 !important;
+  color: #ffffff !important;
+  border: none !important;
+  padding: 5px 12px !important;
+  border-radius: 6px !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.btn-toggle-answer-review:hover {
+  opacity: 0.9;
+}
+
+.test-answers-review-container {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.question-review-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.q-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.q-review-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.q-review-marks-tag {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.q-review-prompt {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+
+.q-review-answer-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.q-review-answer-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.q-review-answer-text {
+  font-size: 13px;
+  color: #1e293b;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.q-review-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+.q-review-score-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 !important;
+  font-size: 12.5px !important;
+}
+
+.score-input-inline {
+  width: 70px !important;
+  margin: 0 !important;
+  padding: 4px 8px !important;
+  font-size: 12.5px !important;
+  text-align: center;
+  border-radius: 4px !important;
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+}
+
+.btn-copy-ans-mini, .btn-toggle-model-mini {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-copy-ans-mini:hover, .btn-toggle-model-mini:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.q-review-model-box {
+  margin-top: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #1e3a8a;
+  white-space: pre-wrap;
+}
+
+/* ============================================================
+   Button Proportion & UI Alignment Polish
+   ============================================================ */
+button, .rbi-btn, .btn-minimal-primary, .sample-pill {
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.sample-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sample-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+}
+
+.btn-minimal-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 16px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+}
+
+.batch-btn {
+  padding: 6px 14px !important;
+  font-size: 12.5px !important;
+}
+
+.history-card-header .actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.history-card-header .actions button {
+  padding: 5px 12px !important;
+  font-size: 12.5px !important;
+  border-radius: 6px !important;
+}
+
 
