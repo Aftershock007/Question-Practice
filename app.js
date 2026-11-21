@@ -2090,7 +2090,109 @@ async function extractPdfText(arrayBuffer) {
     if (lines.length > 0) allExtracted.push(lines.join("\n"));
   }
 
-  return allExtracted.join("\n");
+  const combined = allExtracted.join("\n");
+  const rawPdfLines = combined.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const repPdfHeaders = findRepetitiveHeaders(rawPdfLines);
+  const cleanPdfLines = rawPdfLines.filter(l => !isHeaderOrFooterLine(l, repPdfHeaders));
+  return cleanPdfLines.join("\n");
+}
+
+// Detect repetitive running headers and footers across document lines
+function findRepetitiveHeaders(lines) {
+  const counts = {};
+  for (const l of lines) {
+    const trimmed = (l || "").trim().toLowerCase();
+    if (
+      trimmed.length >= 4 &&
+      trimmed.length <= 90 &&
+      !/(?:\[[a-e]\]|\([a-e]\)|\b[a-e]\b[\.\)])/i.test(trimmed) &&
+      !/\?$/.test(trimmed) &&
+      !/\b(?:statement|statements|following|which\s+of|correct|incorrect|option|options|true|false)\b/i.test(trimmed) &&
+      !/^(?:(?:model\s+)?answer|ans|solution|explanation|q\s*\d+|\d+[\.\)])/i.test(trimmed)
+    ) {
+      counts[trimmed] = (counts[trimmed] || 0) + 1;
+    }
+  }
+  const repetitive = new Set();
+  for (const [text, count] of Object.entries(counts)) {
+    if (count >= 2) repetitive.add(text);
+  }
+  return repetitive;
+}
+
+// Determine if a line is a running header, footer, page number, watermark, or metadata banner
+function isHeaderOrFooterLine(line, repetitiveSet = null) {
+  if (!line || !line.trim()) return true;
+  const trimmed = line.trim();
+
+  // 1. Repetitive running header or footer
+  if (repetitiveSet && repetitiveSet.has(trimmed.toLowerCase())) return true;
+
+  // 2. Page numbers and pagination markers
+  if (/^(?:page\s*\-*\s*\d+(?:\s*(?:of|\/)\s*\d+)?|\d+\s*(?:of|\/)\s*\d+|\-*\s*\d+\s*\-*|\[\s*\d+\s*\]|p\s*[\.\-]?\s*\d+)$/i.test(trimmed)) return true;
+  if (/^page\s*\d+$/i.test(trimmed) || /^\d+\s*\|\s*page$/i.test(trimmed) || /^page\s*\|\s*\d+$/i.test(trimmed)) return true;
+  if (/^\d{1,3}$/.test(trimmed)) return true;
+
+  // 3. Web URLs and coaching watermarks
+  if (/^(?:https?:\/\/|www\.)\S+$/i.test(trimmed)) return true;
+  if (/\b(?:www\.[a-z0-9\-]+\.[a-z]{2,}|[a-z0-9\-]+\.(?:com|in|org|co\.in))\b/i.test(trimmed) && trimmed.length < 80) return true;
+
+  // 4. Section banners and exam headers
+  if (/^(?:RBI\s*Grade\s*B(?:\s*\d{4})?|Reserve\s*Bank\s*of\s*India|Phase\s*[\-:]?[I|1|2|II]+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed)) return true;
+  if (/^(?:Mock\s*Test(?:\s*\d+)?|Test\s*Series|Practice\s*Set|Practice\s*Paper|Sample\s*Paper|Section\s*[\-:]?[A-Z0-9]|Paper\s*[\-:]?[I|1|2|II\d]+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed)) return true;
+  if (/^(?:Chapter\s*\d+|Ch\s*[\-:]?\s*\d+|Unit\s*\d+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 80) return true;
+  if (/^(?:Economic\s*(?:&|and)\s*Social\s*Issues(?:\s*\(ESI\))?|Finance\s*(?:&|and)\s*Management(?:\s*\(F&M\))?|English\s*Descriptive|General\s*Awareness)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 80) return true;
+
+  // 5. Exam instructions and metadata banner lines
+  if (/^(?:Time\s*Allowed|Maximum\s*Marks|Total\s*Marks|Total\s*Time|Duration|Instructions?|Note|Important\s*Instructions?)\s*[:\.\-]/i.test(trimmed) && trimmed.length < 80) return true;
+  if (/^(?:All\s*questions\s*are\s*compulsory|Read\s*the\s*following\s*instructions\s*carefully)/i.test(trimmed)) return true;
+
+  return false;
+}
+
+// Clean descriptive question lines and strip extraneous title/banner lines
+function cleanDescriptiveQuestion(lines, currentTopic = "") {
+  if (!lines || lines.length === 0) return { text: "", topic: currentTopic };
+  let topic = currentTopic;
+  const filtered = lines.filter(l => l.trim().length > 0);
+  if (filtered.length === 0) return { text: "", topic };
+
+  // If first line is a title or header banner rather than a question prompt:
+  if (filtered.length > 1) {
+    const first = filtered[0].trim();
+    const isDirectiveOrQuestion = /^(?:discuss|explain|analyze|critically|evaluate|what|how|why|which|elaborate|describe|write|elucidate|highlight|examine)\b/i.test(first) || /\?$/.test(first);
+    if (!isDirectiveOrQuestion && first.length < 80) {
+      if (!topic) topic = first;
+      filtered.shift();
+    }
+  }
+
+  if (filtered.length > 0) {
+    filtered[0] = filtered[0].replace(/^(?:Question\s*\d+|Q\s*\d+|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*/i, "").trim();
+  }
+
+  return { text: filtered.join("\n").trim(), topic };
+}
+
+// Clean MCQ prompt lines and strip extraneous section headers or page banners
+function cleanMCQPrompt(lines) {
+  if (!lines || lines.length === 0) return "";
+  const qNumIdx = lines.findIndex(l => /^(?:Q(?:uestion)?\s*[\.\-]?\s*\d+|\d+[\.\)]|\(\d+\))\s+/i.test(l));
+  let clean = lines;
+  if (qNumIdx > 0) {
+    clean = lines.slice(qNumIdx);
+  } else if (lines.length > 1) {
+    const first = lines[0].trim();
+    if (first === first.toUpperCase() && first.length < 60 && !/\?$/.test(first)) {
+      clean = lines.slice(1);
+    }
+  }
+
+  if (clean.length > 0) {
+    clean[0] = clean[0].replace(/^(?:Question\s*\d+|Q\s*\d+|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*/i, "").trim();
+  }
+
+  return clean.filter(l => l.trim().length > 0).join("\n").trim();
 }
 
 // Parse raw document text into structured question objects with paper, marks, and model answers
@@ -2099,6 +2201,7 @@ function parseQuestionsAndAnswers(rawText) {
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const rawLines = text.split("\n").map(l => l.trim());
+  const repHeaders = findRepetitiveHeaders(rawLines);
 
   // Check document-level metadata from the first few lines
   let docDefaultPaper = "Other";
@@ -2119,7 +2222,7 @@ function parseQuestionsAndAnswers(rawText) {
 
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i];
-    if (!line) continue;
+    if (!line || isHeaderOrFooterLine(line, repHeaders)) continue;
 
     const m = line.match(qNumRegex);
     if (m) {
@@ -2144,15 +2247,22 @@ function parseQuestionsAndAnswers(rawText) {
   if (questionStarts.length === 0) {
     for (let i = 0; i < rawLines.length; i++) {
       const line = rawLines[i];
+      if (isHeaderOrFooterLine(line, repHeaders)) continue;
       if (/^\d+[\.\)]\s+/.test(line)) {
         questionStarts.push({ lineIndex: i, qNum: parseInt(line, 10), line });
       }
     }
   }
 
-  // Fallback for single question with explicit Answer: marker
+  // Fallback for single question with explicit Answer: marker or directive verb
   if (questionStarts.length === 0) {
-    questionStarts.push({ lineIndex: 0, qNum: 1, line: rawLines[0] });
+    let firstContentIdx = 0;
+    while (firstContentIdx < rawLines.length && (!rawLines[firstContentIdx] || isHeaderOrFooterLine(rawLines[firstContentIdx], repHeaders))) {
+      firstContentIdx++;
+    }
+    if (firstContentIdx < rawLines.length) {
+      questionStarts.push({ lineIndex: firstContentIdx, qNum: 1, line: rawLines[firstContentIdx] });
+    }
   }
 
   const results = [];
@@ -2160,7 +2270,7 @@ function parseQuestionsAndAnswers(rawText) {
   for (let k = 0; k < questionStarts.length; k++) {
     const startIdx = questionStarts[k].lineIndex;
     const endIdx = (k + 1 < questionStarts.length) ? questionStarts[k + 1].lineIndex : rawLines.length;
-    const blockLines = rawLines.slice(startIdx, endIdx).filter(l => l.length > 0);
+    const blockLines = rawLines.slice(startIdx, endIdx).filter(l => l.length > 0 && !isHeaderOrFooterLine(l, repHeaders));
 
     if (blockLines.length === 0) continue;
 
@@ -2253,8 +2363,10 @@ function parseQuestionsAndAnswers(rawText) {
       }
     }
 
-    const questionText = qLines.join("\n").trim();
-    const modelAnswer = aLines.join("\n\n").trim();
+    const cleaned = cleanDescriptiveQuestion(qLines, topic);
+    const questionText = cleaned.text;
+    topic = cleaned.topic;
+    const modelAnswer = aLines.filter(l => !isHeaderOrFooterLine(l, repHeaders)).join("\n\n").trim();
 
     if (questionText || modelAnswer) {
       results.push({
@@ -2370,7 +2482,9 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   if (!rawText || !rawText.trim()) return [];
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const paragraphs = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const rawParagraphs = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const repHeaders = findRepetitiveHeaders(rawParagraphs);
+  const paragraphs = rawParagraphs.filter(p => !isHeaderOrFooterLine(p, repHeaders));
 
   // 1. Locate Answer Key section if present
   let ansKeyIdx = -1;
@@ -2397,12 +2511,12 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
         const startQ = parseInt(rangeMatch[1], 10);
         const endQ = parseInt(rangeMatch[2], 10);
         i++;
-        let currQ = startQ;
-        while (i < ansParagraphs.length && currQ <= endQ) {
+        let currQNum = startQ;
+        while (i < ansParagraphs.length && currQNum <= endQ) {
           const val = ansParagraphs[i].trim().toLowerCase();
           if (/^[a-e]$/.test(val)) {
-            answersMap[currQ] = val;
-            currQ++;
+            answersMap[currQNum] = val;
+            currQNum++;
             i++;
           } else {
             break;
@@ -2470,10 +2584,11 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
 
         if (currOpts.some(o => o.label === curM.label)) {
           if (currQ.length > 0 || currOpts.length > 0) {
+            const cleanText = cleanMCQPrompt(currQ);
             questions.push({
               id: makeId("mcq"),
               subject: defaultSubject,
-              text: currQ.join("\n").trim(),
+              text: cleanText || "Imported Question",
               options: currOpts,
               correctAnswer: "",
               explanation: "",
@@ -2489,10 +2604,11 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       }
     } else {
       if (currOpts.length >= 4) {
+        const cleanText = cleanMCQPrompt(currQ);
         questions.push({
           id: makeId("mcq"),
           subject: defaultSubject,
-          text: currQ.join("\n").trim(),
+          text: cleanText || "Imported Question",
           options: currOpts,
           correctAnswer: "",
           explanation: "",
@@ -2507,10 +2623,11 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   }
 
   if (currQ.length > 0 || currOpts.length > 0) {
+    const cleanText = cleanMCQPrompt(currQ);
     questions.push({
       id: makeId("mcq"),
       subject: defaultSubject,
-      text: currQ.join("\n").trim(),
+      text: cleanText || "Imported Question",
       options: currOpts,
       correctAnswer: "",
       explanation: "",
