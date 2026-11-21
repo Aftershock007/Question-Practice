@@ -21,6 +21,14 @@
     <section id="screen-setup" class="screen">
       <h2>Set up today's test</h2>
 
+      <div class="doc-import-bar" style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <label class="file-btn" style="background: #4f46e5;">
+          📄 Import Questions from DOCX / PDF
+          <input id="setup-doc-import" type="file" accept=".docx,.pdf" hidden>
+        </label>
+        <span id="setup-doc-status" style="font-size: 14px; color: var(--muted);"></span>
+      </div>
+
       <form id="question-form">
         <label>Subject / Paper
           <select id="q-paper">
@@ -140,6 +148,7 @@
       <div id="bank-list"></div>
       <button type="button" id="btn-bank-export">Export bank (.json)</button>
       <label class="file-btn">Import bank (.json) <input id="bank-import" type="file" accept=".json" hidden></label>
+      <label class="file-btn" style="background: #4f46e5;">Import DOCX / PDF <input id="bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
     </section>
   </main>
 

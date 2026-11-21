@@ -7,6 +7,7 @@ A personal, offline typing test and descriptive answer practice website designed
 ## Features
 
 - **Four Dedicated Subjects:** Organize and practice questions across four distinct subjects: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
+- **DOCX & PDF File Import:** Directly upload Word (.docx) or PDF (.pdf) documents containing questions and answers. The app automatically extracts questions, subjects, marks, word limits, and model answers (test with the included `demo_questions.docx` and `demo_questions.pdf`).
 - **Custom Practice Setup:** Add custom questions, specify topics, paper categories, target word limits, and reference model answers.
 - **Realistic Typing Interface:** Countdown timer with visual warning thresholds, live word count adherence tracking, Tab indentation support, and optional paste prevention to simulate genuine test conditions.
 - **AI Evaluation Prompt Generation:** Instantly exports comprehensive `.txt` evaluation prompts containing your typed answer, word count, time spent, and reference model answer ready to paste directly into AI tools for scoring and feedback.

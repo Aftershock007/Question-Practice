@@ -71,13 +71,13 @@ function getLocalDateString(dateInput) {
 function getQuestionFilename(test, question, index) {
   const dateStr = getLocalDateString(test.date);
   const paperClean = (question.paper || "General").replace(/&/g, "and").replace(/[^a-zA-Z0-9]/g, "");
-  return `RBI_${dateStr}_Q${index + 1}_${paperClean}_${question.marks}m.txt`;
+  return `Practice_${dateStr}_Q${index + 1}_${paperClean}_${question.marks}m.txt`;
 }
 
 // Generate file name for the combined test evaluation file
 function getCombinedFilename(test) {
   const dateStr = getLocalDateString(test.date);
-  return `RBI_${dateStr}_FullTest.txt`;
+  return `Practice_${dateStr}_FullTest.txt`;
 }
 
 // Show one screen, hide all others
@@ -188,7 +188,7 @@ function renderSetupList() {
   const suggestedElem = $("setup-suggested-time");
   if (suggestedElem) {
     const suggestedMin = Math.ceil(totalWordLimit / 25);
-    suggestedElem.textContent = `Suggested time (RBI pace ≈ 1 min per 25 words): ${suggestedMin} minutes`;
+    suggestedElem.textContent = `Suggested time (pace ≈ 1 min per 25 words): ${suggestedMin} minutes`;
   }
 
   const minutesInput = $("setup-minutes");
@@ -1124,7 +1124,7 @@ function handleAddRandomQuestions() {
 function handleBankExport() {
   const bank = loadJSON("rbi_question_bank", []);
   const dateStr = getLocalDateString();
-  downloadText(`RBI_question_bank_${dateStr}.json`, JSON.stringify(bank, null, 2));
+  downloadText(`Question_bank_${dateStr}.json`, JSON.stringify(bank, null, 2));
 }
 
 // Read and merge an imported JSON question file into the question bank
@@ -1175,6 +1175,461 @@ function handleBankImport(event) {
   reader.readAsText(file);
 }
 
+// Extract plain text paragraphs from a DOCX file buffer by decompressing word/document.xml
+async function extractDocxText(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  const view = new DataView(arrayBuffer);
+
+  let offset = 0;
+  let targetEntry = null;
+
+  while (offset + 30 < bytes.length) {
+    const sig = view.getUint32(offset, true);
+    if (sig === 0x04034b50) {
+      const compMethod = view.getUint16(offset + 8, true);
+      const compSize = view.getUint32(offset + 18, true);
+      const nameLen = view.getUint16(offset + 26, true);
+      const extraLen = view.getUint16(offset + 28, true);
+      const filename = new TextDecoder().decode(bytes.slice(offset + 30, offset + 30 + nameLen));
+      const dataStart = offset + 30 + nameLen + extraLen;
+
+      if (filename === "word/document.xml") {
+        targetEntry = { compMethod, compSize, dataStart };
+        break;
+      }
+      offset = dataStart + compSize;
+    } else {
+      offset++;
+    }
+  }
+
+  if (!targetEntry) {
+    offset = 0;
+    while (offset + 46 < bytes.length) {
+      const sig = view.getUint32(offset, true);
+      if (sig === 0x02014b50) {
+        const compMethod = view.getUint16(offset + 10, true);
+        const compSize = view.getUint32(offset + 20, true);
+        const nameLen = view.getUint16(offset + 28, true);
+        const extraLen = view.getUint16(offset + 30, true);
+        const commentLen = view.getUint16(offset + 32, true);
+        const localHeaderOffset = view.getUint32(offset + 42, true);
+        const filename = new TextDecoder().decode(bytes.slice(offset + 46, offset + 46 + nameLen));
+        if (filename === "word/document.xml") {
+          const lhNameLen = view.getUint16(localHeaderOffset + 26, true);
+          const lhExtraLen = view.getUint16(localHeaderOffset + 28, true);
+          const dataStart = localHeaderOffset + 30 + lhNameLen + lhExtraLen;
+          targetEntry = { compMethod, compSize, dataStart };
+          break;
+        }
+        offset += 46 + nameLen + extraLen + commentLen;
+      } else {
+        offset++;
+      }
+    }
+  }
+
+  if (!targetEntry) {
+    throw new Error("Could not find document content (word/document.xml) inside the DOCX file.");
+  }
+
+  const compressedData = bytes.slice(targetEntry.dataStart, targetEntry.dataStart + targetEntry.compSize);
+  let xmlString = "";
+
+  if (targetEntry.compMethod === 0) {
+    xmlString = new TextDecoder("utf-8").decode(compressedData);
+  } else if (targetEntry.compMethod === 8) {
+    const ds = new DecompressionStream("deflate-raw");
+    const writer = ds.writable.getWriter();
+    writer.write(compressedData);
+    writer.close();
+    const reader = ds.readable.getReader();
+    const chunks = [];
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const total = chunks.reduce((acc, c) => acc + c.length, 0);
+    const full = new Uint8Array(total);
+    let pos = 0;
+    for (const c of chunks) {
+      full.set(c, pos);
+      pos += c.length;
+    }
+    xmlString = new TextDecoder("utf-8").decode(full);
+  } else {
+    throw new Error("Unsupported ZIP compression method: " + targetEntry.compMethod);
+  }
+
+  const paragraphs = [];
+  const pRegex = /<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g;
+  let pMatch;
+  while ((pMatch = pRegex.exec(xmlString)) !== null) {
+    const pContent = pMatch[1];
+    const normalized = pContent.replace(/<w:tab\/>/g, "    ").replace(/<w:br\/>/g, "\n");
+    const tRegex = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g;
+    let tMatch;
+    let text = "";
+    while ((tMatch = tRegex.exec(normalized)) !== null) {
+      text += tMatch[1];
+    }
+    if (text.trim()) {
+      paragraphs.push(text.trim());
+    }
+  }
+
+  return paragraphs.join("\n");
+}
+
+// Extract text from content streams in a PDF file buffer with support for compressed streams
+async function extractPdfText(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  const textDecoder = new TextDecoder("latin1");
+  const str = textDecoder.decode(bytes);
+
+  const objStreamRegex = /<<([^>]*)>>\s*stream\r?\n/g;
+  let objMatch;
+  const streamPositions = [];
+  while ((objMatch = objStreamRegex.exec(str)) !== null) {
+    const dict = objMatch[1];
+    const isFlate = dict.includes("/FlateDecode");
+    const streamStart = objMatch.index + objMatch[0].length;
+    const endstreamIdx = str.indexOf("endstream", streamStart);
+    if (endstreamIdx !== -1) {
+      streamPositions.push({ isFlate, start: streamStart, end: endstreamIdx });
+    }
+  }
+
+  if (streamPositions.length === 0) {
+    const basicStream = /stream\r?\n/g;
+    let sMatch;
+    while ((sMatch = basicStream.exec(str)) !== null) {
+      const start = sMatch.index + sMatch[0].length;
+      const end = str.indexOf("endstream", start);
+      if (end !== -1) {
+        streamPositions.push({ isFlate: false, start, end });
+      }
+    }
+  }
+
+  const allExtracted = [];
+
+  for (const pos of streamPositions) {
+    let streamText = "";
+    const rawChunk = bytes.slice(pos.start, pos.end);
+
+    if (pos.isFlate) {
+      try {
+        const ds = new DecompressionStream("deflate");
+        const writer = ds.writable.getWriter();
+        writer.write(rawChunk);
+        writer.close();
+        const reader = ds.readable.getReader();
+        const chunks = [];
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+        const total = chunks.reduce((a, b) => a + b.length, 0);
+        const out = new Uint8Array(total);
+        let p = 0;
+        for (const c of chunks) { out.set(c, p); p += c.length; }
+        streamText = new TextDecoder("latin1").decode(out);
+      } catch (e) {
+        try {
+          const ds = new DecompressionStream("deflate-raw");
+          const writer = ds.writable.getWriter();
+          writer.write(rawChunk);
+          writer.close();
+          const reader = ds.readable.getReader();
+          const chunks = [];
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+          }
+          const total = chunks.reduce((a, b) => a + b.length, 0);
+          const out = new Uint8Array(total);
+          let p = 0;
+          for (const c of chunks) { out.set(c, p); p += c.length; }
+          streamText = new TextDecoder("latin1").decode(out);
+        } catch (e2) {
+          streamText = textDecoder.decode(rawChunk);
+        }
+      }
+    } else {
+      streamText = textDecoder.decode(rawChunk);
+    }
+
+    const btRegex = /BT([\s\S]*?)ET/g;
+    let btMatch;
+    while ((btMatch = btRegex.exec(streamText)) !== null) {
+      const block = btMatch[1];
+      const tokenRegex = /(?:\(([^()]*?(?:\\.[^()]*?)*)\)\s*(?:Tj|'|")|\[([\s\S]*?)\]\s*TJ|T\*|(?:-?[\d\.]+)\s+(?:-?[\d\.]+)\s+T[dD])/g;
+      let tokMatch;
+      const blockLines = [];
+      let currentLine = "";
+
+      while ((tokMatch = tokenRegex.exec(block)) !== null) {
+        const fullTok = tokMatch[0];
+        if (tokMatch[1] !== undefined) {
+          const unescaped = tokMatch[1].replace(/\\([()\\])/g, "$1").replace(/\\r/g, "\r").replace(/\\n/g, "\n");
+          currentLine += unescaped;
+        } else if (tokMatch[2] !== undefined) {
+          const arrContent = tokMatch[2];
+          const innerStrRegex = /\(([^()]*?(?:\\.[^()]*?)*)\)/g;
+          let isMatch;
+          while ((isMatch = innerStrRegex.exec(arrContent)) !== null) {
+            currentLine += isMatch[1].replace(/\\([()\\])/g, "$1");
+          }
+        } else if (fullTok.includes("T*") || fullTok.endsWith("Td") || fullTok.endsWith("TD")) {
+          if (currentLine.trim()) blockLines.push(currentLine.trim());
+          currentLine = "";
+        }
+      }
+      if (currentLine.trim()) blockLines.push(currentLine.trim());
+      if (blockLines.length > 0) allExtracted.push(blockLines.join("\n"));
+    }
+  }
+
+  if (allExtracted.length === 0) {
+    const rawLiteralRegex = /\(([^()]{3,})\)\s*(?:Tj|'|TJ)/g;
+    let rMatch;
+    const lines = [];
+    while ((rMatch = rawLiteralRegex.exec(str)) !== null) {
+      lines.push(rMatch[1].replace(/\\([()\\])/g, "$1"));
+    }
+    if (lines.length > 0) allExtracted.push(lines.join("\n"));
+  }
+
+  return allExtracted.join("\n");
+}
+
+// Parse raw document text into structured question objects with paper, marks, and model answers
+function parseQuestionsAndAnswers(rawText) {
+  if (!rawText || !rawText.trim()) return [];
+
+  const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const rawLines = text.split("\n");
+
+  const qStartRegex = /^(?:Question\s*[\d\.\-\)]*|Q\s*[\d\.\-\)]*|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*(.*)/i;
+  const aStartRegex = /^(?:(?:Model\s+)?Answer|Ans|Solution|Reference\s+Answer)\s*[:\.\-]?\s*(.*)/i;
+
+  const blocks = [];
+  let currentBlock = null;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i].trim();
+    if (!line) {
+      if (currentBlock) currentBlock.lines.push("");
+      continue;
+    }
+
+    const qMatch = line.match(qStartRegex);
+    const isExplicitQ = /^(?:Question|Q|Q\.)\s*[\d\.\-\)]*/i.test(line);
+    const isNumberedQ = /^\d+[\.\)]\s+/.test(line);
+
+    if (isExplicitQ || (isNumberedQ && (!currentBlock || currentBlock.hasAnswer))) {
+      if (currentBlock) blocks.push(currentBlock);
+      currentBlock = {
+        headerText: qMatch ? qMatch[1].trim() : line,
+        lines: [],
+        hasAnswer: false
+      };
+    } else {
+      if (!currentBlock) {
+        currentBlock = {
+          headerText: line,
+          lines: [],
+          hasAnswer: false
+        };
+      } else {
+        if (aStartRegex.test(line)) {
+          currentBlock.hasAnswer = true;
+        }
+        currentBlock.lines.push(line);
+      }
+    }
+  }
+
+  if (currentBlock) blocks.push(currentBlock);
+
+  const results = [];
+
+  for (const block of blocks) {
+    let paper = "Other";
+    let topic = "";
+    let marks = 10;
+    let wordLimit = 400;
+    const questionLines = [];
+    const answerLines = [];
+    let inAnswer = false;
+
+    if (block.headerText) {
+      questionLines.push(block.headerText);
+    }
+
+    for (const line of block.lines) {
+      if (!line) {
+        if (inAnswer && answerLines.length > 0) answerLines.push("");
+        else if (!inAnswer && questionLines.length > 0) questionLines.push("");
+        continue;
+      }
+
+      const aMatch = line.match(aStartRegex);
+      if (aMatch) {
+        inAnswer = true;
+        if (aMatch[1].trim()) answerLines.push(aMatch[1].trim());
+        continue;
+      }
+
+      if (!inAnswer) {
+        const marksMatch = line.match(/^(?:Marks?|Maximum\s+marks?)\s*[:\.\-]?\s*(\d+)/i);
+        if (marksMatch) {
+          marks = Number(marksMatch[1]);
+          wordLimit = (marks === 15) ? 600 : 400;
+          continue;
+        }
+
+        const wlMatch = line.match(/^(?:Word\s*limit|Words?)\s*[:\.\-]?\s*(\d+)/i);
+        if (wlMatch) {
+          wordLimit = Number(wlMatch[1]);
+          continue;
+        }
+
+        const paperMatch = line.match(/^(?:Paper|Subject)\s*[:\.\-]?\s*(.+)/i);
+        if (paperMatch) {
+          const val = paperMatch[1].trim();
+          if (/esi/i.test(val)) paper = "ESI";
+          else if (/finance/i.test(val)) paper = "Finance";
+          else if (/management/i.test(val)) paper = "Management";
+          else if (/english/i.test(val)) paper = "English Descriptive";
+          else paper = val || "Other";
+          continue;
+        }
+
+        const topicMatch = line.match(/^Topic\s*[:\.\-]?\s*(.+)/i);
+        if (topicMatch) {
+          topic = topicMatch[1].trim();
+          continue;
+        }
+
+        questionLines.push(line);
+      } else {
+        answerLines.push(line);
+      }
+    }
+
+    const qText = questionLines.join("\n").trim();
+    const aText = answerLines.join("\n").trim();
+
+    if (qText || aText) {
+      results.push({
+        paper,
+        topic,
+        text: qText || "Imported Question",
+        marks: marks || 10,
+        wordLimit: wordLimit || ((marks === 15) ? 600 : 400),
+        modelAnswer: aText
+      });
+    }
+  }
+
+  return results;
+}
+
+// Read an uploaded DOCX or PDF file, extract its questions, and insert them into the target list
+async function handleDocImport(event, targetScreen) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const statusElem = $("setup-doc-status");
+  if (statusElem && targetScreen === "setup") {
+    statusElem.textContent = "Reading " + file.name + "...";
+  }
+
+  try {
+    const arrayBuffer = file.arrayBuffer ? await file.arrayBuffer() : await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsArrayBuffer(file);
+    });
+
+    const fileName = file.name.toLowerCase();
+    let rawText = "";
+
+    if (fileName.endsWith(".docx")) {
+      rawText = await extractDocxText(arrayBuffer);
+    } else if (fileName.endsWith(".pdf")) {
+      rawText = await extractPdfText(arrayBuffer);
+    } else {
+      throw new Error("Unsupported format. Please upload a .docx or .pdf file.");
+    }
+
+    if (!rawText || !rawText.trim()) {
+      throw new Error("No readable text found in the document.");
+    }
+
+    const parsedQuestions = parseQuestionsAndAnswers(rawText);
+    if (!parsedQuestions || parsedQuestions.length === 0) {
+      throw new Error("Could not detect any questions in the file.");
+    }
+
+    const saveToBank = $("q-save-bank") ? $("q-save-bank").checked : true;
+    const bank = loadJSON("rbi_question_bank", []);
+
+    parsedQuestions.forEach(q => {
+      q.id = makeId("q");
+      if (saveToBank) {
+        bank.push(JSON.parse(JSON.stringify(q)));
+      }
+    });
+
+    if (saveToBank) {
+      saveJSON("rbi_question_bank", bank);
+    }
+
+    if (targetScreen === "setup") {
+      parsedQuestions.forEach(q => {
+        state.setup.questions.push(q);
+      });
+      saveSetup();
+      renderSetupList();
+
+      if (parsedQuestions.length === 1) {
+        const first = parsedQuestions[0];
+        $("q-paper").value = first.paper || "ESI";
+        $("q-topic").value = first.topic || "";
+        $("q-text").value = first.text || "";
+        $("q-marks").value = first.marks || 10;
+        $("q-wordlimit").value = first.wordLimit || defaultWordLimit(first.marks || 10);
+        $("q-model").value = first.modelAnswer || "";
+        $("q-edit-id").value = first.id;
+        $("btn-add-question").textContent = "Update question";
+      }
+
+      if (statusElem) {
+        statusElem.textContent = `✓ Fetched ${parsedQuestions.length} question(s) from ${file.name}`;
+        setTimeout(() => { statusElem.textContent = ""; }, 4000);
+      }
+      alert(`Successfully fetched and added ${parsedQuestions.length} question(s) from "${file.name}"!`);
+    } else if (targetScreen === "bank") {
+      renderBank();
+      alert(`Successfully imported ${parsedQuestions.length} question(s) from "${file.name}" into Question Bank!`);
+    }
+  } catch (err) {
+    if (statusElem && targetScreen === "setup") {
+      statusElem.textContent = "Error: " + err.message;
+    }
+    alert("File read error: " + err.message);
+  } finally {
+    event.target.value = "";
+  }
+}
+
 // Wire all global DOM event listeners and initialize screen state
 document.addEventListener("DOMContentLoaded", () => {
   // Navigation
@@ -1213,6 +1668,11 @@ document.addEventListener("DOMContentLoaded", () => {
     qMarks.addEventListener("change", (e) => {
       $("q-wordlimit").value = defaultWordLimit(e.target.value);
     });
+  }
+
+  const setupDocImport = $("setup-doc-import");
+  if (setupDocImport) {
+    setupDocImport.addEventListener("change", (e) => handleDocImport(e, "setup"));
   }
 
   const setupQList = $("setup-question-list");
@@ -1497,6 +1957,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const bankImport = $("bank-import");
   if (bankImport) {
     bankImport.addEventListener("change", handleBankImport);
+  }
+
+  const bankDocImport = $("bank-doc-import");
+  if (bankDocImport) {
+    bankDocImport.addEventListener("change", (e) => handleDocImport(e, "bank"));
   }
 
   // Initial load
