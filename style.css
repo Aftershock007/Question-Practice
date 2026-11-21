@@ -2198,12 +2198,116 @@ button.secondary:hover {
 /* ============================================================
    Study Plan & Calendar Styles
    ============================================================ */
-#screen-calendar {
+#screen-calendar, #screen-calendar-p1, #screen-calendar-p2 {
   max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 16px 48px 16px;
 }
 
-.calendar-upload-card {
-  margin-bottom: 16px;
+/* Calendar Minimal Header Banner */
+.calendar-header-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.calendar-title-group h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.calendar-title-group p {
+  margin: 3px 0 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* Collapsible Minimal Upload Card */
+details.calendar-upload-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+}
+
+details.calendar-upload-card:hover {
+  border-color: #cbd5e1;
+}
+
+summary.upload-card-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  background: #f8fafc;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  transition: background 0.15s ease;
+  list-style: none;
+}
+
+summary.upload-card-summary::-webkit-details-marker {
+  display: none;
+}
+
+summary.upload-card-summary:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.summary-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-icon {
+  font-size: 16px;
+}
+
+.summary-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.summary-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+details.calendar-upload-card[open] summary.upload-card-summary {
+  border-bottom: 1px solid #e2e8f0;
+  background: #f1f5f9;
+}
+
+details.calendar-upload-card .upload-drop-zone {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+details.calendar-upload-card .quick-actions-row {
+  padding: 12px 20px;
+  background: #fafafa;
 }
 
 .danger-pill {
@@ -2218,150 +2322,60 @@ button.secondary:hover {
 /* Schedule Summary Progress Bar */
 .schedule-summary-bar {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-bottom: 18px;
+}
+
+@media (max-width: 820px) {
+  .schedule-summary-bar {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .summary-stat-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 12px 16px;
-  text-align: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.15s ease;
+}
+
+.summary-stat-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 .summary-stat-card .val {
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 800;
   color: #003366;
-  margin-bottom: 2px;
+  line-height: 1.2;
 }
 
 .summary-stat-card .lbl {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* Calendar Controls Bar */
-.calendar-controls-bar {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-}
-
-.cal-nav-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.cal-nav-group h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #0f172a;
-  min-width: 140px;
-  text-align: center;
-}
-
-.cal-nav-btn {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #334155;
-  padding: 5px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.15s ease;
-}
-
-.cal-nav-btn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-  border-color: #cbd5e1;
-}
-
-.cal-today-btn {
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #0f172a;
-  padding: 5px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.cal-today-btn:hover {
-  background: #e2e8f0;
-}
-
-.cal-filter-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.cal-select {
-  width: auto !important;
-  display: inline-block !important;
-  padding: 6px 12px !important;
-  font-size: 13px !important;
-  margin-top: 0 !important;
-  background: #f8fafc !important;
-  border-color: #e2e8f0 !important;
-  border-radius: 6px !important;
-}
-
-.cal-view-toggle {
-  display: inline-flex;
-  background: #f1f5f9;
-  padding: 2px;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-}
-
-.cal-view-btn {
-  background: transparent;
-  border: none;
-  padding: 5px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.cal-view-btn.active {
-  background: #003366;
-  color: #ffffff;
+  letter-spacing: 0.05em;
+  margin-top: 3px;
 }
 
 /* Main Calendar Layout (LeetCode Style: Quests Left, Minimal Calendar Right) */
-.calendar-main-layout {
+.calendar-main-layout.leetcode-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 350px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 20px;
   align-items: start;
 }
 
 @media (max-width: 960px) {
-  .calendar-main-layout {
+  .calendar-main-layout.leetcode-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -2381,8 +2395,17 @@ button.secondary:hover {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 18px 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 18px 22px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  position: relative;
+}
+
+#screen-calendar-p1 .daily-quest-hero-card {
+  border-top: 3.5px solid #10b981;
+}
+
+#screen-calendar-p2 .daily-quest-hero-card {
+  border-top: 3.5px solid #003366;
 }
 
 .quest-hero-header {
@@ -2407,19 +2430,22 @@ button.secondary:hover {
   font-size: 18px;
   font-weight: 800;
   color: #0f172a;
+  letter-spacing: -0.01em;
 }
 
 .quest-pill-daynum {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 800;
-  background: #003366;
-  color: #ffffff;
-  padding: 3px 9px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  padding: 3px 10px;
   border-radius: 20px;
 }
 
 .quest-progress-box {
   min-width: 220px;
+  flex-shrink: 0;
 }
 
 .quest-progress-header {
@@ -2428,7 +2454,7 @@ button.secondary:hover {
   font-size: 12px;
   font-weight: 700;
   color: #475569;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 .quest-progress-bar-track {
@@ -2443,7 +2469,7 @@ button.secondary:hover {
   height: 100%;
   background: linear-gradient(90deg, #10b981, #059669);
   border-radius: 999px;
-  transition: width 0.3s ease;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Chapter Banner for Today */
@@ -2451,51 +2477,29 @@ button.secondary:hover {
   margin-top: 12px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 12px 14px;
-}
-
-.quest-banner-item {
+  border-left: 4px solid #003366;
+  border-radius: 8px;
+  padding: 11px 14px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
-  margin-bottom: 7px;
-}
-
-.quest-banner-item:last-child {
-  margin-bottom: 0;
-}
-
-.quest-banner-label {
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 7px;
-  border-radius: 5px;
-  white-space: nowrap;
-}
-
-.quest-banner-label.p2 {
-  background: #f3e8ff;
-  color: #7e22ce;
-}
-
-.quest-banner-label.p1 {
-  background: #eff6ff;
-  color: #1e40af;
-}
-
-.quest-banner-label.ca {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.quest-banner-text {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 13.5px;
   color: #1e293b;
   line-height: 1.4;
+}
+
+.quest-chapter-banner .banner-icon {
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.quest-chapter-banner .banner-text {
+  flex: 1;
+}
+
+.quest-chapter-banner .banner-sub {
+  color: #64748b;
+  font-size: 12px;
 }
 
 /* Quick Add Quest Form */
@@ -2504,12 +2508,12 @@ button.secondary:hover {
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 12px 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .quick-add-quest-form {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -2517,34 +2521,50 @@ button.secondary:hover {
 .quick-quest-input {
   flex: 1;
   min-width: 220px;
-  padding: 8px 12px;
+  height: 38px;
+  padding: 0 14px;
   border: 1.5px solid #cbd5e1;
   border-radius: 8px;
   font-size: 13px;
-  transition: border-color 0.15s ease;
+  font-family: inherit;
+  transition: all 0.15s ease;
 }
 
 .quick-quest-input:focus {
   outline: none;
   border-color: #003366;
+  box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.12);
 }
 
 .quick-quest-type-select {
-  padding: 8px 10px;
+  height: 38px;
+  padding: 0 10px;
   border: 1.5px solid #cbd5e1;
   border-radius: 8px;
   font-size: 12.5px;
   font-weight: 600;
-  background: #ffffff;
+  background: #f8fafc;
   color: #334155;
   cursor: pointer;
 }
 
 .btn-add-quest {
-  padding: 8px 14px !important;
+  height: 38px;
+  padding: 0 16px !important;
   font-size: 12.5px !important;
   font-weight: 700 !important;
+  background: #003366 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 8px !important;
+  cursor: pointer;
   white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-add-quest:hover {
+  background: #002244 !important;
+  transform: translateY(-1px);
 }
 
 /* Quests List Section */
@@ -2553,7 +2573,7 @@ button.secondary:hover {
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 16px 18px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
 .daily-quests-section-header {
@@ -2567,57 +2587,171 @@ button.secondary:hover {
 
 .daily-quests-section-header h4 {
   margin: 0;
-  font-size: 15.5px;
+  font-size: 15px;
   font-weight: 700;
   color: #0f172a;
 }
 
-/* Quest Item Cards */
-.quest-item-card {
+.selected-date-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* Daily Quest Item Cards */
+.daily-quest-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 14px;
+  padding: 12px 16px;
   background: #ffffff;
   border: 1.5px solid #e2e8f0;
   border-radius: 10px;
   margin-bottom: 10px;
-  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.quest-item-card:hover {
+.daily-quest-card:hover {
   border-color: #cbd5e1;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
 }
 
-.quest-item-card.is-completed {
+.daily-quest-card.is-completed {
   background: #f0fdf4;
   border-color: #bbf7d0;
+  box-shadow: none;
 }
 
-.quest-item-left {
+/* Custom Checkbox */
+.quest-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.quest-status-check {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.quest-custom-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.quest-checkbox-label:hover .quest-custom-checkbox {
+  border-color: #10b981;
+}
+
+.quest-status-check:checked + .quest-custom-checkbox {
+  background: #10b981;
+  border-color: #10b981;
+}
+
+.quest-status-check:checked + .quest-custom-checkbox::after {
+  content: "✓";
+  font-size: 13px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1;
+}
+
+/* Card Content & Meta */
+.quest-card-content {
   flex: 1;
   min-width: 0;
 }
 
-.quest-checkbox {
-  width: 19px;
-  height: 19px;
-  accent-color: #10b981;
-  cursor: pointer;
-  flex-shrink: 0;
+.quest-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
 }
 
-.quest-item-content {
-  flex: 1;
-  min-width: 0;
+.quest-type-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 12px;
+  line-height: 1.3;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
-.quest-item-title {
+.quest-type-pill.tag-obj {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
+
+.quest-type-pill.tag-sub {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.quest-type-pill.tag-study {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.quest-type-pill.tag-ca {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.quest-type-pill.tag-rev {
+  background: #ede9fe;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+
+.quest-type-pill.tag-general {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.quest-subject-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.quest-time-pill {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.quest-title-text {
   font-size: 14px;
   font-weight: 600;
   color: #1e293b;
@@ -2625,76 +2759,60 @@ button.secondary:hover {
   word-break: break-word;
 }
 
-.quest-item-card.is-completed .quest-item-title {
+.daily-quest-card.is-completed .quest-title-text {
   text-decoration: line-through;
-  color: #64748b;
+  color: #94a3b8;
 }
 
-.quest-item-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 11.5px;
-  color: #64748b;
-}
-
-.quest-type-tag {
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.quest-item-actions {
+/* Card Actions */
+.quest-actions-row {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
 
-.btn-quest-action {
-  font-size: 11.5px;
-  font-weight: 700;
-  padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
+.btn-quest-practice {
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  padding: 5px 12px !important;
+  border-radius: 6px !important;
+  background: #003366 !important;
+  color: #ffffff !important;
+  border: none !important;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
-.btn-quest-action:hover {
-  border-color: #003366;
-  color: #003366;
-}
-
-.btn-quest-action.practice-action {
-  background: #003366;
-  color: #ffffff;
-  border-color: #003366;
-}
-
-.btn-quest-action.practice-action:hover {
-  background: #002244;
+.btn-quest-practice:hover {
+  background: #002244 !important;
+  transform: translateY(-1px);
 }
 
 .btn-quest-delete {
-  background: none;
-  border: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
   color: #94a3b8;
-  font-size: 15px;
-  padding: 4px 6px;
-  border-radius: 4px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .btn-quest-delete:hover {
   color: #ef4444;
   background: #fee2e2;
+  border-color: #fecaca;
+}
+
+.exam-score-card {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 /* ============================================================
@@ -2710,13 +2828,13 @@ button.secondary:hover {
 /* LeetCode Streak Hero Card */
 .leetcode-streak-card {
   background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-  border: 1px solid #fde68a;
+  border: 1.5px solid #fde68a;
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.08);
+  gap: 14px;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.08);
 }
 
 .streak-flame-icon {
@@ -2729,7 +2847,7 @@ button.secondary:hover {
 }
 
 .streak-title {
-  font-size: 16.5px;
+  font-size: 17px;
   font-weight: 800;
   color: #92400e;
   line-height: 1.2;
@@ -2743,9 +2861,9 @@ button.secondary:hover {
 }
 
 .streak-status-pill {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 800;
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 12px;
   background: #10b981;
   color: #ffffff;
@@ -2753,7 +2871,7 @@ button.secondary:hover {
   letter-spacing: 0.04em;
 }
 
-.streak-status-pill.missed {
+.streak-status-pill.pending {
   background: #f59e0b;
 }
 
@@ -2762,7 +2880,7 @@ button.secondary:hover {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 16px;
+  padding: 16px 18px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
@@ -2776,15 +2894,15 @@ button.secondary:hover {
 }
 
 .leetcode-month-title {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 700;
-  color: #1e293b;
+  color: #0f172a;
 }
 
 .leetcode-cal-nav {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .lc-nav-btn {
@@ -2809,7 +2927,7 @@ button.secondary:hover {
 }
 
 .lc-today-btn {
-  padding: 3px 9px;
+  padding: 3px 10px;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
   color: #475569;
@@ -2833,19 +2951,18 @@ button.secondary:hover {
   font-size: 11px;
   font-weight: 700;
   color: #94a3b8;
-  margin-bottom: 6px;
+  padding-bottom: 6px;
 }
 
 .leetcode-days-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 5px;
+  gap: 6px;
 }
 
 .lc-day-cell {
   aspect-ratio: 1;
-  min-height: 36px;
-  max-height: 42px;
+  min-height: 38px;
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -2854,27 +2971,29 @@ button.secondary:hover {
   position: relative;
   cursor: pointer;
   background: #f8fafc;
-  border: 1.5px solid transparent;
+  border: 1.5px solid #f1f5f9;
   transition: all 0.15s ease;
 }
 
 .lc-day-cell:hover {
   background: #f1f5f9;
   border-color: #cbd5e1;
+  transform: scale(1.05);
+  z-index: 2;
 }
 
 .lc-day-cell.is-other-month {
-  opacity: 0.35;
+  opacity: 0.3;
 }
 
 .lc-day-cell.is-today {
-  border-color: #2563eb;
+  border-color: #3b82f6;
   background: #eff6ff;
   font-weight: 800;
 }
 
 .lc-day-cell.is-selected {
-  border-color: #003366;
+  border-color: #003366 !important;
   box-shadow: 0 0 0 2px rgba(0, 51, 102, 0.25);
   background: #e0f2fe;
 }
@@ -2882,60 +3001,56 @@ button.secondary:hover {
 /* LeetCode Finished Day with Checkmark */
 .lc-day-cell.is-finished {
   background: #10b981 !important;
+  border-color: #059669 !important;
   color: #ffffff !important;
-  font-weight: 800;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25);
 }
 
 .lc-day-cell.is-finished .lc-day-num {
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1;
-  opacity: 0.95;
+  opacity: 0.9;
   color: #ffffff !important;
+  margin-bottom: 1px;
 }
 
 .lc-tick-badge {
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1;
   color: #ffffff;
-  margin-top: 1px;
 }
 
 .lc-day-num {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: #334155;
   line-height: 1.1;
 }
 
-/* Subtle dot indicators for day types */
-.lc-day-dot {
-  width: 4px;
-  height: 4px;
+/* Day Type Dot Indicators */
+.lc-type-dot {
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   position: absolute;
-  bottom: 3px;
+  bottom: 4px;
 }
 
-.lc-day-cell.is-finished .lc-day-dot {
-  display: none;
-}
-
-.lc-day-dot.dot-chapter {
+.lc-type-dot.ch-test {
   background: #9333ea;
 }
 
-.lc-day-dot.dot-mix {
-  background: #f97316;
+.lc-type-dot.mix-test {
+  background: #ea580c;
 }
 
-.lc-day-dot.dot-buffer {
+.lc-type-dot.buffer {
   background: #64748b;
 }
 
-.lc-day-dot.dot-normal {
-  background: #3b82f6;
+.lc-day-cell.is-finished .lc-type-dot {
+  display: none;
 }
 
 .leetcode-cal-footer {
@@ -2980,9 +3095,8 @@ button.secondary:hover {
 }
 
 .lc-legend-dot.ch-test { background: #9333ea; }
-.lc-legend-dot.mix-test { background: #f97316; }
+.lc-legend-dot.mix-test { background: #ea580c; }
 .lc-legend-dot.buffer { background: #64748b; }
-.lc-legend-dot.normal { background: #3b82f6; }
 
 .leetcode-monthly-stats-card {
   background: #f8fafc;

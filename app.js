@@ -5049,10 +5049,10 @@ function renderP1CalendarSummary() {
   container.innerHTML = `
     <div class="summary-stat-card">
       <div class="val">${total}</div>
-      <div class="lbl">Phase-1 Scheduled Tasks</div>
+      <div class="lbl">Scheduled Tasks</div>
     </div>
     <div class="summary-stat-card">
-      <div class="val" style="color:#16a34a;">${completed} <span style="font-size:13px; font-weight:normal;">(${pct}%)</span></div>
+      <div class="val" style="color:#10b981;">${completed} <span style="font-size:12px; font-weight:700; color:#059669;">(${pct}%)</span></div>
       <div class="lbl">Tasks Completed</div>
     </div>
     <div class="summary-stat-card">
@@ -5060,8 +5060,8 @@ function renderP1CalendarSummary() {
       <div class="lbl">Tasks Pending</div>
     </div>
     <div class="summary-stat-card">
-      <div class="val" style="color:#003366;">${examsCount} <span style="font-size:13px; font-weight:normal;">(${avgAcc}% Acc)</span></div>
-      <div class="lbl">Objective Exams Logged</div>
+      <div class="val" style="color:#003366;">${examsCount} <span style="font-size:12px; font-weight:700; color:#2563eb;">(${avgAcc}% Acc)</span></div>
+      <div class="lbl">Objective Exams</div>
     </div>
   `;
 }
@@ -5427,10 +5427,10 @@ function renderP2CalendarSummary() {
   container.innerHTML = `
     <div class="summary-stat-card">
       <div class="val">${total}</div>
-      <div class="lbl">Phase-2 Scheduled Tasks</div>
+      <div class="lbl">Scheduled Tasks</div>
     </div>
     <div class="summary-stat-card">
-      <div class="val" style="color:#16a34a;">${completed} <span style="font-size:13px; font-weight:normal;">(${pct}%)</span></div>
+      <div class="val" style="color:#10b981;">${completed} <span style="font-size:12px; font-weight:700; color:#059669;">(${pct}%)</span></div>
       <div class="lbl">Tasks Completed</div>
     </div>
     <div class="summary-stat-card">
@@ -5438,8 +5438,8 @@ function renderP2CalendarSummary() {
       <div class="lbl">Tasks Pending</div>
     </div>
     <div class="summary-stat-card">
-      <div class="val" style="color:#7e22ce;">${testsCount} <span style="font-size:13px; font-weight:normal;">(${scoredCount} Scored)</span></div>
-      <div class="lbl">Descriptive Tests Written</div>
+      <div class="val" style="color:#7e22ce;">${testsCount} <span style="font-size:12px; font-weight:700; color:#9333ea;">(${scoredCount} Scored)</span></div>
+      <div class="lbl">Descriptive Tests</div>
     </div>
   `;
 }
