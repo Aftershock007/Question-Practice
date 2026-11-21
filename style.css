@@ -34,7 +34,7 @@ body {
   box-sizing: border-box;
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
-  padding: 12px 28px;
+  padding: 14px 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -125,10 +125,9 @@ main {
 
 .screen {
   width: 100%;
-  max-width: 100%;
-  margin: 0;
-  padding: 20px 28px 48px 28px;
   box-sizing: border-box;
+  margin: 0 auto;
+  padding: 24px 44px 64px 44px;
 }
 
 label {
@@ -741,11 +740,10 @@ button.secondary:hover {
 #screen-exam,
 #screen-exam-p1 {
   width: 100%;
-  max-width: 100%;
-  margin: 0;
-  padding: 10px 20px;
-  background: #f8fafc;
   box-sizing: border-box;
+  margin: 0 auto;
+  padding: 14px 44px 48px 44px;
+  background: #f8fafc;
 }
 
 .rbi-exam-header {
@@ -2216,10 +2214,9 @@ button.secondary:hover {
 #screen-calendar-p1,
 #screen-calendar-p2 {
   width: 100%;
-  max-width: 100%;
-  margin: 0;
-  padding: 0 0 48px 0;
   box-sizing: border-box;
+  margin: 0 auto;
+  padding: 20px 44px 64px 44px;
 }
 
 /* Calendar Minimal Header Banner */
@@ -4058,6 +4055,39 @@ button, .rbi-btn, .btn-minimal-primary, .quick-action-pill {
   padding: 5px 12px !important;
   font-size: 12.5px !important;
   border-radius: 6px !important;
+}
+
+/* ============================================================
+   Responsive Gutters
+   ============================================================ */
+@media (max-width: 1024px) {
+  #app-header {
+    padding: 12px 24px;
+  }
+  .screen,
+  #screen-calendar,
+  #screen-calendar-p1,
+  #screen-calendar-p2,
+  #screen-exam,
+  #screen-exam-p1 {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  #app-header {
+    padding: 10px 16px;
+  }
+  .screen,
+  #screen-calendar,
+  #screen-calendar-p1,
+  #screen-calendar-p2,
+  #screen-exam,
+  #screen-exam-p1 {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
 }
 
 
