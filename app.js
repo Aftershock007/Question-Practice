@@ -147,6 +147,8 @@ const state = {
   questionShownAt: 0,  // Date.now() when current question was shown
   lastAutoSave: 0,     // timestamp of last throttled exam autosave
   lastResultTest: null, // test object currently being viewed on Phase 2 result screen
+  setup_page: 1,       // current page for Phase 2 setup questions list
+  bank_page: 1,        // current page for Phase 2 question bank list
 
   // Phase 1 (Objective / MCQs) state
   p1_setup: loadJSON("rbi_p1_setup", {
@@ -162,8 +164,61 @@ const state = {
   p1_questionShownAt: 0,
   p1_lastAutoSave: 0,
   p1_lastResultTest: null,
-  p1_resultFilter: "all"
+  p1_resultFilter: "all",
+  p1_setup_page: 1,    // current page for Phase 1 setup questions list
+  p1_bank_page: 1      // current page for Phase 1 question bank list
 };
+
+// Render reusable pagination controls (50 items per page; hidden if totalPages <= 1)
+function renderPaginationControls({ containerId, currentPage, totalPages, totalItems, onPageChange }) {
+  const container = $(containerId);
+  if (!container) return;
+
+  if (totalPages <= 1) {
+    container.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+
+  container.style.display = "flex";
+
+  let pagesHtml = "";
+  for (let p = 1; p <= totalPages; p++) {
+    pagesHtml += `<button type="button" class="pagination-btn ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
+  }
+
+  container.innerHTML = `
+    <div class="pagination-bar">
+      <span class="pagination-info">Page ${currentPage} of ${totalPages} (${totalItems} total questions · 50 per page)</span>
+      <div class="pagination-actions">
+        <button type="button" class="pagination-nav-btn prev" ${currentPage === 1 ? 'disabled' : ''}>◀ Prev</button>
+        <div class="pagination-pages">${pagesHtml}</div>
+        <button type="button" class="pagination-nav-btn next" ${currentPage === totalPages ? 'disabled' : ''}>Next ▶</button>
+      </div>
+    </div>
+  `;
+
+  container.onclick = (e) => {
+    const pageBtn = e.target.closest(".pagination-btn");
+    if (pageBtn) {
+      const p = Number(pageBtn.dataset.page);
+      if (p && p !== currentPage) {
+        onPageChange(p);
+      }
+      return;
+    }
+    const prevBtn = e.target.closest(".pagination-nav-btn.prev");
+    if (prevBtn && currentPage > 1) {
+      onPageChange(currentPage - 1);
+      return;
+    }
+    const nextBtn = e.target.closest(".pagination-nav-btn.next");
+    if (nextBtn && currentPage < totalPages) {
+      onPageChange(currentPage + 1);
+      return;
+    }
+  };
+}
 
 function saveP1Setup() {
   saveJSON("rbi_p1_setup", state.p1_setup);
@@ -285,31 +340,8 @@ function renderSetupList() {
     batchActions.style.display = questions.length > 0 ? "flex" : "none";
   }
 
-  questions.forEach((q, index) => {
+  questions.forEach(q => {
     totalWordLimit += Number(q.wordLimit) || 0;
-    const li = document.createElement("li");
-    const snippet = q.text.length > 120 ? q.text.slice(0, 120) + "…" : q.text;
-    const modelWarn = (!q.modelAnswer || !q.modelAnswer.trim())
-      ? '<span class="no-model-warn">(no model answer)</span>'
-      : "";
-    const topicText = q.topic ? ` · <em>${escapeHTML(q.topic)}</em>` : "";
-
-    li.innerHTML = `
-      <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%;">
-        <input type="checkbox" class="q-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select question ${index + 1}">
-        <div class="q-info" style="flex: 1;">
-          <strong>[${escapeHTML(q.paper)}]</strong> (${escapeHTML(q.marks)} marks, ${escapeHTML(q.wordLimit)} words)${topicText}
-          ${modelWarn}
-          <div>${escapeHTML(snippet)}</div>
-        </div>
-        <div class="q-actions">
-          <button type="button" class="btn-move-up" data-action="move-up" data-id="${escapeHTML(q.id)}" ${index === 0 ? "disabled" : ""}>▲</button>
-          <button type="button" class="btn-edit" data-action="edit" data-id="${escapeHTML(q.id)}">Edit</button>
-          <button type="button" class="btn-delete danger" data-action="delete" data-id="${escapeHTML(q.id)}">Delete</button>
-        </div>
-      </div>
-    `;
-    list.appendChild(li);
   });
 
   const countElem = $("setup-count");
@@ -325,6 +357,66 @@ function renderSetupList() {
   if (minutesInput) {
     minutesInput.value = state.setup.totalMinutes || 30;
   }
+
+  if (questions.length === 0) {
+    renderPaginationControls({
+      containerId: "setup-pagination",
+      currentPage: 1,
+      totalPages: 0,
+      totalItems: 0,
+      onPageChange: () => {}
+    });
+    updateSetupBatchDeleteState();
+    return;
+  }
+
+  const PAGE_SIZE = 50;
+  const totalItems = questions.length;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
+  if (state.setup_page > totalPages) state.setup_page = totalPages;
+  if (state.setup_page < 1) state.setup_page = 1;
+
+  const startIndex = (state.setup_page - 1) * PAGE_SIZE;
+  const pageQuestions = questions.slice(startIndex, startIndex + PAGE_SIZE);
+
+  pageQuestions.forEach((q, localIdx) => {
+    const globalIdx = startIndex + localIdx;
+    const li = document.createElement("li");
+    const modelWarn = (!q.modelAnswer || !q.modelAnswer.trim())
+      ? '<span class="no-model-warn">(no model answer)</span>'
+      : "";
+    const topicText = q.topic ? ` · <em>${escapeHTML(q.topic)}</em>` : "";
+
+    li.innerHTML = `
+      <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%;">
+        <input type="checkbox" class="q-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select question ${globalIdx + 1}">
+        <div class="q-info" style="flex: 1;">
+          <strong>[${escapeHTML(q.paper)}]</strong> (${escapeHTML(q.marks)} marks, ${escapeHTML(q.wordLimit)} words)${topicText}
+          ${modelWarn}
+          <span style="font-size:11px; color:var(--muted); margin-left:6px;">Q${globalIdx + 1}</span>
+          <div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.5; font-weight: 500;">${escapeHTML(q.text)}</div>
+        </div>
+        <div class="q-actions">
+          <button type="button" class="btn-move-up" data-action="move-up" data-id="${escapeHTML(q.id)}" ${globalIdx === 0 ? "disabled" : ""}>▲</button>
+          <button type="button" class="btn-edit" data-action="edit" data-id="${escapeHTML(q.id)}">Edit</button>
+          <button type="button" class="btn-delete danger" data-action="delete" data-id="${escapeHTML(q.id)}">Delete</button>
+        </div>
+      </div>
+    `;
+    list.appendChild(li);
+  });
+
+  renderPaginationControls({
+    containerId: "setup-pagination",
+    currentPage: state.setup_page,
+    totalPages: totalPages,
+    totalItems: totalItems,
+    onPageChange: (newPage) => {
+      state.setup_page = newPage;
+      renderSetupList();
+      $("setup-question-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
 
   updateSetupBatchDeleteState();
 }
@@ -1366,15 +1458,31 @@ function renderBank() {
 
   if (filtered.length === 0) {
     listElem.innerHTML = "<p>No questions found matching your filter.</p>";
+    renderPaginationControls({
+      containerId: "bank-pagination",
+      currentPage: 1,
+      totalPages: 0,
+      totalItems: 0,
+      onPageChange: () => {}
+    });
     updateBankBatchState();
     return;
   }
 
-  filtered.forEach(q => {
+  const PAGE_SIZE = 50;
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
+  if (state.bank_page > totalPages) state.bank_page = totalPages;
+  if (state.bank_page < 1) state.bank_page = 1;
+
+  const startIndex = (state.bank_page - 1) * PAGE_SIZE;
+  const pageItems = filtered.slice(startIndex, startIndex + PAGE_SIZE);
+
+  pageItems.forEach((q, localIdx) => {
+    const globalIdx = startIndex + localIdx;
     const card = document.createElement("div");
     card.className = "bank-card";
 
-    const snippet = (q.text || "").length > 200 ? q.text.slice(0, 200) + "…" : q.text;
     const modelNote = (q.modelAnswer && q.modelAnswer.trim())
       ? "<span style='color:var(--ok);font-weight:500;'>Has model answer</span>"
       : "<span class='no-model-warn'>No model answer</span>";
@@ -1386,8 +1494,9 @@ function renderBank() {
         <div style="flex: 1; min-width: 0;">
           <div class="bank-card-header">
             <strong>[${escapeHTML(q.paper)}]</strong> ${escapeHTML(q.marks)} marks (${escapeHTML(q.wordLimit)} words)${topicText} · ${modelNote}
+            <span style="font-size:11px; color:var(--muted); margin-left:6px;">Q${globalIdx + 1}</span>
           </div>
-          <div class="bank-card-text">${escapeHTML(snippet)}</div>
+          <div class="bank-card-text" style="white-space: pre-wrap; line-height: 1.5; margin: 6px 0 10px 0;">${escapeHTML(q.text)}</div>
           <div class="bank-card-actions">
             <button type="button" class="btn-bank-add" data-id="${escapeHTML(q.id)}">Add to today's test</button>
             <button type="button" class="btn-bank-edit secondary" data-id="${escapeHTML(q.id)}">Edit</button>
@@ -1398,6 +1507,18 @@ function renderBank() {
     `;
 
     listElem.appendChild(card);
+  });
+
+  renderPaginationControls({
+    containerId: "bank-pagination",
+    currentPage: state.bank_page,
+    totalPages: totalPages,
+    totalItems: totalItems,
+    onPageChange: (newPage) => {
+      state.bank_page = newPage;
+      renderBank();
+      $("bank-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   });
 
   updateBankBatchState();
@@ -2453,15 +2574,32 @@ function renderP1SetupList() {
 
   if (questions.length === 0) {
     list.innerHTML = `<li style="display:block; text-align:center; color:var(--muted); padding:20px;">No MCQs added yet. Import Spotlight DOCX/PDF or use the form above.</li>`;
+    renderPaginationControls({
+      containerId: "setup-p1-pagination",
+      currentPage: 1,
+      totalPages: 0,
+      totalItems: 0,
+      onPageChange: () => {}
+    });
     updateP1SetupBatchDeleteState();
     return;
   }
 
-  list.innerHTML = questions.map((q, idx) => {
-    const snippet = escapeHTML(q.text.length > 120 ? q.text.slice(0, 120) + "..." : q.text);
-    const optsPreview = (q.options || []).map(o =>
-      `<span class="opt-pill">${o.label.toUpperCase()}: ${escapeHTML(o.text.length > 25 ? o.text.slice(0, 25) + '...' : o.text)}</span>`
-    ).join("");
+  const PAGE_SIZE = 50;
+  const totalItems = questions.length;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
+  if (state.p1_setup_page > totalPages) state.p1_setup_page = totalPages;
+  if (state.p1_setup_page < 1) state.p1_setup_page = 1;
+
+  const startIndex = (state.p1_setup_page - 1) * PAGE_SIZE;
+  const pageQuestions = questions.slice(startIndex, startIndex + PAGE_SIZE);
+
+  list.innerHTML = pageQuestions.map((q, localIdx) => {
+    const globalIdx = startIndex + localIdx;
+    const optsPreview = (q.options || []).map(o => {
+      const isKey = q.correctAnswer && q.correctAnswer.toLowerCase() === o.label.toLowerCase();
+      return `<span class="opt-pill ${isKey ? 'is-correct' : ''}"><strong>[${o.label.toUpperCase()}]</strong> ${escapeHTML(o.text || "")}</span>`;
+    }).join("");
 
     return `
       <li>
@@ -2471,19 +2609,31 @@ function renderP1SetupList() {
             <span class="badge-subject">${escapeHTML(q.subject || "General Awareness")}</span>
             ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
             ${q.correctAnswer ? `<span class="badge-ans">Key: [${q.correctAnswer.toUpperCase()}]</span>` : ""}
-            <span style="font-size:11px; color:var(--muted);">Q${idx + 1}</span>
+            <span style="font-size:11px; color:var(--muted);">Q${globalIdx + 1}</span>
           </div>
-          <div style="font-size:14px; font-weight:600; color:var(--text);">${snippet}</div>
+          <div class="p1-question-full-text">${escapeHTML(q.text || "")}</div>
           <div class="p1-opts-preview">${optsPreview}</div>
         </div>
         <div style="display:flex; flex-direction:column; gap:4px;">
-          ${idx > 0 ? `<button type="button" class="btn-p1-move-up" data-index="${idx}" style="padding:2px 6px; font-size:11px;">▲</button>` : ""}
-          ${idx < questions.length - 1 ? `<button type="button" class="btn-p1-move-down" data-index="${idx}" style="padding:2px 6px; font-size:11px;">▼</button>` : ""}
+          ${globalIdx > 0 ? `<button type="button" class="btn-p1-move-up" data-index="${globalIdx}" style="padding:2px 6px; font-size:11px;">▲</button>` : ""}
+          ${globalIdx < questions.length - 1 ? `<button type="button" class="btn-p1-move-down" data-index="${globalIdx}" style="padding:2px 6px; font-size:11px;">▼</button>` : ""}
           <button type="button" class="danger btn-p1-delete-q" data-id="${q.id}" style="padding:2px 6px; font-size:11px;">✕</button>
         </div>
       </li>
     `;
   }).join("");
+
+  renderPaginationControls({
+    containerId: "setup-p1-pagination",
+    currentPage: state.p1_setup_page,
+    totalPages: totalPages,
+    totalItems: totalItems,
+    onPageChange: (newPage) => {
+      state.p1_setup_page = newPage;
+      renderP1SetupList();
+      $("setup-p1-question-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
 
   updateP1SetupBatchDeleteState();
 }
@@ -3127,14 +3277,32 @@ function renderP1Bank() {
 
   if (filtered.length === 0) {
     container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--muted);">No MCQs found matching your criteria.</div>`;
+    renderPaginationControls({
+      containerId: "p1-bank-pagination",
+      currentPage: 1,
+      totalPages: 0,
+      totalItems: 0,
+      onPageChange: () => {}
+    });
     updateP1BankBatchState();
     return;
   }
 
-  container.innerHTML = filtered.map(q => {
-    const optsPreview = (q.options || []).map(o =>
-      `<span class="opt-pill">${o.label.toUpperCase()}: ${escapeHTML(o.text.length > 30 ? o.text.slice(0, 30) + '...' : o.text)}</span>`
-    ).join("");
+  const PAGE_SIZE = 50;
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
+  if (state.p1_bank_page > totalPages) state.p1_bank_page = totalPages;
+  if (state.p1_bank_page < 1) state.p1_bank_page = 1;
+
+  const startIndex = (state.p1_bank_page - 1) * PAGE_SIZE;
+  const pageItems = filtered.slice(startIndex, startIndex + PAGE_SIZE);
+
+  container.innerHTML = pageItems.map((q, localIdx) => {
+    const globalIdx = startIndex + localIdx;
+    const optsPreview = (q.options || []).map(o => {
+      const isKey = q.correctAnswer && q.correctAnswer.toLowerCase() === o.label.toLowerCase();
+      return `<span class="opt-pill ${isKey ? 'is-correct' : ''}"><strong>[${o.label.toUpperCase()}]</strong> ${escapeHTML(o.text || "")}</span>`;
+    }).join("");
 
     return `
       <div class="mcq-bank-card">
@@ -3144,8 +3312,9 @@ function renderP1Bank() {
             <span class="badge-subject">${escapeHTML(q.subject || "General Awareness")}</span>
             ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
             ${q.correctAnswer ? `<span class="badge-ans">Key: [${q.correctAnswer.toUpperCase()}]</span>` : ""}
+            <span style="font-size:11px; color:var(--muted);">Q${globalIdx + 1}</span>
           </div>
-          <div class="mcq-bank-prompt">${escapeHTML(q.text)}</div>
+          <div class="mcq-bank-prompt" style="font-size:14px; font-weight:600; color:var(--text); line-height:1.5; white-space:pre-wrap; margin:6px 0 10px 0;">${escapeHTML(q.text)}</div>
           <div class="p1-opts-preview">${optsPreview}</div>
           <div class="mcq-bank-actions">
             <button type="button" class="btn-p1-bank-add" data-id="${q.id}" style="background:#059669; color:white;">+ Add to Test</button>
@@ -3155,6 +3324,18 @@ function renderP1Bank() {
       </div>
     `;
   }).join("");
+
+  renderPaginationControls({
+    containerId: "p1-bank-pagination",
+    currentPage: state.p1_bank_page,
+    totalPages: totalPages,
+    totalItems: totalItems,
+    onPageChange: (newPage) => {
+      state.p1_bank_page = newPage;
+      renderP1Bank();
+      $("p1-bank-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
 
   updateP1BankBatchState();
 }
@@ -3791,12 +3972,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // Question Bank Screen
   const bankSearch = $("bank-search");
   if (bankSearch) {
-    bankSearch.addEventListener("input", renderBank);
+    bankSearch.addEventListener("input", () => {
+      state.bank_page = 1;
+      renderBank();
+    });
   }
 
   const bankFilter = $("bank-filter-paper");
   if (bankFilter) {
-    bankFilter.addEventListener("change", renderBank);
+    bankFilter.addEventListener("change", () => {
+      state.bank_page = 1;
+      renderBank();
+    });
   }
 
   const btnBankRandom = $("btn-bank-random");
@@ -4068,12 +4255,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const p1BankSearch = $("p1-bank-search");
   if (p1BankSearch) {
-    p1BankSearch.addEventListener("input", renderP1Bank);
+    p1BankSearch.addEventListener("input", () => {
+      state.p1_bank_page = 1;
+      renderP1Bank();
+    });
   }
 
   const p1BankFilter = $("p1-bank-filter-subject");
   if (p1BankFilter) {
-    p1BankFilter.addEventListener("change", renderP1Bank);
+    p1BankFilter.addEventListener("change", () => {
+      state.p1_bank_page = 1;
+      renderP1Bank();
+    });
   }
 
   const p1BankSelectAll = $("p1-bank-select-all");
