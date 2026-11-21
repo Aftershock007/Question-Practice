@@ -30,9 +30,11 @@ body {
 }
 
 #app-header {
+  width: 100%;
+  box-sizing: border-box;
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
-  padding: 12px 24px;
+  padding: 12px 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -114,11 +116,19 @@ body {
   border-color: #cbd5e1;
 }
 
-main,
+main {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
 .screen {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 16px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 20px 28px 48px 28px;
+  box-sizing: border-box;
 }
 
 label {
@@ -728,10 +738,14 @@ button.secondary:hover {
 }
 
 /* Real RBI Grade B / TCS iON Exam Console Styles */
-#screen-exam {
-  max-width: 1360px;
-  padding: 8px 12px;
+#screen-exam,
+#screen-exam-p1 {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 10px 20px;
   background: #f8fafc;
+  box-sizing: border-box;
 }
 
 .rbi-exam-header {
@@ -2198,10 +2212,14 @@ button.secondary:hover {
 /* ============================================================
    Study Plan & Calendar Styles
    ============================================================ */
-#screen-calendar, #screen-calendar-p1, #screen-calendar-p2 {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 0 16px 48px 16px;
+#screen-calendar,
+#screen-calendar-p1,
+#screen-calendar-p2 {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 0 48px 0;
+  box-sizing: border-box;
 }
 
 /* Calendar Minimal Header Banner */
