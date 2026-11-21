@@ -42,7 +42,7 @@ No backend server, Node.js runtime, build steps, or external dependencies are re
 
 ## Recommended Daily Routine
 
-1. **Select Questions:** Pick 2–3 questions with target word limits (e.g., 400 or 600 words) across your focus subjects (**ESI**, **Finance**, **Management**, or **English Descriptive**).
+1. **Select Questions:** Pick 2-3 questions with target word limits (e.g., 400 or 600 words) across your focus subjects (**ESI**, **Finance**, **Management**, or **English Descriptive**).
 2. **Set Strict Timing:** Aim for a focused writing pace (e.g., ~25 words per minute) to build typing speed, focus, and answer structure discipline.
 3. **Simulate Real Exam Conditions:** Type continuously without pausing, without browser autocorrect or spell-check, and with copy-paste blocked.
 4. **Submit & Evaluate with AI:** Click **Copy** (or Download .txt) for each completed question, paste the complete generated prompt into Gemini or Claude, and let the AI grade your response against standard assessment criteria.

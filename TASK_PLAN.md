@@ -20,15 +20,15 @@ A personal, offline website for daily practice of **RBI Grade B (Phase 2) descri
 
 The user flow is:
 
-1. **Setup screen** – The user types one or more questions. For each question they enter: the question text, the marks (10 or 15), the word limit (auto-filled: 10 marks → 400 words, 15 marks → 600 words, but editable), the paper/subject, and a **model answer** (reference answer). They also set the **total test time** in minutes.
-2. **Exam screen** – A countdown timer starts. The user sees one question at a time with a big typing box (like the real RBI online exam). A live word counter shows `words typed / word limit`. The model answer is **hidden** during the test. The user can move between questions. When the timer reaches 0 the test auto-submits. The user can also submit early.
-3. **Result screen** – For each question, the site builds a **plain text (.txt) file** that contains:
+1. **Setup screen** - The user types one or more questions. For each question they enter: the question text, the marks (10 or 15), the word limit (auto-filled: 10 marks → 400 words, 15 marks → 600 words, but editable), the paper/subject, and a **model answer** (reference answer). They also set the **total test time** in minutes.
+2. **Exam screen** - A countdown timer starts. The user sees one question at a time with a big typing box (like the real RBI online exam). A live word counter shows `words typed / word limit`. The model answer is **hidden** during the test. The user can move between questions. When the timer reaches 0 the test auto-submits. The user can also submit early.
+3. **Result screen** - For each question, the site builds a **plain text (.txt) file** that contains:
    - a detailed **evaluation prompt** (so the user can paste the whole file into Gemini / Claude / ChatGPT and get a score),
    - the question, marks, word limit,
    - the user's written answer + its word count + time spent,
    - the model answer.
    The user can **Download** each file, **Copy** each file to clipboard, or **Download All** as one combined file.
-4. **History screen** – Every finished test is saved in the browser (localStorage). The user can later type the score the AI gave, to track improvement day by day.
+4. **History screen** - Every finished test is saved in the browser (localStorage). The user can later type the score the AI gave, to track improvement day by day.
 
 ---
 
@@ -101,7 +101,7 @@ Do **not** use `type="module"` (modules do not work from `file://`).
 | Key | Content |
 |-----|---------|
 | `rbi_question_bank` | JSON array of Question objects saved for reuse |
-| `rbi_current_setup` | JSON object `{ totalMinutes, questions: [...] }` – the setup the user is preparing |
+| `rbi_current_setup` | JSON object `{ totalMinutes, questions: [...] }` - the setup the user is preparing |
 | `rbi_active_test` | JSON Test object while a test is running (for crash/refresh recovery) |
 | `rbi_history` | JSON array of finished Test objects (newest first) |
 
@@ -109,7 +109,7 @@ Always wrap `localStorage` reads in `try { ... } catch { return default }` and u
 
 ---
 
-## PHASE 1 – Page skeleton (index.html)
+## PHASE 1 - Page skeleton (index.html)
 
 Create `index.html` with:
 
@@ -256,7 +256,7 @@ Create `index.html` with:
 
 ---
 
-## PHASE 2 – Styling (style.css)
+## PHASE 2 - Styling (style.css)
 
 Goals: clean, readable, looks a bit like an online exam interface, works on laptop and phone.
 
@@ -270,8 +270,8 @@ Goals: clean, readable, looks a bit like an online exam interface, works on lapt
    ```
 2. `body`: font-family `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`; background `var(--bg)`; color `var(--text)`; margin 0.
 3. `main`/screens: `max-width: 960px; margin: 0 auto; padding: 16px;`.
-4. `[hidden] { display: none !important; }` (very important – screens rely on it).
-5. Labels in the form: `display: block; margin-bottom: 12px;`. Inputs, selects, textareas: `width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 16px;`. (Exception: checkboxes keep normal width – use `input[type=checkbox] { width: auto; }`.)
+4. `[hidden] { display: none !important; }` (very important - screens rely on it).
+5. Labels in the form: `display: block; margin-bottom: 12px;`. Inputs, selects, textareas: `width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 16px;`. (Exception: checkboxes keep normal width - use `input[type=checkbox] { width: auto; }`.)
 6. Buttons: padding `8px 16px`, border-radius 6px, background `var(--primary)`, white text, no border, cursor pointer. `.danger` uses `var(--danger)`. Disabled buttons: opacity 0.5.
 7. Exam screen:
    - `#exam-topbar`: flex, `justify-content: space-between`, sticky at top, white background, bottom border, padding 8px.
@@ -291,7 +291,7 @@ Goals: clean, readable, looks a bit like an online exam interface, works on lapt
 
 ---
 
-## PHASE 3 – Evaluation prompt (prompt.js)
+## PHASE 3 - Evaluation prompt (prompt.js)
 
 Create `prompt.js` containing ONE global constant `EVAL_PROMPT_TEMPLATE` (use `const` at top level, no export). It is a JavaScript template string with placeholders written like `{{PLACEHOLDER}}`. **Copy the text below exactly** (between the two `=====` lines; do not include the `=====` lines themselves).
 
@@ -303,16 +303,16 @@ const EVAL_PROMPT_TEMPLATE = `...the text below...`;
 
 =====
 ################################################################
-#  RBI GRADE B – DESCRIPTIVE ANSWER EVALUATION REQUEST
+#  RBI GRADE B - DESCRIPTIVE ANSWER EVALUATION REQUEST
 #  (Paste this whole text into Gemini / Claude / ChatGPT)
 ################################################################
 
 ROLE
 You are a strict, experienced examiner for the RBI Grade B Officer Phase 2
-descriptive papers (ESI – Economic & Social Issues, F&M – Finance &
+descriptive papers (ESI - Economic & Social Issues, F&M - Finance &
 Management, and English Writing Skills). You have evaluated thousands of
 answer scripts. You grade honestly and do NOT inflate marks. A typical
-good candidate scores 50–65% of the maximum marks; above 75% is rare and
+good candidate scores 50-65% of the maximum marks; above 75% is rare and
 only for excellent answers.
 
 TASK
@@ -358,7 +358,7 @@ marks and round each parameter to the nearest 0.5.
     - Is every paragraph relevant to the question?
  2. Content, accuracy & depth (35%)
     - Correct concepts, definitions, mechanisms.
-    - Depth of analysis, cause–effect, pros and cons.
+    - Depth of analysis, cause-effect, pros and cons.
     - Coverage of the key points expected (compare with model answer,
       but accept other valid points).
  3. Facts, data & current relevance (15%)
@@ -375,8 +375,8 @@ marks and round each parameter to the nearest 0.5.
     - Grammar, spelling, sentence clarity, formal tone.
     - Precise economic / financial / management terminology.
  6. Word-limit discipline (10%)
-    - 90%–110% of limit  : full marks for this parameter.
-    - 75%–89% or 111%–120%: half marks for this parameter.
+    - 90%-110% of limit  : full marks for this parameter.
+    - 75%-89% or 111%-120%: half marks for this parameter.
     - Below 75% or above 120%: zero for this parameter, AND mention it
       clearly as a serious exam mistake.
     - If the answer is empty or under 30 words, give 0 total marks.
@@ -394,12 +394,12 @@ REQUIRED OUTPUT FORMAT (follow exactly, in this order)
    | Parameter | Max | Given | One-line reason |
    (one row for each of the 6 parameters, then a TOTAL row)
 
-3. WHAT YOU DID WELL (3–5 bullet points, specific, quote your lines)
+3. WHAT YOU DID WELL (3-5 bullet points, specific, quote your lines)
 
 4. MISSING / WEAK POINTS (bullet list of important points the
-   candidate missed or explained poorly – these are what cost marks)
+   candidate missed or explained poorly - these are what cost marks)
 
-5. ERRORS (factual mistakes, wrong data, grammar/spelling mistakes –
+5. ERRORS (factual mistakes, wrong data, grammar/spelling mistakes -
    quote the wrong text and give the correction)
 
 6. STRUCTURE FEEDBACK (how the intro, body and conclusion could be
@@ -422,7 +422,7 @@ Be honest and strict. Do not be polite at the cost of accuracy.
 Also add, below the constant, a second constant for the combined file header:
 
 ```js
-const COMBINED_HEADER_TEMPLATE = `RBI DESCRIPTIVE PRACTICE – FULL TEST
+const COMBINED_HEADER_TEMPLATE = `RBI DESCRIPTIVE PRACTICE - FULL TEST
 Date: {{DATE}}
 Questions: {{COUNT}} | Total time given: {{TOTAL_MINUTES}} min | Time used: {{USED_TIME}}{{AUTO_NOTE}}
 
@@ -440,7 +440,7 @@ table: Question no. | Marks obtained | Max marks, and the TOTAL.
 
 ---
 
-## PHASE 4 – Core helpers (app.js, top of file)
+## PHASE 4 - Core helpers (app.js, top of file)
 
 Write these helper functions first, exactly with these names. Put `"use strict";` at the very top of `app.js`.
 
@@ -553,7 +553,7 @@ In the browser console:
 
 ---
 
-## PHASE 5 – Setup screen logic
+## PHASE 5 - Setup screen logic
 
 Keep a global state object at the top of app.js (after helpers):
 
@@ -570,7 +570,7 @@ const state = {
 
 Implement these functions:
 
-1. **`saveSetup()`** – `saveJSON("rbi_current_setup", state.setup)`.
+1. **`saveSetup()`** - `saveJSON("rbi_current_setup", state.setup)`.
 
 2. **Marks → word limit auto-fill:** on `change` of `#q-marks`, set `#q-wordlimit` value to `defaultWordLimit(marks)`.
 
@@ -589,15 +589,15 @@ Implement these functions:
    - If `#q-save-bank` is checked → also add/update it in `rbi_question_bank` (match by id; if new, push).
    - `saveSetup()`, `renderSetupList()`, reset the form (`form.reset()`, set word limit back to 400, clear `#q-edit-id`, change button text back to "Add question"), clear error, focus `#q-text`.
 
-5. **Edit button** – fill the form with that question's values, set `#q-edit-id` to its id, change submit button text to "Update question", scroll to the form.
+5. **Edit button** - fill the form with that question's values, set `#q-edit-id` to its id, change submit button text to "Update question", scroll to the form.
 
-6. **Delete button** – `confirm("Remove this question from the test?")` then remove from `state.setup.questions`, save, re-render. (This does NOT remove it from the bank.)
+6. **Delete button** - `confirm("Remove this question from the test?")` then remove from `state.setup.questions`, save, re-render. (This does NOT remove it from the bank.)
 
-7. **Move up button** – swap with previous item, save, re-render.
+7. **Move up button** - swap with previous item, save, re-render.
 
-8. **`#setup-minutes` change** – save the number into `state.setup.totalMinutes` (min 1), `saveSetup()`.
+8. **`#setup-minutes` change** - save the number into `state.setup.totalMinutes` (min 1), `saveSetup()`.
 
-9. **Start Test (`#btn-start-test`)** – validation:
+9. **Start Test (`#btn-start-test`)** - validation:
    - At least 1 question, else error "Add at least one question."
    - Minutes ≥ 1, else error.
    - If any question has empty model answer → `confirm("Some questions have no model answer. The AI will grade without a reference. Continue?")`.
@@ -614,7 +614,7 @@ Implement these functions:
 
 ---
 
-## PHASE 6 – Exam screen logic (timer + typing)
+## PHASE 6 - Exam screen logic (timer + typing)
 
 ### 6.1 `startTest()`
 1. Build the Test object (see 2.2): deep copy questions with `JSON.parse(JSON.stringify(state.setup.questions))`. For each question create `answers[id] = { text: "", wordCount: 0, secondsSpent: 0 }` and `scores[id] = null`.
@@ -678,7 +678,7 @@ Implement these functions:
 
 ### 6.9 Resume after refresh (on page load)
 On `DOMContentLoaded`: if `rbi_active_test` exists:
-- If its `endTime` is still in the future → `confirm("You have a test in progress. Resume it?")`. Yes → restore `state.test`, `state.endTime = test.endTime`, render and restart timer (same as steps 5–8 of startTest, but do not rebuild answers). No → finish it as submitted (`finishTest(false)` after restoring state).
+- If its `endTime` is still in the future → `confirm("You have a test in progress. Resume it?")`. Yes → restore `state.test`, `state.endTime = test.endTime`, render and restart timer (same as steps 5-8 of startTest, but do not rebuild answers). No → finish it as submitted (`finishTest(false)` after restoring state).
 - If `endTime` has passed → restore state and call `finishTest(true)`.
 
 ### ✅ Verify Phase 6
@@ -692,7 +692,7 @@ On `DOMContentLoaded`: if `rbi_active_test` exists:
 
 ---
 
-## PHASE 7 – Result screen + .txt file generation
+## PHASE 7 - Result screen + .txt file generation
 
 ### 7.1 `buildQuestionText(test, question, index)` → returns a string
 
@@ -710,11 +710,11 @@ Fill `EVAL_PROMPT_TEMPLATE` with `fillTemplate()` using:
 | `DATE` | `new Date(test.date).toLocaleString()` |
 | `QUESTION` | `question.text` |
 | `ANSWER` | `answer.text.trim()` or `"[NO ANSWER WRITTEN]"` |
-| `MODEL_ANSWER` | `question.modelAnswer.trim()` or `"[No model answer provided – evaluate using your own expert knowledge of the topic.]"` |
+| `MODEL_ANSWER` | `question.modelAnswer.trim()` or `"[No model answer provided - evaluate using your own expert knowledge of the topic.]"` |
 
 Then add this line at the very top of the returned string: `"QUESTION " + (index + 1) + " OF " + test.questions.length + "\n"`.
 
-**Important:** Do **not** run `fillTemplate` on the user's answer text after inserting it (if the user's answer contains curly braces or markers it must stay as it is). Since `fillTemplate` replaces in one pass on the template only, this is already safe – just do not call it twice.
+**Important:** Do **not** run `fillTemplate` on the user's answer text after inserting it (if the user's answer contains curly braces or markers it must stay as it is). Since `fillTemplate` replaces in one pass on the template only, this is already safe - just do not call it twice.
 
 ### 7.2 `buildCombinedText(test)` → returns a string
 - `fillTemplate(COMBINED_HEADER_TEMPLATE, { DATE, COUNT, TOTAL_MINUTES, USED_TIME: formatDuration(test.usedSeconds), AUTO_NOTE: test.autoSubmitted ? " (auto-submitted, time over)" : "" })`
@@ -744,7 +744,7 @@ Then add this line at the very top of the returned string: `"QUESTION " + (index
 
 ---
 
-## PHASE 8 – History screen
+## PHASE 8 - History screen
 
 ### 8.1 `renderHistory()`
 1. Load `rbi_history`.
@@ -757,7 +757,7 @@ Then add this line at the very top of the returned string: `"QUESTION " + (index
 4. `#history-list`: one card per test (newest first) with: date & time, number of questions, time used/total, and a small table:
    `Q# | Paper | Marks | Words | Score (input) | Buttons`
    - The **Score** cell is an `<input type="number" step="0.5" min="0" max="{marks}">` prefilled with the saved score. On `change`, save the number (or `null` if empty) into that test's `scores[qid]` in `rbi_history`, then refresh the stats.
-   - Buttons per row: **Copy** and **Download** (same text as on the result screen – reuse `buildQuestionText`).
+   - Buttons per row: **Copy** and **Download** (same text as on the result screen - reuse `buildQuestionText`).
    - Per test: **Open results** (calls `renderResult(test)` + `showScreen("result")`), **Retake** (puts this test's questions into `state.setup.questions`, saves, goes to setup screen), **Delete** (confirm, remove from history).
 5. `#btn-clear-history` → double confirm (`confirm` then type-check: `prompt('Type DELETE to confirm') === 'DELETE'`) then remove `rbi_history`.
 
@@ -772,7 +772,7 @@ Then add this line at the very top of the returned string: `"QUESTION " + (index
 
 ---
 
-## PHASE 9 – Question Bank screen
+## PHASE 9 - Question Bank screen
 
 ### 9.1 `renderBank()`
 1. Load `rbi_question_bank`.
@@ -794,7 +794,7 @@ Then add this line at the very top of the returned string: `"QUESTION " + (index
 
 ---
 
-## PHASE 10 – Wiring everything together
+## PHASE 10 - Wiring everything together
 
 At the bottom of `app.js`:
 
@@ -809,7 +809,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 ```
 
-Make sure every listener is attached **once** (not inside render functions – use event delegation on list containers instead).
+Make sure every listener is attached **once** (not inside render functions - use event delegation on list containers instead).
 
 ### ✅ Verify Phase 10 (full end-to-end test)
 Do this whole flow without errors in the console:
@@ -826,15 +826,15 @@ Do this whole flow without errors in the console:
 
 ---
 
-## PHASE 11 – README.md
+## PHASE 11 - README.md
 
 Replace README.md content with a short user guide:
 
 1. **What it is** (2 lines).
 2. **How to open**: download/clone → double-click `index.html`. Or enable GitHub Pages (Settings → Pages → Branch: main → / (root)) and open the link on any device.
 3. **Daily routine** (recommended):
-   - Pick 2–3 questions (mix of 10 and 15 marks; ESI + F&M).
-   - Time: about 1 minute per 25 words (400 words ≈ 16 min, 600 words ≈ 24 min) – a little less than comfortable, to build speed.
+   - Pick 2-3 questions (mix of 10 and 15 marks; ESI + F&M).
+   - Time: about 1 minute per 25 words (400 words ≈ 16 min, 600 words ≈ 24 min) - a little less than comfortable, to build speed.
    - Write without pausing; no spell-check, no paste.
    - Submit → Copy each question → paste into Gemini/Claude → read feedback.
    - Enter the score in History. Re-write the "Improved model answer" in your own words once.
@@ -843,18 +843,18 @@ Replace README.md content with a short user guide:
 
 ---
 
-## PHASE 12 – Final checks (do all before saying "done")
+## PHASE 12 - Final checks (do all before saying "done")
 
 - [ ] No external libraries/CDN links anywhere (`grep -n "http" index.html app.js style.css` should show nothing important).
 - [ ] No `console.log` left except for real errors.
 - [ ] No user text is inserted with `innerHTML` without `escapeHTML`.
 - [ ] Works in Chrome and Firefox, opened directly as a file.
-- [ ] All Verify checklists from Phases 1–10 pass.
+- [ ] All Verify checklists from Phases 1-10 pass.
 - [ ] Commit with message: `Build RBI descriptive practice site`.
 
 ---
 
-## Appendix A – Common mistakes to avoid (for the agent)
+## Appendix A - Common mistakes to avoid (for the agent)
 
 1. **Timer drift:** never do `remaining--` in setInterval. Always compute from `endTime`.
 2. **Lost answers:** always call `storeCurrentAnswer()` before changing question and before finishing.
@@ -862,15 +862,15 @@ Replace README.md content with a short user guide:
 4. **`hidden` not working:** the CSS rule `[hidden]{display:none!important}` is required because other CSS `display` values override `hidden`.
 5. **Template literal breaking:** if you edit the prompt and add a backtick (`) or `${`, escape it as \` and \${.
 6. **Numbers stored as strings:** convert form values with `Number(...)` for marks, wordLimit, minutes, score.
-7. **ES modules:** don't use `import`/`export` – the site must run from `file://`.
+7. **ES modules:** don't use `import`/`export` - the site must run from `file://`.
 8. **Clipboard on file://:** `navigator.clipboard` may fail; the fallback with `execCommand("copy")` is required.
 
-## Appendix B – Example of one generated .txt file (shortened)
+## Appendix B - Example of one generated .txt file (shortened)
 
 ```
 QUESTION 1 OF 2
 ################################################################
-#  RBI GRADE B – DESCRIPTIVE ANSWER EVALUATION REQUEST
+#  RBI GRADE B - DESCRIPTIVE ANSWER EVALUATION REQUEST
 ...
 Paper          : ESI
 Topic          : Monetary policy

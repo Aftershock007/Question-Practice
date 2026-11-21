@@ -1838,6 +1838,46 @@ function handleBankImport(event) {
   reader.readAsText(file);
 }
 
+// Safe concurrent stream decompression helper preventing WHATWG stream backpressure deadlocks
+async function decompressBuffer(data, format = "deflate-raw") {
+  const ds = new DecompressionStream(format);
+  const writer = ds.writable.getWriter();
+  const reader = ds.readable.getReader();
+
+  const writePromise = (async () => {
+    try {
+      await writer.write(data);
+      await writer.close();
+    } catch (err) {
+      try { await writer.abort(err); } catch (_) {}
+      throw err;
+    }
+  })();
+
+  const chunks = [];
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+  } catch (err) {
+    try { await reader.cancel(err); } catch (_) {}
+    throw err;
+  }
+
+  await writePromise;
+
+  const total = chunks.reduce((acc, c) => acc + c.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const c of chunks) {
+    out.set(c, pos);
+    pos += c.length;
+  }
+  return out;
+}
+
 // Extract plain text paragraphs from a DOCX file buffer by decompressing word/document.xml
 async function extractDocxText(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
@@ -1920,30 +1960,13 @@ async function extractDocxText(arrayBuffer) {
     xmlString = new TextDecoder("utf-8").decode(compressedData);
   } else if (targetEntry.compMethod === 8) {
     try {
+      const full = await decompressBuffer(compressedData, "deflate-raw");
+      xmlString = new TextDecoder("utf-8").decode(full);
+    } catch (e1) {
       const ds = new DecompressionStream("deflate-raw");
       const resp = new Response(new Response(compressedData).body.pipeThrough(ds));
       const blob = await resp.blob();
       xmlString = await blob.text();
-    } catch (e1) {
-      const ds = new DecompressionStream("deflate-raw");
-      const writer = ds.writable.getWriter();
-      await writer.write(compressedData);
-      await writer.close();
-      const reader = ds.readable.getReader();
-      const chunks = [];
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-      }
-      const total = chunks.reduce((acc, c) => acc + c.length, 0);
-      const full = new Uint8Array(total);
-      let pos = 0;
-      for (const c of chunks) {
-        full.set(c, pos);
-        pos += c.length;
-      }
-      xmlString = new TextDecoder("utf-8").decode(full);
     }
   } else {
     throw new Error("Unsupported ZIP compression method: " + targetEntry.compMethod);
@@ -2012,39 +2035,11 @@ async function extractPdfText(arrayBuffer) {
 
     if (pos.isFlate) {
       try {
-        const ds = new DecompressionStream("deflate");
-        const writer = ds.writable.getWriter();
-        await writer.write(rawChunk);
-        await writer.close();
-        const reader = ds.readable.getReader();
-        const chunks = [];
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-        }
-        const total = chunks.reduce((a, b) => a + b.length, 0);
-        const out = new Uint8Array(total);
-        let p = 0;
-        for (const c of chunks) { out.set(c, p); p += c.length; }
+        const out = await decompressBuffer(rawChunk, "deflate");
         streamText = new TextDecoder("latin1").decode(out);
       } catch (e) {
         try {
-          const ds = new DecompressionStream("deflate-raw");
-          const writer = ds.writable.getWriter();
-          await writer.write(rawChunk);
-          await writer.close();
-          const reader = ds.readable.getReader();
-          const chunks = [];
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-          }
-          const total = chunks.reduce((a, b) => a + b.length, 0);
-          const out = new Uint8Array(total);
-          let p = 0;
-          for (const c of chunks) { out.set(c, p); p += c.length; }
+          const out = await decompressBuffer(rawChunk, "deflate-raw");
           streamText = new TextDecoder("latin1").decode(out);
         } catch (e2) {
           streamText = textDecoder.decode(rawChunk);
@@ -3825,24 +3820,7 @@ async function extractZipEntries(buf) {
       entries[fileName] = new TextDecoder("utf-8").decode(compressedData);
     } else if (compression === 8) {
       try {
-        const ds = new DecompressionStream("deflate-raw");
-        const writer = ds.writable.getWriter();
-        await writer.write(compressedData);
-        await writer.close();
-        const reader = ds.readable.getReader();
-        const chunks = [];
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-        }
-        const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
-        const merged = new Uint8Array(totalLen);
-        let pos = 0;
-        for (const c of chunks) {
-          merged.set(c, pos);
-          pos += c.length;
-        }
+        const merged = await decompressBuffer(compressedData, "deflate-raw");
         entries[fileName] = new TextDecoder("utf-8").decode(merged);
       } catch (e) {
         // Continue if a single zip entry fails decompression
@@ -3903,14 +3881,17 @@ async function parseXLSX(arrayBuffer) {
 
   while ((rowMatch = rowRegex.exec(sheetXml)) !== null) {
     const rowContent = rowMatch[1];
-    const cellRegex = /<c\b([^>]*)>(?:<v>(.*?)<\/v>|<is><t>(.*?)<\/t><\/is>)?<\/c>/gs;
+    const cellRegex = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
     let cMatch;
     const row = [];
 
     while ((cMatch = cellRegex.exec(rowContent)) !== null) {
       const attrs = cMatch[1];
-      const val = cMatch[2] || "";
-      const isVal = cMatch[3] || "";
+      const inner = cMatch[2] || "";
+      const vMatch = /<v>([\s\S]*?)<\/v>/.exec(inner);
+      const tMatch = /<t\b[^>]*>([\s\S]*?)<\/t>/.exec(inner);
+      const val = vMatch ? vMatch[1].trim() : "";
+      const isVal = tMatch ? tMatch[1].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'").trim() : "";
 
       // derive column index from r="A1"
       const rAttrMatch = /r="([A-Z]+)(\d+)"/.exec(attrs);
@@ -3930,8 +3911,8 @@ async function parseXLSX(arrayBuffer) {
       let cellValue = "";
       if (isString) {
         cellValue = sharedStrings[Number(val)] || "";
-      } else if (isInline) {
-        cellValue = isVal;
+      } else if (isInline || isVal) {
+        cellValue = isVal || val;
       } else {
         cellValue = val;
       }
