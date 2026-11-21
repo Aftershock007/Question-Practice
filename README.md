@@ -6,13 +6,22 @@ A personal, offline typing test and descriptive answer practice website designed
 
 ## Features
 
-- **Four Dedicated Subjects:** Organize and practice questions across four distinct subjects: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
-- **DOCX & PDF File Import:** Directly upload Word (.docx) or PDF (.pdf) documents containing questions and answers. The app automatically extracts questions, subjects, marks, word limits, and model answers (test with the included `demo_questions.docx` and `demo_questions.pdf`).
-- **Custom Practice Setup:** Add custom questions, specify topics, paper categories, target word limits, and reference model answers.
-- **Realistic Typing Interface:** Countdown timer with visual warning thresholds, live word count adherence tracking, Tab indentation support, and optional paste prevention to simulate genuine test conditions.
-- **AI Evaluation Prompt Generation:** Instantly exports comprehensive `.txt` evaluation prompts containing your typed answer, word count, time spent, and reference model answer ready to paste directly into AI tools for scoring and feedback.
-- **Question Bank:** Save and organize questions by category/topic, search your question library, pick random questions for quick practice, and import/export via JSON.
-- **Progress & History Tracking:** Automatically logs test attempts with time used, words typed, daily streak tracking, and score recording to monitor your improvement over time.
+- **Phase Selection (Phase 1 Objective & Phase 2 Descriptive):** Switch instantly between objective MCQ test simulation and descriptive answer writing practice from the top header bar.
+- **Phase-1 Objective Practice (Real TCS iON Simulation):**
+  - Real exam interface with countdown timer, candidate profile bar, and question options `[A]` through `[E]`.
+  - Authentic 5-color TCS iON Question Palette: Answered (Green), Not Answered (Red), Not Visited (Grey), Marked for Review (Purple), and Answered & Marked for Review.
+  - Automatic answer key matching, immediate net scoring (+1.00 correct, -0.25 negative marking), scorecard, and question-by-question review with filters.
+- **Phase-2 Descriptive Typing Practice:**
+  - Four dedicated papers: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
+  - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support, and optional paste prevention.
+  - Automatic AI evaluation prompt generation (ready for Gemini, Claude, and ChatGPT).
+- **DOCX & PDF File Import:** Directly upload Word (.docx) or PDF (.pdf) documents with robust decompression handling (including ZIP data descriptors) to extract questions, options, answer keys, and model answers.
+- **Included Example Practice Documents:**
+  - `Spotlight-Questions-1-6-Nov-2026.docx`: 200 General Awareness Phase-1 MCQs with options and full answer key table.
+  - `CH-1-National_Income-Answer-Writing.docx`: ESI Chapter 1 National Income descriptive practice questions with model answers.
+  - `demo_questions.docx` & `demo_questions.pdf`: Multi-subject Phase-2 practice questions.
+- **Question Bank & Batch Management:** Multi-select checkbox deletion, subject filtering, keyword search, random question generator, and JSON import/export.
+- **History Tracking:** Comprehensive logs of test scores, accuracy %, time spent, and performance trends for both phases.
 
 ---
 

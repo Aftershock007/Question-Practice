@@ -2073,6 +2073,84 @@ async function handleDocImport(event, targetScreen) {
   }
 }
 
+// One-click loader for the included ESI Chapter-1 DOCX file (Phase 2)
+async function loadCH1Sample() {
+  const statusElem = $("setup-doc-status");
+  if (statusElem) statusElem.textContent = "Loading CH-1-National_Income-Answer-Writing.docx...";
+  try {
+    const resp = await fetch("CH-1-National_Income-Answer-Writing.docx");
+    if (!resp.ok) throw new Error("Could not fetch file: " + resp.statusText);
+    const arrayBuffer = await resp.arrayBuffer();
+    const rawText = await extractDocxText(arrayBuffer);
+    const parsed = parseQuestionsAndAnswers(rawText);
+    if (!parsed || parsed.length === 0) throw new Error("No questions detected.");
+
+    parsed.forEach(q => {
+      q.id = makeId("q");
+      state.setup.questions.push(q);
+    });
+    saveSetup();
+    renderSetupList();
+
+    const bank = loadJSON("rbi_question_bank", []);
+    let added = 0;
+    parsed.forEach(q => {
+      if (!bank.some(b => b.text === q.text)) {
+        bank.push({ ...q, id: makeId("bank") });
+        added++;
+      }
+    });
+    saveJSON("rbi_question_bank", bank);
+
+    if (statusElem) {
+      statusElem.textContent = `✅ Loaded ${parsed.length} questions from National Income Ch-1 (+${added} in Bank)!`;
+    }
+  } catch (err) {
+    if (statusElem) statusElem.textContent = `File load note: ${err.message}.`;
+    const fileInput = $("setup-doc-import");
+    if (fileInput) fileInput.click();
+  }
+}
+
+// One-click loader for demo_questions.docx (Phase 2)
+async function loadDemoSample() {
+  const statusElem = $("setup-doc-status");
+  if (statusElem) statusElem.textContent = "Loading demo_questions.docx...";
+  try {
+    const resp = await fetch("demo_questions.docx");
+    if (!resp.ok) throw new Error("Could not fetch file: " + resp.statusText);
+    const arrayBuffer = await resp.arrayBuffer();
+    const rawText = await extractDocxText(arrayBuffer);
+    const parsed = parseQuestionsAndAnswers(rawText);
+    if (!parsed || parsed.length === 0) throw new Error("No questions detected.");
+
+    parsed.forEach(q => {
+      q.id = makeId("q");
+      state.setup.questions.push(q);
+    });
+    saveSetup();
+    renderSetupList();
+
+    const bank = loadJSON("rbi_question_bank", []);
+    let added = 0;
+    parsed.forEach(q => {
+      if (!bank.some(b => b.text === q.text)) {
+        bank.push({ ...q, id: makeId("bank") });
+        added++;
+      }
+    });
+    saveJSON("rbi_question_bank", bank);
+
+    if (statusElem) {
+      statusElem.textContent = `✅ Loaded ${parsed.length} demo questions (+${added} in Bank)!`;
+    }
+  } catch (err) {
+    if (statusElem) statusElem.textContent = `File load note: ${err.message}.`;
+    const fileInput = $("setup-doc-import");
+    if (fileInput) fileInput.click();
+  }
+}
+
 // ==========================================
 // PHASE 1: OBJECTIVE / MCQ TEST FUNCTIONS
 // ==========================================
@@ -3374,6 +3452,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const setupDocImport = $("setup-doc-import");
   if (setupDocImport) {
     setupDocImport.addEventListener("change", (e) => handleDocImport(e, "setup"));
+  }
+
+  const btnLoadCH1 = $("btn-load-ch1-sample");
+  if (btnLoadCH1) {
+    btnLoadCH1.addEventListener("click", loadCH1Sample);
+  }
+
+  const btnLoadDemo = $("btn-load-demo-sample");
+  if (btnLoadDemo) {
+    btnLoadDemo.addEventListener("click", loadDemoSample);
   }
 
   const setupSelectAll = $("setup-select-all");

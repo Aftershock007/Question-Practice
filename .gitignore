@@ -52,7 +52,17 @@ build/
 coverage/
 .nyc_output/
 
-CH-1-National_Income-Answer-Writing.docx
-demo_questions.docx
-demo_questions.pdf
-Spotlight-Questions-1-6-Nov-2026.docx
+# Downloaded practice outputs and exports
+Practice_*.txt
+RBI_Phase1_Scorecard_*.txt
+RBI_Phase1_Analysis_*.txt
+RBI_Phase1_MCQs_Bank*.json
+RBI_Question_Bank*.json
+
+# Ignore generic docx/pdf uploads, but explicitly preserve all example documents
+*.docx
+*.pdf
+!CH-1-National_Income-Answer-Writing.docx
+!Spotlight-Questions-1-6-Nov-2026.docx
+!demo_questions.docx
+!demo_questions.pdf
