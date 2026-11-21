@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RBI Descriptive Practice</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="app-header">
+    <h1>RBI Descriptive Practice</h1>
+    <nav>
+      <button type="button" id="nav-setup">New Test</button>
+      <button type="button" id="nav-bank">Question Bank</button>
+      <button type="button" id="nav-history">History</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Screen: Setup -->
+    <section id="screen-setup" class="screen">
+      <h2>Set up today's test</h2>
+
+      <form id="question-form">
+        <label>Paper
+          <select id="q-paper">
+            <option value="ESI">ESI (Economic & Social Issues)</option>
+            <option value="F&M">F&M (Finance & Management)</option>
+            <option value="English">English (Essay / Précis / Comprehension)</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+
+        <label>Topic (optional) <input id="q-topic" type="text"></label>
+
+        <label>Question <textarea id="q-text" rows="4" required></textarea></label>
+
+        <label>Marks
+          <select id="q-marks">
+            <option value="10">10 marks</option>
+            <option value="15">15 marks</option>
+          </select>
+        </label>
+
+        <label>Word limit <input id="q-wordlimit" type="number" min="50" value="400"></label>
+
+        <label>Model answer (reference) <textarea id="q-model" rows="8"></textarea></label>
+
+        <label><input id="q-save-bank" type="checkbox" checked> Also save to Question Bank</label>
+
+        <button type="submit" id="btn-add-question">Add question</button>
+        <input type="hidden" id="q-edit-id" value="">
+      </form>
+
+      <h3>Questions in this test (<span id="setup-count">0</span>)</h3>
+      <ol id="setup-question-list"></ol>
+
+      <div id="setup-time-box">
+        <label>Total time (minutes) <input id="setup-minutes" type="number" min="1" value="30"></label>
+        <p id="setup-suggested-time"></p>
+        <label><input id="setup-block-paste" type="checkbox" checked> Block copy-paste in answer box (like real exam)</label>
+      </div>
+
+      <button type="button" id="btn-start-test">Start Test</button>
+      <p id="setup-error" class="error"></p>
+    </section>
+
+    <!-- Screen: Exam -->
+    <section id="screen-exam" class="screen" hidden>
+      <div id="exam-topbar">
+        <span id="exam-qpos">Question 1 of 3</span>
+        <span id="exam-marks">10 marks · 400 words</span>
+        <span id="exam-timer">30:00</span>
+      </div>
+
+      <div id="exam-question-text"></div>
+
+      <textarea id="exam-answer" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
+                placeholder="Type your answer here..."></textarea>
+
+      <div id="exam-bottombar">
+        <span id="exam-wordcount">0 / 400 words</span>
+        <div id="exam-palette"></div>   <!-- small numbered buttons, one per question -->
+        <button type="button" id="btn-prev">◀ Previous</button>
+        <button type="button" id="btn-next">Next ▶</button>
+        <button type="button" id="btn-submit">Submit Test</button>
+      </div>
+
+      <div id="confirm-submit" class="modal" hidden>
+        <div class="modal-content">
+          <p>Submit the test now? Unanswered questions will be saved as empty.</p>
+          <button type="button" id="btn-confirm-yes">Yes, submit</button>
+          <button type="button" id="btn-confirm-no">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen: Result -->
+    <section id="screen-result" class="screen" hidden>
+      <h2>Test finished</h2>
+      <p id="result-summary"></p>
+
+      <div id="result-howto" class="info">
+        <b>How to get your score:</b> click <b>Copy</b> (or Download) for a question,
+        open Gemini or Claude, paste everything, and send. The AI will grade it like an RBI examiner.
+      </div>
+
+      <button type="button" id="btn-download-all">Download All (one .txt file)</button>
+      <button type="button" id="btn-copy-all">Copy All</button>
+
+      <div id="result-list"></div>   <!-- one card per question, built by JS -->
+
+      <button type="button" id="btn-go-history">Go to History</button>
+    </section>
+
+    <!-- Screen: History -->
+    <section id="screen-history" class="screen" hidden>
+      <h2>Practice History</h2>
+      <div id="history-stats"></div>
+      <div id="history-list"></div>
+      <button type="button" id="btn-clear-history" class="danger">Delete all history</button>
+    </section>
+
+    <!-- Screen: Question Bank -->
+    <section id="screen-bank" class="screen" hidden>
+      <h2>Question Bank</h2>
+      <div style="margin-bottom: 12px;">
+        <button type="button" id="btn-bank-random">Add 3 random questions</button>
+      </div>
+      <input id="bank-search" type="text" placeholder="Search question or topic...">
+      <select id="bank-filter-paper">
+        <option value="">All papers</option>
+        <option value="ESI">ESI</option>
+        <option value="F&M">F&M</option>
+        <option value="English">English</option>
+        <option value="Other">Other</option>
+      </select>
+      <div id="bank-list"></div>
+      <button type="button" id="btn-bank-export">Export bank (.json)</button>
+      <label class="file-btn">Import bank (.json) <input id="bank-import" type="file" accept=".json" hidden></label>
+    </section>
+  </main>
+
+  <script src="prompt.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
