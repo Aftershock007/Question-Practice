@@ -1984,6 +1984,12 @@ async function extractDocxText(arrayBuffer) {
     while ((tMatch = tRegex.exec(normalized)) !== null) {
       text += tMatch[1];
     }
+    text = text.replace(/&amp;/g, "&")
+               .replace(/&lt;/g, "<")
+               .replace(/&gt;/g, ">")
+               .replace(/&quot;/g, '"')
+               .replace(/&apos;/g, "'")
+               .replace(/[\u2013\u2014]/g, "-");
     if (text.trim()) {
       paragraphs.push(text.trim());
     }
@@ -2090,7 +2096,7 @@ async function extractPdfText(arrayBuffer) {
     if (lines.length > 0) allExtracted.push(lines.join("\n"));
   }
 
-  const combined = allExtracted.join("\n");
+  const combined = allExtracted.join("\n").replace(/[\u2013\u2014]/g, "-");
   const rawPdfLines = combined.split("\n").map(l => l.trim()).filter(l => l.length > 0);
   const repPdfHeaders = findRepetitiveHeaders(rawPdfLines);
   const cleanPdfLines = rawPdfLines.filter(l => !isHeaderOrFooterLine(l, repPdfHeaders));
@@ -2138,10 +2144,10 @@ function isHeaderOrFooterLine(line, repetitiveSet = null) {
   if (/\b(?:www\.[a-z0-9\-]+\.[a-z]{2,}|[a-z0-9\-]+\.(?:com|in|org|co\.in))\b/i.test(trimmed) && trimmed.length < 80) return true;
 
   // 4. Section banners and exam headers
-  if (/^(?:RBI\s*Grade\s*B(?:\s*\d{4})?|Reserve\s*Bank\s*of\s*India|Phase\s*[\-:]?[I|1|2|II]+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed)) return true;
-  if (/^(?:Mock\s*Test(?:\s*\d+)?|Test\s*Series|Practice\s*Set|Practice\s*Paper|Sample\s*Paper|Section\s*[\-:]?[A-Z0-9]|Paper\s*[\-:]?[I|1|2|II\d]+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed)) return true;
-  if (/^(?:Chapter\s*\d+|Ch\s*[\-:]?\s*\d+|Unit\s*\d+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 80) return true;
-  if (/^(?:Economic\s*(?:&|and)\s*Social\s*Issues(?:\s*\(ESI\))?|Finance\s*(?:&|and)\s*Management(?:\s*\(F&M\))?|English\s*Descriptive|General\s*Awareness)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 80) return true;
+  if (/^(?:RBI\s*Grade\s*B(?:\s*\d{4})?|Reserve\s*Bank\s*of\s*India|Phase\s*[\-:]?[I|1|2|II\d]+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed)) return true;
+  if (/^(?:Mock\s*Test(?:\s*[A-Z0-9]+)?|Test\s*Series|Practice\s*Set(?:\s*[A-Z0-9]+)?|Practice\s*Paper(?:\s*[A-Z0-9]+)?|Sample\s*Paper(?:\s*[A-Z0-9]+)?|Exercise(?:\s*[A-Z0-9]+)?|Set\s*[\-:]?\s*[A-Z0-9]+|Section\s*[\-:]?\s*[A-Z0-9]+|Paper\s*[\-:]?\s*[I|1|2|II\d]+|Part\s*[\-:]?\s*[A-Z0-9]+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 100) return true;
+  if (/^(?:Chapter\s*[\-:]?\s*\d+|Ch\s*[\-:]?\s*\d+|Unit\s*[\-:]?\s*\d+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 100) return true;
+  if (/^(?:Economic\s*(?:&|and)\s*Social\s*Issues(?:\s*\(ESI\))?|Finance\s*(?:&|and)\s*Management(?:\s*\(F&M\))?|English\s*Descriptive|General\s*Awareness|Quantitative\s*Aptitude|Reasoning\s*Ability|English\s*Language)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 100) return true;
 
   // 5. Exam instructions and metadata banner lines
   if (/^(?:Time\s*Allowed|Maximum\s*Marks|Total\s*Marks|Total\s*Time|Duration|Instructions?|Note|Important\s*Instructions?)\s*[:\.\-]/i.test(trimmed) && trimmed.length < 80) return true;
@@ -2154,7 +2160,7 @@ function isHeaderOrFooterLine(line, repetitiveSet = null) {
 function cleanDescriptiveQuestion(lines, currentTopic = "") {
   if (!lines || lines.length === 0) return { text: "", topic: currentTopic };
   let topic = currentTopic;
-  const filtered = lines.filter(l => l.trim().length > 0);
+  const filtered = lines.filter(l => l.trim().length > 0 && !isHeaderOrFooterLine(l));
   if (filtered.length === 0) return { text: "", topic };
 
   // If first line is a title or header banner rather than a question prompt:
@@ -2167,8 +2173,12 @@ function cleanDescriptiveQuestion(lines, currentTopic = "") {
     }
   }
 
-  if (filtered.length > 0) {
-    filtered[0] = filtered[0].replace(/^(?:Question\s*\d+|Q\s*\d+|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*/i, "").trim();
+  for (let idx = 0; idx < filtered.length; idx++) {
+    if (/^(?:Q(?:uestion)?\s*[\.\-]?\s*\d+|\(\d+\)|\[\d+\]|\d+[\.\)])/i.test(filtered[idx])) {
+      filtered[idx] = filtered[idx].replace(/^(?:\(\d+\)|\[\d+\]|(?:Question|Q)\s*[\.\-]?\s*\d+|\d+)\s*[\.\:\)\-\]]*\s*/i, "").trim();
+      filtered[idx] = filtered[idx].replace(/^[\.\:\)\-\]\s]+/, "").trim();
+      break;
+    }
   }
 
   return { text: filtered.join("\n").trim(), topic };
@@ -2177,19 +2187,15 @@ function cleanDescriptiveQuestion(lines, currentTopic = "") {
 // Clean MCQ prompt lines and strip extraneous section headers or page banners
 function cleanMCQPrompt(lines) {
   if (!lines || lines.length === 0) return "";
-  const qNumIdx = lines.findIndex(l => /^(?:Q(?:uestion)?\s*[\.\-]?\s*\d+|\d+[\.\)]|\(\d+\))\s+/i.test(l));
-  let clean = lines;
-  if (qNumIdx > 0) {
-    clean = lines.slice(qNumIdx);
-  } else if (lines.length > 1) {
-    const first = lines[0].trim();
-    if (first === first.toUpperCase() && first.length < 60 && !/\?$/.test(first)) {
-      clean = lines.slice(1);
-    }
-  }
+  let clean = lines.filter(l => l.trim().length > 0 && !isHeaderOrFooterLine(l));
+  if (clean.length === 0) return "";
 
-  if (clean.length > 0) {
-    clean[0] = clean[0].replace(/^(?:Question\s*\d+|Q\s*\d+|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*/i, "").trim();
+  for (let idx = 0; idx < clean.length; idx++) {
+    if (/^(?:Q(?:uestion)?\s*[\.\-]?\s*\d+|\(\d+\)|\[\d+\]|\d+[\.\)])/i.test(clean[idx])) {
+      clean[idx] = clean[idx].replace(/^(?:\(\d+\)|\[\d+\]|(?:Question|Q)\s*[\.\-]?\s*\d+|\d+)\s*[\.\:\)\-\]]*\s*/i, "").trim();
+      clean[idx] = clean[idx].replace(/^[\.\:\)\-\]\s]+/, "").trim();
+      break;
+    }
   }
 
   return clean.filter(l => l.trim().length > 0).join("\n").trim();
@@ -2212,12 +2218,24 @@ function parseQuestionsAndAnswers(rawText) {
   else if (/\bManagement\b/i.test(headerPreview)) docDefaultPaper = "Management";
   else if (/\bEnglish(?:\s+Descriptive)?\b/i.test(headerPreview)) docDefaultPaper = "English Descriptive";
 
-  if (rawLines[0] && !/^(?:Question|Q\d|\d+[\.\)])/i.test(rawLines[0])) {
-    const titleMatch = rawLines[0].match(/^([^:\(\)\|]+)/);
-    if (titleMatch) docDefaultTopic = titleMatch[1].trim();
+  for (let i = 0; i < Math.min(5, rawLines.length); i++) {
+    const line = rawLines[i];
+    if (!line) continue;
+    const chMatch = line.match(/^(?:Chapter\s*[\-:]?\s*\d+|Ch\s*[\-:]?\s*\d+)\s*[:\.\-]\s*(.+)/i);
+    if (chMatch) {
+      docDefaultTopic = chMatch[1].replace(/questions?|test|practice/gi, "").trim();
+      break;
+    }
+    if (!docDefaultTopic && !isHeaderOrFooterLine(line, repHeaders) && !/^(?:Question|Q\d|\d+[\.\)])/i.test(line)) {
+      const titleMatch = line.match(/^([^:\(\)\|]+)/);
+      if (titleMatch) {
+        docDefaultTopic = titleMatch[1].trim();
+        break;
+      }
+    }
   }
 
-  const qNumRegex = /^(?:Question\s*(\d+)|Q\s*(\d+)[\.:\)]?)/i;
+  const qNumRegex = /^(?:Question\s*(\d+)|Q\s*[\.\-]?\s*(\d+))\s*[\.\:\)\-]?/i;
   const rawQuestionStarts = [];
 
   for (let i = 0; i < rawLines.length; i++) {
@@ -2347,7 +2365,7 @@ function parseQuestionsAndAnswers(rawText) {
 
       if (hasExplicitAnswer) {
         if (!inAnswer) {
-          const cleanQ = line.replace(/^(?:Question\s*\d+|Q\s*\d+|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*/i, "");
+          const cleanQ = line.replace(/^(?:\(\d+\)|\[\d+\]|(?:Question|Q)\s*[\.\-]?\s*\d+|\d+)\s*[\.\:\)\-\]]*\s*/i, "").replace(/^[\.\:\)\-\]\s]+/, "");
           if (cleanQ) qLines.push(cleanQ);
         } else {
           aLines.push(line);
@@ -2355,7 +2373,7 @@ function parseQuestionsAndAnswers(rawText) {
       } else {
         // No explicit Answer marker in document: first non-metadata paragraph is Question prompt, rest is Model Answer
         if (qLines.length === 0) {
-          const cleanQ = line.replace(/^(?:Question\s*\d+|Q\s*\d+|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*/i, "");
+          const cleanQ = line.replace(/^(?:\(\d+\)|\[\d+\]|(?:Question|Q)\s*[\.\-]?\s*\d+|\d+)\s*[\.\:\)\-\]]*\s*/i, "").replace(/^[\.\:\)\-\]\s]+/, "");
           if (cleanQ) qLines.push(cleanQ);
         } else {
           aLines.push(line);
@@ -2490,46 +2508,90 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   let ansKeyIdx = -1;
   for (let i = 0; i < paragraphs.length; i++) {
     const pLower = paragraphs[i].toLowerCase();
-    if (pLower === "answer key" || pLower === "answers" || pLower.startsWith("answer key:") || pLower === "answer keys") {
+    if (pLower === "answer key" || pLower === "answers" || pLower.startsWith("answer key:") || pLower === "answer keys" || pLower.startsWith("answers:")) {
       ansKeyIdx = i;
       break;
     }
   }
 
   const qParagraphs = ansKeyIdx !== -1 ? paragraphs.slice(0, ansKeyIdx) : paragraphs;
-  const ansParagraphs = ansKeyIdx !== -1 ? paragraphs.slice(ansKeyIdx) : [];
+  const ansParagraphs = ansKeyIdx !== -1 ? paragraphs.slice(ansKeyIdx + 1) : [];
 
   // Parse Answer Key
-  const answersMap = {}; // questionIndex (1-based) -> 'a' | 'b' | 'c' | 'd' | 'e'
+  const answersMap = {}; // 0-based question index -> { answer: 'a'|'b'|'c'|'d'|'e', explanation: string }
+  let currentOffset = 0;
+  let lastSeenQNum = 0;
+  let currentQIdx = -1;
 
-  if (ansParagraphs.length > 0) {
-    let i = 0;
-    while (i < ansParagraphs.length) {
-      const p = ansParagraphs[i].trim();
-      const rangeMatch = p.match(/^(\d+)\s+to\s+(\d+)$/i);
-      if (rangeMatch) {
-        const startQ = parseInt(rangeMatch[1], 10);
-        const endQ = parseInt(rangeMatch[2], 10);
-        i++;
-        let currQNum = startQ;
-        while (i < ansParagraphs.length && currQNum <= endQ) {
-          const val = ansParagraphs[i].trim().toLowerCase();
-          if (/^[a-e]$/.test(val)) {
-            answersMap[currQNum] = val;
-            currQNum++;
-            i++;
-          } else {
-            break;
-          }
+  for (let i = 0; i < ansParagraphs.length; i++) {
+    const p = ansParagraphs[i];
+
+    // Check for section/set header: e.g. "Practice Set B" or "Section B"
+    if (/^(?:Practice\s*Set(?:\s*[A-Z0-9]+)?|Section\s*[A-Z0-9]+|Set\s*[A-Z0-9]+)\b/i.test(p)) {
+      if (lastSeenQNum > 0) {
+        currentOffset += lastSeenQNum;
+        lastSeenQNum = 0;
+      }
+      continue;
+    }
+
+    // Check for range match: e.g. "1 to 10"
+    const rangeMatch = p.match(/^(\d+)\s+to\s+(\d+)$/i);
+    if (rangeMatch) {
+      const startQ = parseInt(rangeMatch[1], 10);
+      const endQ = parseInt(rangeMatch[2], 10);
+      i++;
+      let currQNum = startQ;
+      while (i < ansParagraphs.length && currQNum <= endQ) {
+        const val = ansParagraphs[i].trim().toLowerCase();
+        if (/^[a-e]$/.test(val)) {
+          answersMap[currQNum - 1] = { answer: val, explanation: "" };
+          currQNum++;
+          i++;
+        } else {
+          break;
         }
-      } else {
-        const singleMatches = [...p.matchAll(/(?:(?:^|\s+)(?:Q\.?\s*)?(\d+)[\.:\-\)\s]+(?:\(?([a-eA-E])\)?))/g)];
-        if (singleMatches.length > 0) {
-          for (const sm of singleMatches) {
-            answersMap[parseInt(sm[1], 10)] = sm[2].toLowerCase();
-          }
-        }
-        i++;
+      }
+      i--;
+      continue;
+    }
+
+    // Check for question answer line: e.g. "Q.1) [c] Impulsive" or "1. (b) Some text" or "Q1. a"
+    const qAnsMatch = p.match(/^(?:(?:Q(?:uestion)?\s*[\.\-]?\s*)?(\d+)[\.:\-\)\s]+)\s*(?:[\(\[]?([a-eA-E])[\)\]]?)(?:\s+(.*))?$/i);
+    if (qAnsMatch) {
+      const qNum = parseInt(qAnsMatch[1], 10);
+      const ans = qAnsMatch[2].toLowerCase();
+      const inlineRest = (qAnsMatch[3] || "").trim();
+
+      // If qNum restarted from 1 and we previously had higher qNums, advance offset
+      if (lastSeenQNum > 0 && qNum <= lastSeenQNum && qNum === 1) {
+        currentOffset += lastSeenQNum;
+      }
+      lastSeenQNum = qNum;
+
+      currentQIdx = (qNum - 1) + currentOffset;
+      answersMap[currentQIdx] = {
+        answer: ans,
+        explanation: inlineRest ? [inlineRest] : []
+      };
+      continue;
+    }
+
+    // Check for multiple answers in one line: "1. a  2. b  3. c"
+    const multiMatches = [...p.matchAll(/(?:(?:^|\s+)(?:Q\.?\s*)?(\d+)[\.:\-\)\s]+(?:[\(\[]?([a-eA-E])[\)\]]?))/g)];
+    if (multiMatches.length > 1) {
+      for (const sm of multiMatches) {
+        const qNum = parseInt(sm[1], 10);
+        answersMap[(qNum - 1) + currentOffset] = { answer: sm[2].toLowerCase(), explanation: [] };
+        lastSeenQNum = qNum;
+      }
+      continue;
+    }
+
+    // Accumulate explanation lines for the current answer block
+    if (currentQIdx !== -1 && answersMap[currentQIdx] && Array.isArray(answersMap[currentQIdx].explanation)) {
+      if (!/^(?:word\s+meaning\s+opposite|word|meaning|opposite)$/i.test(p)) {
+        answersMap[currentQIdx].explanation.push(p);
       }
     }
   }
@@ -2539,6 +2601,24 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   let currQ = [];
   let currOpts = [];
   const optRegex = /(?:\[([a-eA-E])\]|\(([a-eA-E])\)|(?:\b|^)([a-eA-E])[\.\)])/g;
+
+  function finalizeCurrentQuestion() {
+    if (currQ.length > 0 || currOpts.length > 0) {
+      const cleanText = cleanMCQPrompt(currQ);
+      questions.push({
+        id: makeId("mcq"),
+        subject: defaultSubject,
+        text: cleanText || "Imported Question",
+        options: [...currOpts],
+        correctAnswer: "",
+        explanation: "",
+        marks: 1.0,
+        negativeMarks: 0.25
+      });
+      currQ = [];
+      currOpts = [];
+    }
+  }
 
   for (let idxP = 0; idxP < qParagraphs.length; idxP++) {
     const p = qParagraphs[idxP];
@@ -2563,15 +2643,27 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       continue;
     }
 
+    // Detect if this line starts a new question
+    const isNewQ = /^(?:Q(?:uestion)?\s*[\.\-]?\s*\d+|\d+[\.\)])(?:\s*[\.\:\)\-]*\s*|\s+)/i.test(p);
+    if (isNewQ && currOpts.length > 0) {
+      finalizeCurrentQuestion();
+    }
+
+    // Find options
     const matches = [];
     let m;
     const re = new RegExp(optRegex);
     while ((m = re.exec(p)) !== null) {
+      // Guard against Column A, Column B, Section B, Part B, Table B, etc.
+      const prefix = p.slice(Math.max(0, m.index - 10), m.index).toLowerCase();
+      if (/(?:column|section|part|table|schedule|figure|group|row)\s+$/i.test(prefix)) {
+        continue;
+      }
       const label = (m[1] || m[2] || m[3]).toLowerCase();
       matches.push({ label, start: m.index, end: m.index + m[0].length });
     }
 
-    if (matches.length > 0) {
+    if (matches.length > 0 && (currOpts.length > 0 || matches[0].label === "a")) {
       const beforeFirst = p.slice(0, matches[0].start).trim();
       if (beforeFirst) {
         currQ.push(beforeFirst);
@@ -2583,64 +2675,30 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
         const optVal = p.slice(curM.end, nextM ? nextM.start : p.length).trim();
 
         if (currOpts.some(o => o.label === curM.label)) {
-          if (currQ.length > 0 || currOpts.length > 0) {
-            const cleanText = cleanMCQPrompt(currQ);
-            questions.push({
-              id: makeId("mcq"),
-              subject: defaultSubject,
-              text: cleanText || "Imported Question",
-              options: currOpts,
-              correctAnswer: "",
-              explanation: "",
-              marks: 1.0,
-              negativeMarks: 0.25
-            });
-            currQ = [];
-            currOpts = [];
-          }
+          finalizeCurrentQuestion();
         }
 
         currOpts.push({ label: curM.label, text: optVal });
       }
     } else {
       if (currOpts.length >= 4) {
-        const cleanText = cleanMCQPrompt(currQ);
-        questions.push({
-          id: makeId("mcq"),
-          subject: defaultSubject,
-          text: cleanText || "Imported Question",
-          options: currOpts,
-          correctAnswer: "",
-          explanation: "",
-          marks: 1.0,
-          negativeMarks: 0.25
-        });
-        currQ = [];
-        currOpts = [];
+        finalizeCurrentQuestion();
       }
       currQ.push(p);
     }
   }
 
-  if (currQ.length > 0 || currOpts.length > 0) {
-    const cleanText = cleanMCQPrompt(currQ);
-    questions.push({
-      id: makeId("mcq"),
-      subject: defaultSubject,
-      text: cleanText || "Imported Question",
-      options: currOpts,
-      correctAnswer: "",
-      explanation: "",
-      marks: 1.0,
-      negativeMarks: 0.25
-    });
-  }
+  finalizeCurrentQuestion();
 
-  // Assign answers from answersMap to questions
+  // Assign answers and explanations from answersMap to questions
   for (let qIdx = 0; qIdx < questions.length; qIdx++) {
-    const qNum = qIdx + 1;
-    if (answersMap[qNum]) {
-      questions[qIdx].correctAnswer = answersMap[qNum];
+    if (answersMap[qIdx]) {
+      questions[qIdx].correctAnswer = answersMap[qIdx].answer;
+      if (Array.isArray(answersMap[qIdx].explanation)) {
+        questions[qIdx].explanation = answersMap[qIdx].explanation.join("\n").trim();
+      } else if (typeof answersMap[qIdx].explanation === "string") {
+        questions[qIdx].explanation = answersMap[qIdx].explanation;
+      }
     }
   }
 
