@@ -1554,56 +1554,73 @@ async function extractDocxText(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
   const view = new DataView(arrayBuffer);
 
-  let offset = 0;
   let targetEntry = null;
 
-  while (offset + 30 < bytes.length) {
+  // 1. Scan Central Directory first (authoritative in ZIP specification, guarantees valid compSize even when data descriptors are used)
+  let offset = 0;
+  while (offset + 46 < bytes.length) {
     const sig = view.getUint32(offset, true);
-    if (sig === 0x04034b50) {
-      const compMethod = view.getUint16(offset + 8, true);
-      const compSize = view.getUint32(offset + 18, true);
-      const nameLen = view.getUint16(offset + 26, true);
-      const extraLen = view.getUint16(offset + 28, true);
-      const filename = new TextDecoder().decode(bytes.slice(offset + 30, offset + 30 + nameLen));
-      const dataStart = offset + 30 + nameLen + extraLen;
+    if (sig === 0x02014b50) {
+      const compMethod = view.getUint16(offset + 10, true);
+      const compSize = view.getUint32(offset + 20, true);
+      const nameLen = view.getUint16(offset + 28, true);
+      const extraLen = view.getUint16(offset + 30, true);
+      const commentLen = view.getUint16(offset + 32, true);
+      const localHeaderOffset = view.getUint32(offset + 42, true);
+      const filename = new TextDecoder().decode(bytes.slice(offset + 46, offset + 46 + nameLen));
 
       if (filename === "word/document.xml") {
-        targetEntry = { compMethod, compSize, dataStart };
-        break;
-      }
-      offset = dataStart + compSize;
-    } else {
-      offset++;
-    }
-  }
-
-  if (!targetEntry) {
-    offset = 0;
-    while (offset + 46 < bytes.length) {
-      const sig = view.getUint32(offset, true);
-      if (sig === 0x02014b50) {
-        const compMethod = view.getUint16(offset + 10, true);
-        const compSize = view.getUint32(offset + 20, true);
-        const nameLen = view.getUint16(offset + 28, true);
-        const extraLen = view.getUint16(offset + 30, true);
-        const commentLen = view.getUint16(offset + 32, true);
-        const localHeaderOffset = view.getUint32(offset + 42, true);
-        const filename = new TextDecoder().decode(bytes.slice(offset + 46, offset + 46 + nameLen));
-        if (filename === "word/document.xml") {
+        if (localHeaderOffset + 30 <= bytes.length) {
           const lhNameLen = view.getUint16(localHeaderOffset + 26, true);
           const lhExtraLen = view.getUint16(localHeaderOffset + 28, true);
           const dataStart = localHeaderOffset + 30 + lhNameLen + lhExtraLen;
           targetEntry = { compMethod, compSize, dataStart };
           break;
         }
-        offset += 46 + nameLen + extraLen + commentLen;
+      }
+      offset += 46 + nameLen + extraLen + commentLen;
+    } else {
+      offset++;
+    }
+  }
+
+  // 2. Fallback to Local File Header (if central directory is missing or compSize is 0)
+  if (!targetEntry || targetEntry.compSize === 0) {
+    offset = 0;
+    while (offset + 30 < bytes.length) {
+      const sig = view.getUint32(offset, true);
+      if (sig === 0x04034b50) {
+        const compMethod = view.getUint16(offset + 8, true);
+        const compSize = view.getUint32(offset + 18, true);
+        const nameLen = view.getUint16(offset + 26, true);
+        const extraLen = view.getUint16(offset + 28, true);
+        const filename = new TextDecoder().decode(bytes.slice(offset + 30, offset + 30 + nameLen));
+        const dataStart = offset + 30 + nameLen + extraLen;
+
+        if (filename === "word/document.xml") {
+          let effectiveCompSize = compSize;
+          if (effectiveCompSize === 0) {
+            let scan = dataStart;
+            while (scan + 4 <= bytes.length) {
+              const s = view.getUint32(scan, true);
+              if (s === 0x04034b50 || s === 0x08074b50 || s === 0x02014b50) {
+                break;
+              }
+              scan++;
+            }
+            effectiveCompSize = scan - dataStart;
+          }
+          targetEntry = { compMethod, compSize: effectiveCompSize, dataStart };
+          break;
+        }
+        offset = dataStart + (compSize > 0 ? compSize : 1);
       } else {
         offset++;
       }
     }
   }
 
-  if (!targetEntry) {
+  if (!targetEntry || targetEntry.compSize === 0) {
     throw new Error("Could not find document content (word/document.xml) inside the DOCX file.");
   }
 
@@ -1613,25 +1630,32 @@ async function extractDocxText(arrayBuffer) {
   if (targetEntry.compMethod === 0) {
     xmlString = new TextDecoder("utf-8").decode(compressedData);
   } else if (targetEntry.compMethod === 8) {
-    const ds = new DecompressionStream("deflate-raw");
-    const writer = ds.writable.getWriter();
-    writer.write(compressedData);
-    writer.close();
-    const reader = ds.readable.getReader();
-    const chunks = [];
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      chunks.push(value);
+    try {
+      const ds = new DecompressionStream("deflate-raw");
+      const resp = new Response(new Response(compressedData).body.pipeThrough(ds));
+      const blob = await resp.blob();
+      xmlString = await blob.text();
+    } catch (e1) {
+      const ds = new DecompressionStream("deflate-raw");
+      const writer = ds.writable.getWriter();
+      await writer.write(compressedData);
+      await writer.close();
+      const reader = ds.readable.getReader();
+      const chunks = [];
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const total = chunks.reduce((acc, c) => acc + c.length, 0);
+      const full = new Uint8Array(total);
+      let pos = 0;
+      for (const c of chunks) {
+        full.set(c, pos);
+        pos += c.length;
+      }
+      xmlString = new TextDecoder("utf-8").decode(full);
     }
-    const total = chunks.reduce((acc, c) => acc + c.length, 0);
-    const full = new Uint8Array(total);
-    let pos = 0;
-    for (const c of chunks) {
-      full.set(c, pos);
-      pos += c.length;
-    }
-    xmlString = new TextDecoder("utf-8").decode(full);
   } else {
     throw new Error("Unsupported ZIP compression method: " + targetEntry.compMethod);
   }
