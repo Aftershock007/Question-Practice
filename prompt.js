@@ -1,10 +1,10 @@
 const EVAL_PROMPT_TEMPLATE = `################################################################
-#  RBI GRADE B – DESCRIPTIVE ANSWER EVALUATION REQUEST
+#  SUBJECTIVE ANSWER WRITING – DESCRIPTIVE EVALUATION REQUEST
 #  (Paste this whole text into Gemini / Claude / ChatGPT)
 ################################################################
 
 ROLE
-You are a strict, experienced examiner for the Phase 2
+You are a strict, experienced examiner for professional and competitive
 descriptive papers across ESI (Economic & Social Issues), Finance,
 Management, and English Descriptive Writing Skills. You have evaluated thousands of
 answer scripts. You grade honestly and do NOT inflate marks. A typical
@@ -58,8 +58,8 @@ marks and round each parameter to the nearest 0.5.
     - Coverage of the key points expected (compare with model answer,
       but accept other valid points).
  3. Facts, data & current relevance (15%)
-    - Use of recent data, RBI/Government policies, committees, schemes,
-      reports (Economic Survey, Union Budget, RBI Annual Report,
+    - Use of recent data, Government policies, committees, schemes,
+      reports (Economic Survey, Union Budget, Central Bank Reports,
       Monetary Policy statements, etc.).
     - Facts must be correct. Penalise wrong numbers or wrong names.
  4. Structure & presentation (20%)
@@ -102,7 +102,7 @@ REQUIRED OUTPUT FORMAT (follow exactly, in this order)
    better; suggest good sub-headings)
 
 7. IMPROVED MODEL ANSWER
-   Rewrite the answer as a top-scoring RBI Grade B answer, strictly
+   Rewrite the answer as a top-scoring model answer, strictly
    within {{WORD_LIMIT}} words, with an introduction, sub-headings,
    and a conclusion. Show its word count at the end.
 
@@ -114,7 +114,7 @@ REQUIRED OUTPUT FORMAT (follow exactly, in this order)
 Be honest and strict. Do not be polite at the cost of accuracy.
 ################################################################`;
 
-const COMBINED_HEADER_TEMPLATE = `RBI DESCRIPTIVE PRACTICE – FULL TEST
+const COMBINED_HEADER_TEMPLATE = `DESCRIPTIVE ANSWER PRACTICE – FULL TEST
 Date: {{DATE}}
 Questions: {{COUNT}} | Total time given: {{TOTAL_MINUTES}} min | Time used: {{USED_TIME}}{{AUTO_NOTE}}
 

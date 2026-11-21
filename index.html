@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RBI Descriptive Practice</title>
+  <title>Subjective Typing &amp; Answer Practice</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header id="app-header">
-    <h1>RBI Descriptive Practice</h1>
+    <h1>Subjective Typing &amp; Answer Practice</h1>
     <nav>
       <button type="button" id="nav-setup">New Test</button>
       <button type="button" id="nav-bank">Question Bank</button>
@@ -61,7 +61,16 @@
         <input type="hidden" id="q-edit-id" value="">
       </form>
 
-      <h3>Questions in this test (<span id="setup-count">0</span>)</h3>
+      <div class="setup-list-header">
+        <h3>Questions in this test (<span id="setup-count">0</span>)</h3>
+        <div id="setup-batch-actions">
+          <label class="select-all-label">
+            <input type="checkbox" id="setup-select-all"> Select All
+          </label>
+          <button type="button" id="btn-delete-selected" class="danger batch-btn" style="display: none;">Delete Selected (<span id="selected-count">0</span>)</button>
+          <button type="button" id="btn-delete-all-setup" class="danger batch-btn">Delete All</button>
+        </div>
+      </div>
       <ol id="setup-question-list"></ol>
 
       <div id="setup-time-box">
@@ -111,7 +120,7 @@
 
       <div id="result-howto" class="info">
         <b>How to get your score:</b> click <b>Copy</b> (or Download) for a question,
-        open Gemini or Claude, paste everything, and send. The AI will grade it like an RBI examiner.
+        open Gemini or Claude, paste everything, and send. The AI will grade it with comprehensive feedback.
       </div>
 
       <button type="button" id="btn-download-all">Download All (one .txt file)</button>
@@ -149,6 +158,7 @@
       <button type="button" id="btn-bank-export">Export bank (.json)</button>
       <label class="file-btn">Import bank (.json) <input id="bank-import" type="file" accept=".json" hidden></label>
       <label class="file-btn" style="background: #4f46e5;">Import DOCX / PDF <input id="bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
+      <button type="button" id="btn-bank-clear-all" class="danger">Delete all questions in bank</button>
     </section>
   </main>
 

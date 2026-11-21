@@ -150,6 +150,48 @@ button.secondary:hover {
 }
 
 /* Setup Screen */
+.setup-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+  margin-bottom: 10px;
+}
+
+.setup-list-header h3 {
+  margin: 0;
+}
+
+#setup-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.select-all-label {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+  user-select: none;
+}
+
+.batch-btn {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.q-select-check {
+  margin-right: 12px;
+  cursor: pointer;
+  transform: scale(1.15);
+}
+
 #setup-question-list {
   padding-left: 20px;
   margin-bottom: 20px;

@@ -151,6 +151,70 @@ function resetQuestionForm() {
   $("setup-error").textContent = "";
 }
 
+// Update the visibility and count of the batch delete button based on checkbox selection
+function updateSetupBatchDeleteState() {
+  const checkboxes = document.querySelectorAll("#setup-question-list .q-select-check");
+  const checked = document.querySelectorAll("#setup-question-list .q-select-check:checked");
+  const count = checked.length;
+  const countElem = $("selected-count");
+  if (countElem) countElem.textContent = count;
+
+  const btnDeleteSelected = $("btn-delete-selected");
+  if (btnDeleteSelected) {
+    btnDeleteSelected.style.display = count > 0 ? "inline-block" : "none";
+  }
+
+  const selectAll = $("setup-select-all");
+  if (selectAll) {
+    selectAll.checked = checkboxes.length > 0 && count === checkboxes.length;
+    selectAll.indeterminate = count > 0 && count < checkboxes.length;
+  }
+}
+
+// Toggle selection of all question checkboxes in the setup screen
+function handleSelectAllSetup(event) {
+  const checked = event.target.checked;
+  const checkboxes = document.querySelectorAll("#setup-question-list .q-select-check");
+  checkboxes.forEach(cb => { cb.checked = checked; });
+  updateSetupBatchDeleteState();
+}
+
+// Delete all questions currently checked in the setup list
+function handleDeleteSelectedSetup() {
+  const checked = document.querySelectorAll("#setup-question-list .q-select-check:checked");
+  const idsToDelete = new Set(Array.from(checked).map(cb => cb.dataset.id));
+  if (idsToDelete.size === 0) return;
+
+  if (confirm(`Remove ${idsToDelete.size} selected question(s) from this test?`)) {
+    state.setup.questions = state.setup.questions.filter(q => !idsToDelete.has(q.id));
+    saveSetup();
+    renderSetupList();
+  }
+}
+
+// Remove all questions from the current test setup after confirmation
+function handleDeleteAllSetup() {
+  if (!state.setup.questions || state.setup.questions.length === 0) return;
+  if (confirm(`Remove all ${state.setup.questions.length} question(s) from this test?`)) {
+    state.setup.questions = [];
+    saveSetup();
+    renderSetupList();
+  }
+}
+
+// Delete all questions stored in Question Bank after confirmation
+function handleClearAllBank() {
+  const bank = loadJSON("rbi_question_bank", []);
+  if (bank.length === 0) {
+    alert("Question bank is already empty.");
+    return;
+  }
+  if (confirm(`Permanently delete all ${bank.length} question(s) from Question Bank? This cannot be undone.`)) {
+    saveJSON("rbi_question_bank", []);
+    renderBank();
+  }
+}
+
 // Render the list of configured questions in the setup screen
 function renderSetupList() {
   const list = $("setup-question-list");
@@ -159,6 +223,11 @@ function renderSetupList() {
   const questions = state.setup.questions || [];
   let totalWordLimit = 0;
 
+  const batchActions = $("setup-batch-actions");
+  if (batchActions) {
+    batchActions.style.display = questions.length > 0 ? "flex" : "none";
+  }
+
   questions.forEach((q, index) => {
     totalWordLimit += Number(q.wordLimit) || 0;
     const li = document.createElement("li");
@@ -166,17 +235,21 @@ function renderSetupList() {
     const modelWarn = (!q.modelAnswer || !q.modelAnswer.trim())
       ? '<span class="no-model-warn">(no model answer)</span>'
       : "";
+    const topicText = q.topic ? ` · <em>${escapeHTML(q.topic)}</em>` : "";
 
     li.innerHTML = `
-      <div class="q-info">
-        <strong>[${escapeHTML(q.paper)}]</strong> (${escapeHTML(q.marks)} marks, ${escapeHTML(q.wordLimit)} words)
-        ${modelWarn}
-        <div>${escapeHTML(snippet)}</div>
-      </div>
-      <div class="q-actions">
-        <button type="button" class="btn-move-up" data-action="move-up" data-id="${escapeHTML(q.id)}" ${index === 0 ? "disabled" : ""}>▲</button>
-        <button type="button" class="btn-edit" data-action="edit" data-id="${escapeHTML(q.id)}">Edit</button>
-        <button type="button" class="btn-delete danger" data-action="delete" data-id="${escapeHTML(q.id)}">Delete</button>
+      <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%;">
+        <input type="checkbox" class="q-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select question ${index + 1}">
+        <div class="q-info" style="flex: 1;">
+          <strong>[${escapeHTML(q.paper)}]</strong> (${escapeHTML(q.marks)} marks, ${escapeHTML(q.wordLimit)} words)${topicText}
+          ${modelWarn}
+          <div>${escapeHTML(snippet)}</div>
+        </div>
+        <div class="q-actions">
+          <button type="button" class="btn-move-up" data-action="move-up" data-id="${escapeHTML(q.id)}" ${index === 0 ? "disabled" : ""}>▲</button>
+          <button type="button" class="btn-edit" data-action="edit" data-id="${escapeHTML(q.id)}">Edit</button>
+          <button type="button" class="btn-delete danger" data-action="delete" data-id="${escapeHTML(q.id)}">Delete</button>
+        </div>
       </div>
     `;
     list.appendChild(li);
@@ -195,6 +268,8 @@ function renderSetupList() {
   if (minutesInput) {
     minutesInput.value = state.setup.totalMinutes || 30;
   }
+
+  updateSetupBatchDeleteState();
 }
 
 // Populate the setup form with an existing question for editing
@@ -1412,127 +1487,172 @@ function parseQuestionsAndAnswers(rawText) {
   if (!rawText || !rawText.trim()) return [];
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const rawLines = text.split("\n");
+  const rawLines = text.split("\n").map(l => l.trim());
 
-  const qStartRegex = /^(?:Question\s*[\d\.\-\)]*|Q\s*[\d\.\-\)]*|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*(.*)/i;
-  const aStartRegex = /^(?:(?:Model\s+)?Answer|Ans|Solution|Reference\s+Answer)\s*[:\.\-]?\s*(.*)/i;
+  // Check document-level metadata from the first few lines
+  let docDefaultPaper = "Other";
+  let docDefaultTopic = "";
+  const headerPreview = rawLines.slice(0, 15).join(" ");
+  if (/\bESI\b/i.test(headerPreview)) docDefaultPaper = "ESI";
+  else if (/\bFinance\b/i.test(headerPreview)) docDefaultPaper = "Finance";
+  else if (/\bManagement\b/i.test(headerPreview)) docDefaultPaper = "Management";
+  else if (/\bEnglish(?:\s+Descriptive)?\b/i.test(headerPreview)) docDefaultPaper = "English Descriptive";
 
-  const blocks = [];
-  let currentBlock = null;
+  if (rawLines[0] && !/^(?:Question|Q\d|\d+[\.\)])/i.test(rawLines[0])) {
+    const titleMatch = rawLines[0].match(/^([^:\(\)\|]+)/);
+    if (titleMatch) docDefaultTopic = titleMatch[1].trim();
+  }
+
+  const qNumRegex = /^(?:Question\s*(\d+)|Q\s*(\d+)[\.:\)]?)/i;
+  const rawQuestionStarts = [];
 
   for (let i = 0; i < rawLines.length; i++) {
-    const line = rawLines[i].trim();
-    if (!line) {
-      if (currentBlock) currentBlock.lines.push("");
+    const line = rawLines[i];
+    if (!line) continue;
+
+    const m = line.match(qNumRegex);
+    if (m) {
+      const qNum = parseInt(m[1] || m[2], 10);
+      rawQuestionStarts.push({ lineIndex: i, qNum, line });
+    } else if (/^(?:Question|Q)\s*[:\.\-]/i.test(line)) {
+      rawQuestionStarts.push({ lineIndex: i, qNum: null, line });
+    }
+  }
+
+  // Deduplicate consecutive starts with the same question number (e.g. "Q1." followed by "QUESTION 1")
+  const questionStarts = [];
+  for (const qs of rawQuestionStarts) {
+    const last = questionStarts[questionStarts.length - 1];
+    if (last && qs.qNum !== null && last.qNum === qs.qNum) {
       continue;
     }
+    questionStarts.push(qs);
+  }
 
-    const qMatch = line.match(qStartRegex);
-    const isExplicitQ = /^(?:Question|Q|Q\.)\s*[\d\.\-\)]*/i.test(line);
-    const isNumberedQ = /^\d+[\.\)]\s+/.test(line);
-
-    if (isExplicitQ || (isNumberedQ && (!currentBlock || currentBlock.hasAnswer))) {
-      if (currentBlock) blocks.push(currentBlock);
-      currentBlock = {
-        headerText: qMatch ? qMatch[1].trim() : line,
-        lines: [],
-        hasAnswer: false
-      };
-    } else {
-      if (!currentBlock) {
-        currentBlock = {
-          headerText: line,
-          lines: [],
-          hasAnswer: false
-        };
-      } else {
-        if (aStartRegex.test(line)) {
-          currentBlock.hasAnswer = true;
-        }
-        currentBlock.lines.push(line);
+  // Fallback to numbered list e.g. "1. ..." if no Q1/Question headers found
+  if (questionStarts.length === 0) {
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      if (/^\d+[\.\)]\s+/.test(line)) {
+        questionStarts.push({ lineIndex: i, qNum: parseInt(line, 10), line });
       }
     }
   }
 
-  if (currentBlock) blocks.push(currentBlock);
+  // Fallback for single question with explicit Answer: marker
+  if (questionStarts.length === 0) {
+    questionStarts.push({ lineIndex: 0, qNum: 1, line: rawLines[0] });
+  }
 
   const results = [];
 
-  for (const block of blocks) {
-    let paper = "Other";
-    let topic = "";
+  for (let k = 0; k < questionStarts.length; k++) {
+    const startIdx = questionStarts[k].lineIndex;
+    const endIdx = (k + 1 < questionStarts.length) ? questionStarts[k + 1].lineIndex : rawLines.length;
+    const blockLines = rawLines.slice(startIdx, endIdx).filter(l => l.length > 0);
+
+    if (blockLines.length === 0) continue;
+
+    let paper = docDefaultPaper;
+    let topic = docDefaultTopic;
     let marks = 10;
     let wordLimit = 400;
-    const questionLines = [];
-    const answerLines = [];
+
+    const qLines = [];
+    const aLines = [];
     let inAnswer = false;
 
-    if (block.headerText) {
-      questionLines.push(block.headerText);
-    }
+    // Check if there is an explicit Answer: / Ans: marker in this question block
+    const hasExplicitAnswer = blockLines.some(l => /^(?:(?:Model\s+)?Answer|Ans|Solution|Reference\s+Answer)\s*[:\.\-]/i.test(l));
 
-    for (const line of block.lines) {
-      if (!line) {
-        if (inAnswer && answerLines.length > 0) answerLines.push("");
-        else if (!inAnswer && questionLines.length > 0) questionLines.push("");
+    for (let i = 0; i < blockLines.length; i++) {
+      const line = blockLines[i];
+
+      // Check for inline metadata e.g. "QUESTION 1     15 MARKS     600 WORDS"
+      if (/QUESTION\s*\d+/i.test(line) && /MARKS/i.test(line)) {
+        const mMarks = line.match(/(\d+)\s*MARKS/i);
+        if (mMarks) marks = Number(mMarks[1]);
+        const mWords = line.match(/(\d+)\s*WORDS/i);
+        if (mWords) wordLimit = Number(mWords[1]);
+        else wordLimit = (marks === 15) ? 600 : 400;
         continue;
       }
 
-      const aMatch = line.match(aStartRegex);
-      if (aMatch) {
+      // Check for topic header e.g. "Q1. GDP and Welfare"
+      const topicHeaderMatch = line.match(/^Q\d+[\.\)]\s*(.+)/i);
+      if (topicHeaderMatch && qLines.length === 0 && !inAnswer) {
+        topic = topicHeaderMatch[1].trim();
+        continue;
+      }
+
+      // Check standard metadata lines: "Marks: 10", "Paper: Finance", "Topic: ...", "Word limit: 400"
+      const marksMatch = line.match(/^(?:Marks?|Maximum\s+marks?)\s*[:\.\-]?\s*(\d+)/i);
+      if (marksMatch && !inAnswer) {
+        marks = Number(marksMatch[1]);
+        wordLimit = (marks === 15) ? 600 : 400;
+        continue;
+      }
+
+      const wlMatch = line.match(/^(?:Word\s*limit|Words?)\s*[:\.\-]?\s*(\d+)/i);
+      if (wlMatch && !inAnswer) {
+        wordLimit = Number(wlMatch[1]);
+        continue;
+      }
+
+      const paperMatch = line.match(/^(?:Paper|Subject)\s*[:\.\-]?\s*(.+)/i);
+      if (paperMatch && !inAnswer) {
+        const val = paperMatch[1].trim();
+        if (/esi/i.test(val)) paper = "ESI";
+        else if (/finance/i.test(val)) paper = "Finance";
+        else if (/management/i.test(val)) paper = "Management";
+        else if (/english/i.test(val)) paper = "English Descriptive";
+        else paper = val || docDefaultPaper;
+        continue;
+      }
+
+      const topicMatch = line.match(/^Topic\s*[:\.\-]?\s*(.+)/i);
+      if (topicMatch && !inAnswer) {
+        topic = topicMatch[1].trim();
+        continue;
+      }
+
+      // Check for explicit Answer start
+      const ansMatch = line.match(/^(?:(?:Model\s+)?Answer|Ans|Solution|Reference\s+Answer)\s*[:\.\-]?\s*(.*)/i);
+      if (ansMatch) {
         inAnswer = true;
-        if (aMatch[1].trim()) answerLines.push(aMatch[1].trim());
+        if (ansMatch[1].trim()) aLines.push(ansMatch[1].trim());
         continue;
       }
 
-      if (!inAnswer) {
-        const marksMatch = line.match(/^(?:Marks?|Maximum\s+marks?)\s*[:\.\-]?\s*(\d+)/i);
-        if (marksMatch) {
-          marks = Number(marksMatch[1]);
-          wordLimit = (marks === 15) ? 600 : 400;
-          continue;
+      if (hasExplicitAnswer) {
+        if (!inAnswer) {
+          const cleanQ = line.replace(/^(?:Question\s*\d+|Q\s*\d+|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*/i, "");
+          if (cleanQ) qLines.push(cleanQ);
+        } else {
+          aLines.push(line);
         }
-
-        const wlMatch = line.match(/^(?:Word\s*limit|Words?)\s*[:\.\-]?\s*(\d+)/i);
-        if (wlMatch) {
-          wordLimit = Number(wlMatch[1]);
-          continue;
-        }
-
-        const paperMatch = line.match(/^(?:Paper|Subject)\s*[:\.\-]?\s*(.+)/i);
-        if (paperMatch) {
-          const val = paperMatch[1].trim();
-          if (/esi/i.test(val)) paper = "ESI";
-          else if (/finance/i.test(val)) paper = "Finance";
-          else if (/management/i.test(val)) paper = "Management";
-          else if (/english/i.test(val)) paper = "English Descriptive";
-          else paper = val || "Other";
-          continue;
-        }
-
-        const topicMatch = line.match(/^Topic\s*[:\.\-]?\s*(.+)/i);
-        if (topicMatch) {
-          topic = topicMatch[1].trim();
-          continue;
-        }
-
-        questionLines.push(line);
       } else {
-        answerLines.push(line);
+        // No explicit Answer marker in document: first non-metadata paragraph is Question prompt, rest is Model Answer
+        if (qLines.length === 0) {
+          const cleanQ = line.replace(/^(?:Question\s*\d+|Q\s*\d+|Q\.\s*\d+|\d+\s*[\.\)])\s*[:\.\-]?\s*/i, "");
+          if (cleanQ) qLines.push(cleanQ);
+        } else {
+          aLines.push(line);
+        }
       }
     }
 
-    const qText = questionLines.join("\n").trim();
-    const aText = answerLines.join("\n").trim();
+    const questionText = qLines.join("\n").trim();
+    const modelAnswer = aLines.join("\n\n").trim();
 
-    if (qText || aText) {
+    if (questionText || modelAnswer) {
       results.push({
         paper,
         topic,
-        text: qText || "Imported Question",
+        text: questionText || "Imported Question",
         marks: marks || 10,
         wordLimit: wordLimit || ((marks === 15) ? 600 : 400),
-        modelAnswer: aText
+        modelAnswer
       });
     }
   }
@@ -1675,8 +1795,29 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDocImport.addEventListener("change", (e) => handleDocImport(e, "setup"));
   }
 
+  const setupSelectAll = $("setup-select-all");
+  if (setupSelectAll) {
+    setupSelectAll.addEventListener("change", handleSelectAllSetup);
+  }
+
+  const btnDeleteSelected = $("btn-delete-selected");
+  if (btnDeleteSelected) {
+    btnDeleteSelected.addEventListener("click", handleDeleteSelectedSetup);
+  }
+
+  const btnDeleteAllSetup = $("btn-delete-all-setup");
+  if (btnDeleteAllSetup) {
+    btnDeleteAllSetup.addEventListener("click", handleDeleteAllSetup);
+  }
+
   const setupQList = $("setup-question-list");
   if (setupQList) {
+    setupQList.addEventListener("change", (e) => {
+      if (e.target && e.target.classList.contains("q-select-check")) {
+        updateSetupBatchDeleteState();
+      }
+    });
+
     setupQList.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-action]");
       if (!btn) return;
@@ -1962,6 +2103,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const bankDocImport = $("bank-doc-import");
   if (bankDocImport) {
     bankDocImport.addEventListener("change", (e) => handleDocImport(e, "bank"));
+  }
+
+  const btnBankClearAll = $("btn-bank-clear-all");
+  if (btnBankClearAll) {
+    btnBankClearAll.addEventListener("click", handleClearAllBank);
   }
 
   // Initial load
