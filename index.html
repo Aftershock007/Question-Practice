@@ -25,97 +25,126 @@
   <main>
     <!-- Screen: Phase-1 Setup (Objective / MCQs) -->
     <section id="screen-setup-p1" class="screen">
-      <div class="p1-hero-banner">
-        <h2>Phase-1: Objective MCQ Practice</h2>
-        <p>Prepare for General Awareness (Spotlight), Quant, Reasoning &amp; English with real TCS iON simulation.</p>
+      <div class="setup-header">
+        <div class="setup-title-group">
+          <h2>Phase-1: Objective MCQ Practice</h2>
+          <p class="setup-subtitle">Simulate authentic TCS iON examination console with automated instant scoring.</p>
+        </div>
       </div>
 
-      <div class="doc-import-bar" style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-        <label class="file-btn" style="background: #4f46e5;">
-          📄 Import MCQs from DOCX / PDF
-          <input id="setup-p1-doc-import" type="file" accept=".docx,.pdf" hidden>
-        </label>
-        <button type="button" id="btn-load-spotlight-sample" class="file-btn" style="background: #0284c7;">
-          ⚡ Load Included Spotlight (200 MCQs)
-        </button>
-        <a href="Spotlight-Questions-1-6-Nov-2026.docx" download class="file-btn" style="background: #047857; text-decoration: none; display: inline-flex; align-items: center;">
-          ⬇️ Download Spotlight.docx
-        </a>
-        <span id="setup-p1-doc-status" style="font-size: 14px; color: var(--muted);"></span>
+      <!-- Minimal Document Import / Upload Card -->
+      <div class="minimal-upload-card">
+        <div class="upload-drop-zone">
+          <div class="upload-icon-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="12" y2="12"></line>
+              <line x1="15" y1="15" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <div class="upload-text-group">
+            <strong>Upload questions from DOCX or PDF</strong>
+            <span>Extracts questions, 5 options (A–E), explanations, and answer keys automatically</span>
+          </div>
+          <label class="btn-minimal-primary">
+            Browse Document
+            <input id="setup-p1-doc-import" type="file" accept=".docx,.pdf" hidden>
+          </label>
+        </div>
+
+        <div class="sample-pills-row">
+          <span class="sample-label">Or try sample paper:</span>
+          <div class="sample-actions">
+            <button type="button" id="btn-load-spotlight-sample" class="sample-pill">⚡ Spotlight (200 MCQs)</button>
+            <a href="Spotlight-Questions-1-6-Nov-2026.docx" download class="sample-link">⬇️ Spotlight.docx</a>
+          </div>
+        </div>
+        <span id="setup-p1-doc-status" class="upload-status-badge"></span>
       </div>
 
-      <form id="p1-question-form" class="p1-form-card">
-        <h3>Add an MCQ Manually</h3>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <label>Subject / Section
-            <select id="p1-q-subject">
-              <option value="General Awareness">General Awareness (Spotlight)</option>
-              <option value="Reasoning Ability">Reasoning Ability</option>
-              <option value="Quantitative Aptitude">Quantitative Aptitude</option>
-              <option value="English Language">English Language</option>
-              <option value="Other">Other</option>
-            </select>
+      <!-- Collapsible Manual Question Form -->
+      <details id="p1-manual-accordion" class="minimal-accordion">
+        <summary class="accordion-summary">
+          <span class="accordion-title">✏️ Add an MCQ manually</span>
+          <span class="accordion-hint">Click to expand</span>
+        </summary>
+        <form id="p1-question-form" class="minimal-form-card">
+          <div class="form-row-2col">
+            <label>Subject / Section
+              <select id="p1-q-subject">
+                <option value="General Awareness">General Awareness (Spotlight)</option>
+                <option value="Reasoning Ability">Reasoning Ability</option>
+                <option value="Quantitative Aptitude">Quantitative Aptitude</option>
+                <option value="English Language">English Language</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+            <label>Topic / Sub-section (optional)
+              <input id="p1-q-topic" type="text" placeholder="e.g. Banking &amp; Financial Awareness">
+            </label>
+          </div>
+
+          <label>Question Prompt
+            <textarea id="p1-q-text" rows="3" required placeholder="Type the question statement..."></textarea>
           </label>
-          <label>Topic / Sub-section (optional)
-            <input id="p1-q-topic" type="text" placeholder="e.g. Banking &amp; Financial Awareness">
-          </label>
-        </div>
 
-        <label>Question Prompt
-          <textarea id="p1-q-text" rows="3" required placeholder="Type the question statement..."></textarea>
-        </label>
+          <div class="p1-options-grid">
+            <label>Option [A] <input id="p1-q-opt-a" type="text" required placeholder="Option A text"></label>
+            <label>Option [B] <input id="p1-q-opt-b" type="text" required placeholder="Option B text"></label>
+            <label>Option [C] <input id="p1-q-opt-c" type="text" required placeholder="Option C text"></label>
+            <label>Option [D] <input id="p1-q-opt-d" type="text" required placeholder="Option D text"></label>
+            <label>Option [E] <input id="p1-q-opt-e" type="text" required placeholder="Option E text"></label>
+          </div>
 
-        <div class="p1-options-grid">
-          <label>Option [A] <input id="p1-q-opt-a" type="text" required placeholder="Option A text"></label>
-          <label>Option [B] <input id="p1-q-opt-b" type="text" required placeholder="Option B text"></label>
-          <label>Option [C] <input id="p1-q-opt-c" type="text" required placeholder="Option C text"></label>
-          <label>Option [D] <input id="p1-q-opt-d" type="text" required placeholder="Option D text"></label>
-          <label>Option [E] <input id="p1-q-opt-e" type="text" required placeholder="Option E text"></label>
-        </div>
+          <div class="form-row-2col" style="align-items: start;">
+            <label>Correct Answer
+              <select id="p1-q-correct" required>
+                <option value="a">[A]</option>
+                <option value="b">[B]</option>
+                <option value="c">[C]</option>
+                <option value="d">[D]</option>
+                <option value="e">[E]</option>
+              </select>
+            </label>
+            <label>Explanation / Source (optional)
+              <input id="p1-q-explanation" type="text" placeholder="e.g. As announced by MoES...">
+            </label>
+          </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; align-items: start;">
-          <label>Correct Answer
-            <select id="p1-q-correct" required>
-              <option value="a">[A]</option>
-              <option value="b">[B]</option>
-              <option value="c">[C]</option>
-              <option value="d">[D]</option>
-              <option value="e">[E]</option>
-            </select>
-          </label>
-          <label>Explanation / Source (optional)
-            <input id="p1-q-explanation" type="text" placeholder="e.g. As announced by MoES...">
-          </label>
-        </div>
+          <label class="checkbox-label"><input id="p1-q-save-bank" type="checkbox" checked> Also save to Objective Question Bank</label>
 
-        <label style="margin-top: 8px;"><input id="p1-q-save-bank" type="checkbox" checked> Also save to Objective Question Bank</label>
-
-        <button type="submit" id="btn-add-p1-question">Add MCQ to Test</button>
-      </form>
+          <button type="submit" id="btn-add-p1-question" class="btn-minimal-secondary">Add MCQ to Test</button>
+        </form>
+      </details>
 
       <div class="setup-list-header">
-        <h3>Questions in this test (<span id="setup-p1-count">0</span>)</h3>
-        <div id="setup-p1-batch-actions">
+        <div class="setup-list-title">
+          <h3>Questions in this test</h3>
+          <span class="count-badge" id="setup-p1-count">0</span>
+        </div>
+        <div id="setup-p1-batch-actions" class="batch-actions-group">
           <label class="select-all-label">
             <input type="checkbox" id="setup-p1-select-all"> Select All
           </label>
           <button type="button" id="btn-p1-delete-selected" class="danger batch-btn" style="display: none;">Delete Selected (<span id="p1-selected-count">0</span>)</button>
-          <button type="button" id="btn-p1-delete-all-setup" class="danger batch-btn">Delete All</button>
+          <button type="button" id="btn-p1-delete-all-setup" class="ghost-danger batch-btn">Delete All</button>
         </div>
       </div>
       <ol id="setup-p1-question-list" class="p1-question-list"></ol>
       <div id="setup-p1-pagination" class="pagination-wrapper" style="display: none;"></div>
 
-      <div id="setup-p1-time-box" class="config-box">
+      <div id="setup-p1-time-box" class="config-box minimal-config">
         <h4>Test Settings &amp; Marking Scheme</h4>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 8px;">
+        <div class="config-grid-3col">
           <label>Total Time (minutes) <input id="setup-p1-minutes" type="number" min="1" value="120"></label>
           <label>Marks for Correct <input id="setup-p1-positive" type="number" step="0.25" min="0" value="1.00"></label>
           <label>Negative Marking <input id="setup-p1-negative" type="number" step="0.05" min="0" value="0.25"></label>
         </div>
       </div>
 
-      <button type="button" id="btn-start-p1-test" class="rbi-btn primary" style="font-size: 16px; padding: 12px 24px; width: 100%; margin-top: 14px;">Start Phase-1 Objective Test</button>
+      <button type="button" id="btn-start-p1-test" class="btn-start-primary">Start Phase-1 Objective Test</button>
       <p id="setup-p1-error" class="error"></p>
     </section>
 
@@ -324,7 +353,7 @@
       <div id="p1-bank-pagination" class="pagination-wrapper" style="display: none;"></div>
       <button type="button" id="btn-p1-bank-export">Export MCQs (.json)</button>
       <label class="file-btn">Import MCQs (.json) <input id="p1-bank-import" type="file" accept=".json" hidden></label>
-      <label class="file-btn" style="background: #4f46e5;">Import DOCX / PDF <input id="p1-bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
+      <label class="file-btn secondary-file-btn">Import DOCX / PDF <input id="p1-bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
       <button type="button" id="btn-p1-bank-clear-all" class="danger">Delete all MCQs in bank</button>
     </section>
 
@@ -338,83 +367,127 @@
 
     <!-- Screen: Phase-2 Setup (Descriptive) -->
     <section id="screen-setup" class="screen" hidden>
-      <h2>Set up today's test</h2>
-
-      <div class="doc-import-bar" style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-        <label class="file-btn" style="background: #4f46e5;">
-          📄 Import Questions from DOCX / PDF
-          <input id="setup-doc-import" type="file" accept=".docx,.pdf" hidden>
-        </label>
-        <button type="button" id="btn-load-ch1-sample" class="file-btn" style="background: #0284c7;">
-          ⚡ Load ESI Ch-1 (DOCX)
-        </button>
-        <button type="button" id="btn-load-demo-sample" class="file-btn" style="background: #059669;">
-          ⚡ Load Demo Questions (DOCX)
-        </button>
-        <a href="CH-1-National_Income-Answer-Writing.docx" download class="file-btn" style="background: #047857; text-decoration: none; display: inline-flex; align-items: center;">
-          ⬇️ Ch-1.docx
-        </a>
-        <a href="demo_questions.docx" download class="file-btn" style="background: #0891b2; text-decoration: none; display: inline-flex; align-items: center;">
-          ⬇️ Demo.docx
-        </a>
-        <a href="demo_questions.pdf" download class="file-btn" style="background: #be123c; text-decoration: none; display: inline-flex; align-items: center;">
-          ⬇️ Demo.pdf
-        </a>
-        <span id="setup-doc-status" style="font-size: 14px; color: var(--muted);"></span>
+      <div class="setup-header">
+        <div class="setup-title-group">
+          <h2>Phase-2: Descriptive Practice</h2>
+          <p class="setup-subtitle">Prepare for ESI, Finance, and Management with timed answer writing and word count limits.</p>
+        </div>
       </div>
 
-      <form id="question-form">
-        <label>Subject / Paper
-          <select id="q-paper">
-            <option value="ESI">ESI (Economic & Social Issues)</option>
-            <option value="Finance">Finance</option>
-            <option value="Management">Management</option>
-            <option value="English Descriptive">English Descriptive</option>
-            <option value="Other">Other</option>
-          </select>
-        </label>
+      <!-- Minimal Document Import / Upload Card -->
+      <div class="minimal-upload-card">
+        <div class="upload-drop-zone">
+          <div class="upload-icon-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="12" y2="12"></line>
+              <line x1="15" y1="15" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <div class="upload-text-group">
+            <strong>Upload descriptive questions from DOCX or PDF</strong>
+            <span>Extracts questions, marks, word limits, and model answers automatically</span>
+          </div>
+          <label class="btn-minimal-primary">
+            Browse Document
+            <input id="setup-doc-import" type="file" accept=".docx,.pdf" hidden>
+          </label>
+        </div>
 
-        <label>Topic (optional) <input id="q-topic" type="text"></label>
+        <div class="sample-pills-row">
+          <span class="sample-label">Or try sample paper:</span>
+          <div class="sample-actions">
+            <button type="button" id="btn-load-ch1-sample" class="sample-pill">⚡ ESI Ch-1</button>
+            <button type="button" id="btn-load-demo-sample" class="sample-pill">⚡ Demo Set</button>
+            <a href="CH-1-National_Income-Answer-Writing.docx" download class="sample-link">⬇️ Ch-1.docx</a>
+            <a href="demo_questions.docx" download class="sample-link">⬇️ Demo.docx</a>
+            <a href="demo_questions.pdf" download class="sample-link">⬇️ Demo.pdf</a>
+          </div>
+        </div>
+        <span id="setup-doc-status" class="upload-status-badge"></span>
+      </div>
 
-        <label>Question <textarea id="q-text" rows="4" required></textarea></label>
+      <!-- Collapsible Manual Question Form -->
+      <details id="p2-manual-accordion" class="minimal-accordion">
+        <summary class="accordion-summary">
+          <span class="accordion-title">✏️ Add a descriptive question manually</span>
+          <span class="accordion-hint">Click to expand</span>
+        </summary>
+        <form id="question-form" class="minimal-form-card">
+          <div class="form-row-2col">
+            <label>Subject / Paper
+              <select id="q-paper">
+                <option value="ESI">ESI (Economic &amp; Social Issues)</option>
+                <option value="Finance">Finance</option>
+                <option value="Management">Management</option>
+                <option value="English Descriptive">English Descriptive</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+            <label>Topic (optional)
+              <input id="q-topic" type="text" placeholder="e.g. Monetary Policy">
+            </label>
+          </div>
 
-        <label>Marks
-          <select id="q-marks">
-            <option value="10">10 marks</option>
-            <option value="15">15 marks</option>
-          </select>
-        </label>
+          <label>Question
+            <textarea id="q-text" rows="4" required placeholder="Type descriptive question statement..."></textarea>
+          </label>
 
-        <label>Word limit <input id="q-wordlimit" type="number" min="50" value="400"></label>
+          <div class="form-row-2col">
+            <label>Marks
+              <select id="q-marks">
+                <option value="10">10 marks</option>
+                <option value="15">15 marks</option>
+              </select>
+            </label>
+            <label>Word limit
+              <input id="q-wordlimit" type="number" min="50" value="400">
+            </label>
+          </div>
 
-        <label>Model answer (reference) <textarea id="q-model" rows="8"></textarea></label>
+          <label>Model answer (reference)
+            <textarea id="q-model" rows="6" placeholder="Reference answer or key evaluation points..."></textarea>
+          </label>
 
-        <label><input id="q-save-bank" type="checkbox" checked> Also save to Question Bank</label>
+          <label class="checkbox-label"><input id="q-save-bank" type="checkbox" checked> Also save to Question Bank</label>
 
-        <button type="submit" id="btn-add-question">Add question</button>
-        <input type="hidden" id="q-edit-id" value="">
-      </form>
+          <button type="submit" id="btn-add-question" class="btn-minimal-secondary">Add question</button>
+          <input type="hidden" id="q-edit-id" value="">
+        </form>
+      </details>
 
       <div class="setup-list-header">
-        <h3>Questions in this test (<span id="setup-count">0</span>)</h3>
-        <div id="setup-batch-actions">
+        <div class="setup-list-title">
+          <h3>Questions in this test</h3>
+          <span class="count-badge" id="setup-count">0</span>
+        </div>
+        <div id="setup-batch-actions" class="batch-actions-group">
           <label class="select-all-label">
             <input type="checkbox" id="setup-select-all"> Select All
           </label>
           <button type="button" id="btn-delete-selected" class="danger batch-btn" style="display: none;">Delete Selected (<span id="selected-count">0</span>)</button>
-          <button type="button" id="btn-delete-all-setup" class="danger batch-btn">Delete All</button>
+          <button type="button" id="btn-delete-all-setup" class="ghost-danger batch-btn">Delete All</button>
         </div>
       </div>
       <ol id="setup-question-list"></ol>
       <div id="setup-pagination" class="pagination-wrapper" style="display: none;"></div>
 
-      <div id="setup-time-box">
-        <label>Total time (minutes) <input id="setup-minutes" type="number" min="1" value="30"></label>
-        <p id="setup-suggested-time"></p>
-        <label><input id="setup-block-paste" type="checkbox" checked> Block copy-paste in answer box (like real exam)</label>
+      <div id="setup-time-box" class="config-box minimal-config">
+        <h4>Test Settings &amp; Constraints</h4>
+        <div class="config-grid-2col">
+          <div>
+            <label>Total time (minutes) <input id="setup-minutes" type="number" min="1" value="30"></label>
+            <p id="setup-suggested-time"></p>
+          </div>
+          <div style="display: flex; align-items: center; padding-top: 10px;">
+            <label class="checkbox-label"><input id="setup-block-paste" type="checkbox" checked> Block copy-paste in answer box (like real exam)</label>
+          </div>
+        </div>
       </div>
 
-      <button type="button" id="btn-start-test">Start Test</button>
+      <button type="button" id="btn-start-test" class="btn-start-primary">Start Descriptive Test</button>
       <p id="setup-error" class="error"></p>
     </section>
 
@@ -622,7 +695,7 @@
       <div id="bank-pagination" class="pagination-wrapper" style="display: none;"></div>
       <button type="button" id="btn-bank-export">Export bank (.json)</button>
       <label class="file-btn">Import bank (.json) <input id="bank-import" type="file" accept=".json" hidden></label>
-      <label class="file-btn" style="background: #4f46e5;">Import DOCX / PDF <input id="bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
+      <label class="file-btn secondary-file-btn">Import DOCX / PDF <input id="bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
       <button type="button" id="btn-bank-clear-all" class="danger">Delete all questions in bank</button>
     </section>
   </main>

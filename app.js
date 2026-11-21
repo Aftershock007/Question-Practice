@@ -359,6 +359,7 @@ function renderSetupList() {
   }
 
   if (questions.length === 0) {
+    list.innerHTML = `<li class="empty-list-placeholder">No questions added yet. Upload a document or select a sample paper above to begin.</li>`;
     renderPaginationControls({
       containerId: "setup-pagination",
       currentPage: 1,
@@ -425,6 +426,8 @@ function renderSetupList() {
 function editSetupQuestion(id) {
   const q = state.setup.questions.find(item => item.id === id);
   if (!q) return;
+  const acc = $("p2-manual-accordion");
+  if (acc) acc.open = true;
   $("q-paper").value = q.paper || "ESI";
   $("q-topic").value = q.topic || "";
   $("q-text").value = q.text || "";
@@ -1550,6 +1553,9 @@ function editBankQuestion(id) {
   const q = bank.find(item => item.id === id);
   if (!q) return;
 
+  const acc = $("p2-manual-accordion");
+  if (acc) acc.open = true;
+
   $("q-paper").value = q.paper || "ESI";
   $("q-topic").value = q.topic || "";
   $("q-text").value = q.text || "";
@@ -2573,7 +2579,7 @@ function renderP1SetupList() {
   if (countElem) countElem.textContent = questions.length;
 
   if (questions.length === 0) {
-    list.innerHTML = `<li style="display:block; text-align:center; color:var(--muted); padding:20px;">No MCQs added yet. Import Spotlight DOCX/PDF or use the form above.</li>`;
+    list.innerHTML = `<li class="empty-list-placeholder">No MCQs added yet. Upload a document or select a sample paper above to begin.</li>`;
     renderPaginationControls({
       containerId: "setup-p1-pagination",
       currentPage: 1,
@@ -3635,6 +3641,24 @@ document.addEventListener("DOMContentLoaded", () => {
     setupDocImport.addEventListener("change", (e) => handleDocImport(e, "setup"));
   }
 
+  const p2UploadCard = document.querySelector("#screen-setup .minimal-upload-card");
+  if (p2UploadCard) {
+    p2UploadCard.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      p2UploadCard.classList.add("drag-over");
+    });
+    p2UploadCard.addEventListener("dragleave", () => {
+      p2UploadCard.classList.remove("drag-over");
+    });
+    p2UploadCard.addEventListener("drop", (e) => {
+      e.preventDefault();
+      p2UploadCard.classList.remove("drag-over");
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleDocImport({ target: { files: e.dataTransfer.files } }, "setup");
+      }
+    });
+  }
+
   const btnLoadCH1 = $("btn-load-ch1-sample");
   if (btnLoadCH1) {
     btnLoadCH1.addEventListener("click", loadCH1Sample);
@@ -4082,6 +4106,24 @@ document.addEventListener("DOMContentLoaded", () => {
   const p1DocImport = $("setup-p1-doc-import");
   if (p1DocImport) {
     p1DocImport.addEventListener("change", (e) => handleP1DocImport(e, "setup"));
+  }
+
+  const p1UploadCard = document.querySelector("#screen-setup-p1 .minimal-upload-card");
+  if (p1UploadCard) {
+    p1UploadCard.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      p1UploadCard.classList.add("drag-over");
+    });
+    p1UploadCard.addEventListener("dragleave", () => {
+      p1UploadCard.classList.remove("drag-over");
+    });
+    p1UploadCard.addEventListener("drop", (e) => {
+      e.preventDefault();
+      p1UploadCard.classList.remove("drag-over");
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleP1DocImport({ target: { files: e.dataTransfer.files } }, "setup");
+      }
+    });
   }
 
   const p1SelectAll = $("setup-p1-select-all");
