@@ -427,7 +427,7 @@ function renderSetupList() {
   }
 
   if (questions.length === 0) {
-    list.innerHTML = `<li class="empty-list-placeholder">No questions added yet. Upload a document or select a sample paper above to begin.</li>`;
+    list.innerHTML = `<li class="empty-list-placeholder">No questions added yet. Upload a document (DOCX/PDF) or add questions manually to begin.</li>`;
     renderPaginationControls({
       containerId: "setup-pagination",
       currentPage: 1,
@@ -2361,84 +2361,6 @@ async function handleDocImport(event, targetScreen) {
   }
 }
 
-// One-click loader for the included ESI Chapter-1 DOCX file (Phase 2)
-async function loadCH1Sample() {
-  const statusElem = $("setup-doc-status");
-  if (statusElem) statusElem.textContent = "Loading CH-1-National_Income-Answer-Writing.docx...";
-  try {
-    const resp = await fetch("CH-1-National_Income-Answer-Writing.docx");
-    if (!resp.ok) throw new Error("Could not fetch file: " + resp.statusText);
-    const arrayBuffer = await resp.arrayBuffer();
-    const rawText = await extractDocxText(arrayBuffer);
-    const parsed = parseQuestionsAndAnswers(rawText);
-    if (!parsed || parsed.length === 0) throw new Error("No questions detected.");
-
-    parsed.forEach(q => {
-      q.id = makeId("q");
-      state.setup.questions.push(q);
-    });
-    saveSetup();
-    renderSetupList();
-
-    const bank = loadJSON("rbi_question_bank", []);
-    let added = 0;
-    parsed.forEach(q => {
-      if (!bank.some(b => b.text === q.text)) {
-        bank.push({ ...q, id: makeId("bank") });
-        added++;
-      }
-    });
-    saveJSON("rbi_question_bank", bank);
-
-    if (statusElem) {
-      statusElem.textContent = `✅ Loaded ${parsed.length} questions from National Income Ch-1 (+${added} in Bank)!`;
-    }
-  } catch (err) {
-    if (statusElem) statusElem.textContent = `File load note: ${err.message}.`;
-    const fileInput = $("setup-doc-import");
-    if (fileInput) fileInput.click();
-  }
-}
-
-// One-click loader for demo_questions.docx (Phase 2)
-async function loadDemoSample() {
-  const statusElem = $("setup-doc-status");
-  if (statusElem) statusElem.textContent = "Loading demo_questions.docx...";
-  try {
-    const resp = await fetch("demo_questions.docx");
-    if (!resp.ok) throw new Error("Could not fetch file: " + resp.statusText);
-    const arrayBuffer = await resp.arrayBuffer();
-    const rawText = await extractDocxText(arrayBuffer);
-    const parsed = parseQuestionsAndAnswers(rawText);
-    if (!parsed || parsed.length === 0) throw new Error("No questions detected.");
-
-    parsed.forEach(q => {
-      q.id = makeId("q");
-      state.setup.questions.push(q);
-    });
-    saveSetup();
-    renderSetupList();
-
-    const bank = loadJSON("rbi_question_bank", []);
-    let added = 0;
-    parsed.forEach(q => {
-      if (!bank.some(b => b.text === q.text)) {
-        bank.push({ ...q, id: makeId("bank") });
-        added++;
-      }
-    });
-    saveJSON("rbi_question_bank", bank);
-
-    if (statusElem) {
-      statusElem.textContent = `✅ Loaded ${parsed.length} demo questions (+${added} in Bank)!`;
-    }
-  } catch (err) {
-    if (statusElem) statusElem.textContent = `File load note: ${err.message}.`;
-    const fileInput = $("setup-doc-import");
-    if (fileInput) fileInput.click();
-  }
-}
-
 // ==========================================
 // PHASE 1: OBJECTIVE / MCQ TEST FUNCTIONS
 // ==========================================
@@ -2608,49 +2530,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   return questions;
 }
 
-// One-click loader for the included Spotlight DOCX file
-async function loadSpotlightSample() {
-  const statusElem = $("setup-p1-doc-status");
-  if (statusElem) statusElem.textContent = "Loading Spotlight-Questions-1-6-Nov-2026.docx...";
-  try {
-    const resp = await fetch("Spotlight-Questions-1-6-Nov-2026.docx");
-    if (!resp.ok) {
-      throw new Error("Could not fetch file: " + resp.statusText);
-    }
-    const arrayBuffer = await resp.arrayBuffer();
-    const rawText = await extractDocxText(arrayBuffer);
-    const parsed = parseMCQDocument(rawText, "General Awareness");
-    if (!parsed || parsed.length === 0) {
-      throw new Error("No MCQs parsed from document.");
-    }
-
-    state.p1_setup.questions = parsed;
-    saveP1Setup();
-    renderP1SetupList();
-
-    const bank = loadJSON("rbi_p1_bank", []);
-    let bankAdded = 0;
-    parsed.forEach(q => {
-      if (!bank.some(b => b.text === q.text)) {
-        bank.push({ ...q });
-        bankAdded++;
-      }
-    });
-    saveJSON("rbi_p1_bank", bank);
-
-    const withAns = parsed.filter(q => q.correctAnswer).length;
-    if (statusElem) {
-      statusElem.textContent = `✅ Successfully loaded all ${parsed.length} MCQs (${withAns} with Answer Key)! Bank updated (+${bankAdded}).`;
-    }
-  } catch (err) {
-    if (statusElem) {
-      statusElem.textContent = `File load note: ${err.message}. (You can also click 'Import DOCX / PDF' to select the file directly).`;
-    }
-    const fileInput = $("setup-p1-doc-import");
-    if (fileInput) fileInput.click();
-  }
-}
-
 // Handle importing DOCX / PDF files for Phase 1
 async function handleP1DocImport(event, targetScreen = "setup") {
   const file = event.target.files && event.target.files[0];
@@ -2740,7 +2619,7 @@ function renderP1SetupList() {
   if (countElem) countElem.textContent = questions.length;
 
   if (questions.length === 0) {
-    list.innerHTML = `<li class="empty-list-placeholder">No MCQs added yet. Upload a document or select a sample paper above to begin.</li>`;
+    list.innerHTML = `<li class="empty-list-placeholder">No MCQs added yet. Upload a document (DOCX/PDF) or add MCQs manually to begin.</li>`;
     renderPaginationControls({
       containerId: "setup-p1-pagination",
       currentPage: 1,
@@ -4397,7 +4276,7 @@ function generateDefaultSchedule(startDateStr = null, daysFinished = 0) {
   // Fallback 30-Day Plan if schedule data not loaded
   const plan = [];
   const today = new Date();
-  const sampleTopics = [
+  const defaultTopics = [
     { phase: "Phase-1", subject: "General Awareness", topic: "Spotlight Nov 1-6 Current Affairs (Part 1 - 50 MCQs)", type: "MCQ Practice", time: "10:00 AM" },
     { phase: "Phase-2", subject: "ESI", topic: "Chapter 1: National Income - Concepts & Measurement", type: "Descriptive Writing", time: "11:00 AM" },
     { phase: "Phase-1", subject: "Reasoning Ability", topic: "Puzzles & Seating Arrangement (Circular & Floor)", type: "MCQ Practice", time: "02:00 PM" },
@@ -4409,7 +4288,7 @@ function generateDefaultSchedule(startDateStr = null, daysFinished = 0) {
 
   for (let i = 0; i < 30; i++) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
-    const item = sampleTopics[i % sampleTopics.length];
+    const item = defaultTopics[i % defaultTopics.length];
     const dayNum = i + 1;
     const isCompleted = (numFinished > 0 && dayNum <= numFinished);
     plan.push({
@@ -5762,30 +5641,6 @@ function loadOfficialSchedule(phaseType = null) {
   }
 }
 
-// Load built-in sample schedule
-function loadSampleSchedule(phaseType = null) {
-  const pType = phaseType || (state.phase === "phase1" ? "phase1" : "phase2");
-  const prefix = pType === "phase1" ? "p1" : "p2";
-
-  if (state.calendar && state.calendar.length > 0) {
-    if (!confirm("Load the sample study plan? This will update your calendar schedule.")) return;
-  }
-  state.calendar = generateDefaultSchedule();
-  saveCalendarSchedule();
-
-  if (pType === "phase1") {
-    renderP1Calendar();
-  } else {
-    renderP2Calendar();
-  }
-
-  const statusElem = $(`${prefix}-calendar-import-status`);
-  if (statusElem) {
-    statusElem.textContent = "✓ Loaded RBI Grade B Preparation Schedule!";
-    setTimeout(() => { statusElem.textContent = ""; }, 4000);
-  }
-}
-
 // Download ready-to-use spreadsheet CSV template
 function downloadScheduleTemplate() {
   const csvContent =
@@ -6043,16 +5898,6 @@ document.addEventListener("DOMContentLoaded", () => {
         handleDocImport({ target: { files: e.dataTransfer.files } }, "setup");
       }
     });
-  }
-
-  const btnLoadCH1 = $("btn-load-ch1-sample");
-  if (btnLoadCH1) {
-    btnLoadCH1.addEventListener("click", loadCH1Sample);
-  }
-
-  const btnLoadDemo = $("btn-load-demo-sample");
-  if (btnLoadDemo) {
-    btnLoadDemo.addEventListener("click", loadDemoSample);
   }
 
   const setupSelectAll = $("setup-select-all");
@@ -6532,11 +6377,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const p1Form = $("p1-question-form");
   if (p1Form) {
     p1Form.addEventListener("submit", handleP1QuestionFormSubmit);
-  }
-
-  const btnLoadSpotlight = $("btn-load-spotlight-sample");
-  if (btnLoadSpotlight) {
-    btnLoadSpotlight.addEventListener("click", loadSpotlightSample);
   }
 
   const p1DocImport = $("setup-p1-doc-import");
