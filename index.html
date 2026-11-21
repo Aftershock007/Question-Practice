@@ -698,9 +698,16 @@
         </div>
       </div>
 
-      <!-- Schedule Import Card for Phase-1 -->
-      <div class="minimal-upload-card calendar-upload-card">
-        <div class="upload-drop-zone">
+      <!-- Schedule Import Card for Phase-1 (Collapsible for Clean Minimalism) -->
+      <details class="minimal-upload-card calendar-upload-card">
+        <summary class="accordion-summary" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 4px 2px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">📂</span>
+            <strong style="color: #003366; font-size: 13.5px;">Spreadsheet Timetable &amp; Schedule Config (.xlsx, .csv)</strong>
+          </div>
+          <span style="font-size: 12px; color: var(--muted);">Click to import / export timetable or load official 415-day plan ▼</span>
+        </summary>
+        <div class="upload-drop-zone" style="margin-top: 14px;">
           <div class="upload-icon-circle">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -742,88 +749,110 @@
           </div>
         </div>
         <span id="p1-calendar-import-status" class="upload-status-badge"></span>
-      </div>
+      </details>
 
       <!-- Phase-1 Schedule & Exam Stats Bar -->
       <div id="p1-calendar-progress-bar" class="schedule-summary-bar"></div>
 
-      <!-- Calendar Day Types Legend & Navigation Bar -->
-      <div class="calendar-legend-config-bar">
-        <div class="cal-legend-group">
-          <span class="legend-label">Day Types:</span>
-          <span class="legend-badge-item badge-normal"><span class="legend-chip normal"></span> Normal Day (274)</span>
-          <span class="legend-badge-item badge-chapter"><span class="legend-chip chapter"></span> 📝 Chapter Test (88)</span>
-          <span class="legend-badge-item badge-mix"><span class="legend-chip mix"></span> 🔥 Mix Test (30)</span>
-          <span class="legend-badge-item badge-buffer"><span class="legend-chip buffer"></span> ⏳ Buffer Day (23)</span>
-          <span class="legend-badge-item" style="background:#ecfdf5; border-color:#a7f3d0; color:#065f46;"><span class="legend-chip" style="background:#10b981;"></span> 🏆 Exam Score Logged</span>
-        </div>
-      </div>
-
-      <!-- Calendar Controls: Month Navigation & Filters -->
-      <div class="calendar-controls-bar">
-        <div class="cal-nav-group">
-          <button type="button" id="p1-cal-btn-prev-month" class="cal-nav-btn" title="Previous Month">◀</button>
-          <h3 id="p1-cal-month-year-display">November 2026</h3>
-          <button type="button" id="p1-cal-btn-next-month" class="cal-nav-btn" title="Next Month">▶</button>
-          <button type="button" id="p1-cal-btn-today" class="cal-today-btn">Today</button>
-        </div>
-
-        <div class="cal-filter-group">
-          <select id="p1-cal-filter-day-type" class="cal-select">
-            <option value="all">All Day Types</option>
-            <option value="normal-day">Normal Class (274)</option>
-            <option value="chapter-test">📝 Chapter Test (88)</option>
-            <option value="mix-test">🔥 Mix Test (30)</option>
-            <option value="buffer-day">⏳ Buffer Day (23)</option>
-          </select>
-          <select id="p1-cal-filter-status" class="cal-select">
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="completed">Completed</option>
-            <option value="exams">Exams Taken (Scores Logged)</option>
-          </select>
-          <div class="cal-view-toggle">
-            <button type="button" id="p1-cal-view-month" class="cal-view-btn active">Month View</button>
-            <button type="button" id="p1-cal-view-agenda" class="cal-view-btn">Agenda View</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Main Calendar Body -->
-      <div class="calendar-main-layout">
-        <!-- Left Column: Month Grid or Agenda List -->
-        <div class="calendar-grid-container">
-          <!-- Month View -->
-          <div id="p1-calendar-month-view" class="calendar-grid-wrapper">
-            <div class="calendar-weekdays-row">
-              <div class="cal-weekday">Sun</div>
-              <div class="cal-weekday">Mon</div>
-              <div class="cal-weekday">Tue</div>
-              <div class="cal-weekday">Wed</div>
-              <div class="cal-weekday">Thu</div>
-              <div class="cal-weekday">Fri</div>
-              <div class="cal-weekday">Sat</div>
+      <!-- Main LeetCode Style Layout: Quests Left, Minimal Calendar Right -->
+      <div class="calendar-main-layout leetcode-layout">
+        <!-- LEFT COLUMN: Daily Quests Workspace -->
+        <div class="calendar-quests-container">
+          <!-- Daily Quest Hero Card -->
+          <div class="daily-quest-hero-card">
+            <div class="quest-hero-header">
+              <div class="quest-date-info">
+                <span id="p1-quest-daynum-badge" class="quest-pill-daynum">Day 1</span>
+                <h3 id="p1-cal-selected-date-heading">Selected Day</h3>
+                <span id="p1-quest-daytype-badge" class="popover-type-badge normal-day">📘 Normal Class</span>
+              </div>
+              <div class="quest-progress-box">
+                <div class="quest-progress-header">
+                  <span>Daily Quests</span>
+                  <strong id="p1-quest-progress-text">0 / 0 Completed (0%)</strong>
+                </div>
+                <div class="quest-progress-bar-track">
+                  <div id="p1-quest-progress-bar-fill" class="quest-progress-bar-fill" style="width: 0%;"></div>
+                </div>
+              </div>
             </div>
-            <div id="p1-calendar-days-grid" class="calendar-days-grid"></div>
+
+            <!-- Chapter Banner for Today -->
+            <div id="p1-quest-chapter-banner" class="quest-chapter-banner"></div>
           </div>
 
-          <!-- Agenda View -->
-          <div id="p1-calendar-agenda-view" class="calendar-agenda-wrapper" style="display: none;">
-            <div id="p1-calendar-agenda-list" class="calendar-agenda-list"></div>
+          <!-- Quick Add Dynamic Quest / TODO Form -->
+          <div class="daily-add-quest-box">
+            <form id="p1-form-quick-add-quest" class="quick-add-quest-form">
+              <input type="text" id="p1-input-quick-quest-title" placeholder="⚡ Add new quest / TODO (e.g. Read Speed Math Notes, Solve 30 MCQs)..." required class="quick-quest-input">
+              <select id="p1-select-quick-quest-type" class="quick-quest-type-select">
+                <option value="Objective Exam">🎯 Objective Exam</option>
+                <option value="Current Affairs">📰 Current Affairs</option>
+                <option value="Study / Reading">📖 Study / Reading</option>
+                <option value="Revision">🔄 Revision</option>
+                <option value="General">📌 General TODO</option>
+              </select>
+              <button type="submit" class="btn-minimal-primary btn-add-quest">+ Add Quest</button>
+            </form>
           </div>
-        </div>
 
-        <!-- Right Column: Day Detail & Task/Exam Management Panel -->
-        <div class="calendar-day-panel">
-          <div class="day-panel-header">
-            <div>
-              <h4 id="p1-cal-selected-date-heading">Selected Day</h4>
+          <!-- Daily Quests List Section -->
+          <div class="daily-quests-section">
+            <div class="daily-quests-section-header">
+              <h4>Today's Quests &amp; Tasks</h4>
               <span id="p1-cal-selected-date-sub" class="selected-date-sub">0 tasks</span>
             </div>
-            <button type="button" id="p1-btn-open-add-task-modal" class="btn-minimal-primary add-task-btn">+ Add Task</button>
+            <div id="p1-cal-selected-day-tasks" class="day-tasks-list"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: LeetCode Style Minimal Calendar Widget -->
+        <div class="calendar-leetcode-sidebar">
+          <!-- LeetCode Streak Hero Card -->
+          <div class="leetcode-streak-card">
+            <div class="streak-flame-icon">🔥</div>
+            <div class="streak-info">
+              <div class="streak-title"><strong id="p1-streak-days-count">0</strong> Day Streak</div>
+              <div class="streak-sub">
+                <span>Best: <strong id="p1-streak-max-count">0</strong> d</span> ·
+                <span>Active: <strong id="p1-streak-total-active">0</strong> d</span>
+              </div>
+            </div>
+            <div id="p1-streak-status-pill" class="streak-status-pill">Active</div>
           </div>
 
-          <div id="p1-cal-selected-day-tasks" class="day-tasks-list"></div>
+          <!-- LeetCode Minimal Calendar Card -->
+          <div class="leetcode-calendar-card">
+            <div class="leetcode-cal-header">
+              <div id="p1-cal-month-year-display" class="leetcode-month-title">November 2026</div>
+              <div class="leetcode-cal-nav">
+                <button type="button" id="p1-cal-btn-prev-month" class="lc-nav-btn" title="Previous Month">‹</button>
+                <button type="button" id="p1-cal-btn-today" class="lc-today-btn" title="Go to Today">Today</button>
+                <button type="button" id="p1-cal-btn-next-month" class="lc-nav-btn" title="Next Month">›</button>
+              </div>
+            </div>
+
+            <!-- Minimal Day-of-week header: S M T W T F S -->
+            <div class="leetcode-weekdays-row">
+              <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+            </div>
+
+            <!-- LeetCode Days Grid with checkmarks -->
+            <div id="p1-calendar-days-grid" class="leetcode-days-grid"></div>
+
+            <!-- Minimal Footer Legend -->
+            <div class="leetcode-cal-footer">
+              <div class="lc-legend-items">
+                <span class="lc-legend-item"><span class="lc-legend-tick">✓</span> Finished</span>
+                <span class="lc-legend-item"><span class="lc-legend-dot ch-test"></span> Ch Test</span>
+                <span class="lc-legend-item"><span class="lc-legend-dot mix-test"></span> Mix Test</span>
+                <span class="lc-legend-item"><span class="lc-legend-dot buffer"></span> Buffer</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Monthly Completion Stats -->
+          <div id="p1-leetcode-monthly-stats" class="leetcode-monthly-stats-card"></div>
         </div>
       </div>
 
@@ -840,9 +869,16 @@
         </div>
       </div>
 
-      <!-- Schedule Import Card for Phase-2 -->
-      <div class="minimal-upload-card calendar-upload-card">
-        <div class="upload-drop-zone">
+      <!-- Schedule Import Card for Phase-2 (Collapsible for Clean Minimalism) -->
+      <details class="minimal-upload-card calendar-upload-card">
+        <summary class="accordion-summary" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 4px 2px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">📂</span>
+            <strong style="color: #003366; font-size: 13.5px;">Spreadsheet Timetable &amp; Schedule Config (.xlsx, .csv)</strong>
+          </div>
+          <span style="font-size: 12px; color: var(--muted);">Click to import / export timetable or load official 415-day plan ▼</span>
+        </summary>
+        <div class="upload-drop-zone" style="margin-top: 14px;">
           <div class="upload-icon-circle">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -884,88 +920,110 @@
           </div>
         </div>
         <span id="p2-calendar-import-status" class="upload-status-badge"></span>
-      </div>
+      </details>
 
       <!-- Phase-2 Schedule & Writing Stats Bar -->
       <div id="p2-calendar-progress-bar" class="schedule-summary-bar"></div>
 
-      <!-- Calendar Day Types Legend & Navigation Bar -->
-      <div class="calendar-legend-config-bar">
-        <div class="cal-legend-group">
-          <span class="legend-label">Day Types:</span>
-          <span class="legend-badge-item badge-normal"><span class="legend-chip normal"></span> Normal Day (274)</span>
-          <span class="legend-badge-item badge-chapter"><span class="legend-chip chapter"></span> 📝 Chapter Test (88)</span>
-          <span class="legend-badge-item badge-mix"><span class="legend-chip mix"></span> 🔥 Mix Test (30)</span>
-          <span class="legend-badge-item badge-buffer"><span class="legend-chip buffer"></span> ⏳ Buffer Day (23)</span>
-          <span class="legend-badge-item" style="background:#faf5ff; border-color:#e9d5ff; color:#6b21a8;"><span class="legend-chip" style="background:#9333ea;"></span> 🏆 Writing Marks Logged</span>
-        </div>
-      </div>
-
-      <!-- Calendar Controls: Month Navigation & Filters -->
-      <div class="calendar-controls-bar">
-        <div class="cal-nav-group">
-          <button type="button" id="p2-cal-btn-prev-month" class="cal-nav-btn" title="Previous Month">◀</button>
-          <h3 id="p2-cal-month-year-display">November 2026</h3>
-          <button type="button" id="p2-cal-btn-next-month" class="cal-nav-btn" title="Next Month">▶</button>
-          <button type="button" id="p2-cal-btn-today" class="cal-today-btn">Today</button>
-        </div>
-
-        <div class="cal-filter-group">
-          <select id="p2-cal-filter-day-type" class="cal-select">
-            <option value="all">All Day Types</option>
-            <option value="normal-day">Normal Class (274)</option>
-            <option value="chapter-test">📝 Chapter Test (88)</option>
-            <option value="mix-test">🔥 Mix Test (30)</option>
-            <option value="buffer-day">⏳ Buffer Day (23)</option>
-          </select>
-          <select id="p2-cal-filter-status" class="cal-select">
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="completed">Completed</option>
-            <option value="written">Written Tests (Marks Logged)</option>
-          </select>
-          <div class="cal-view-toggle">
-            <button type="button" id="p2-cal-view-month" class="cal-view-btn active">Month View</button>
-            <button type="button" id="p2-cal-view-agenda" class="cal-view-btn">Agenda View</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Main Calendar Body -->
-      <div class="calendar-main-layout">
-        <!-- Left Column: Month Grid or Agenda List -->
-        <div class="calendar-grid-container">
-          <!-- Month View -->
-          <div id="p2-calendar-month-view" class="calendar-grid-wrapper">
-            <div class="calendar-weekdays-row">
-              <div class="cal-weekday">Sun</div>
-              <div class="cal-weekday">Mon</div>
-              <div class="cal-weekday">Tue</div>
-              <div class="cal-weekday">Wed</div>
-              <div class="cal-weekday">Thu</div>
-              <div class="cal-weekday">Fri</div>
-              <div class="cal-weekday">Sat</div>
+      <!-- Main LeetCode Style Layout: Quests Left, Minimal Calendar Right -->
+      <div class="calendar-main-layout leetcode-layout">
+        <!-- LEFT COLUMN: Daily Quests Workspace -->
+        <div class="calendar-quests-container">
+          <!-- Daily Quest Hero Card -->
+          <div class="daily-quest-hero-card">
+            <div class="quest-hero-header">
+              <div class="quest-date-info">
+                <span id="p2-quest-daynum-badge" class="quest-pill-daynum">Day 1</span>
+                <h3 id="p2-cal-selected-date-heading">Selected Day</h3>
+                <span id="p2-quest-daytype-badge" class="popover-type-badge normal-day">📘 Normal Class</span>
+              </div>
+              <div class="quest-progress-box">
+                <div class="quest-progress-header">
+                  <span>Daily Quests</span>
+                  <strong id="p2-quest-progress-text">0 / 0 Completed (0%)</strong>
+                </div>
+                <div class="quest-progress-bar-track">
+                  <div id="p2-quest-progress-bar-fill" class="quest-progress-bar-fill" style="width: 0%;"></div>
+                </div>
+              </div>
             </div>
-            <div id="p2-calendar-days-grid" class="calendar-days-grid"></div>
+
+            <!-- Chapter Banner for Today -->
+            <div id="p2-quest-chapter-banner" class="quest-chapter-banner"></div>
           </div>
 
-          <!-- Agenda View -->
-          <div id="p2-calendar-agenda-view" class="calendar-agenda-wrapper" style="display: none;">
-            <div id="p2-calendar-agenda-list" class="calendar-agenda-list"></div>
+          <!-- Quick Add Dynamic Quest / TODO Form -->
+          <div class="daily-add-quest-box">
+            <form id="p2-form-quick-add-quest" class="quick-add-quest-form">
+              <input type="text" id="p2-input-quick-quest-title" placeholder="⚡ Add new quest / TODO (e.g. Chapter 2 Part 2 Notes, Phase-2 Objective Quiz)..." required class="quick-quest-input">
+              <select id="p2-select-quick-quest-type" class="quick-quest-type-select">
+                <option value="Objective Exam">🎯 Phase-2 Objective Exam</option>
+                <option value="Subjective Exam">✍️ Phase-2 Subjective Writing</option>
+                <option value="Study / Reading">📖 Study / Reading</option>
+                <option value="Revision">🔄 Revision</option>
+                <option value="General">📌 General TODO</option>
+              </select>
+              <button type="submit" class="btn-minimal-primary btn-add-quest">+ Add Quest</button>
+            </form>
           </div>
-        </div>
 
-        <!-- Right Column: Day Detail & Task/Exam Management Panel -->
-        <div class="calendar-day-panel">
-          <div class="day-panel-header">
-            <div>
-              <h4 id="p2-cal-selected-date-heading">Selected Day</h4>
+          <!-- Daily Quests List Section -->
+          <div class="daily-quests-section">
+            <div class="daily-quests-section-header">
+              <h4>Today's Quests &amp; Tasks</h4>
               <span id="p2-cal-selected-date-sub" class="selected-date-sub">0 tasks</span>
             </div>
-            <button type="button" id="p2-btn-open-add-task-modal" class="btn-minimal-primary add-task-btn">+ Add Task</button>
+            <div id="p2-cal-selected-day-tasks" class="day-tasks-list"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: LeetCode Style Minimal Calendar Widget -->
+        <div class="calendar-leetcode-sidebar">
+          <!-- LeetCode Streak Hero Card -->
+          <div class="leetcode-streak-card">
+            <div class="streak-flame-icon">🔥</div>
+            <div class="streak-info">
+              <div class="streak-title"><strong id="p2-streak-days-count">0</strong> Day Streak</div>
+              <div class="streak-sub">
+                <span>Best: <strong id="p2-streak-max-count">0</strong> d</span> ·
+                <span>Active: <strong id="p2-streak-total-active">0</strong> d</span>
+              </div>
+            </div>
+            <div id="p2-streak-status-pill" class="streak-status-pill">Active</div>
           </div>
 
-          <div id="p2-cal-selected-day-tasks" class="day-tasks-list"></div>
+          <!-- LeetCode Minimal Calendar Card -->
+          <div class="leetcode-calendar-card">
+            <div class="leetcode-cal-header">
+              <div id="p2-cal-month-year-display" class="leetcode-month-title">November 2026</div>
+              <div class="leetcode-cal-nav">
+                <button type="button" id="p2-cal-btn-prev-month" class="lc-nav-btn" title="Previous Month">‹</button>
+                <button type="button" id="p2-cal-btn-today" class="lc-today-btn" title="Go to Today">Today</button>
+                <button type="button" id="p2-cal-btn-next-month" class="lc-nav-btn" title="Next Month">›</button>
+              </div>
+            </div>
+
+            <!-- Minimal Day-of-week header: S M T W T F S -->
+            <div class="leetcode-weekdays-row">
+              <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+            </div>
+
+            <!-- LeetCode Days Grid with checkmarks -->
+            <div id="p2-calendar-days-grid" class="leetcode-days-grid"></div>
+
+            <!-- Minimal Footer Legend -->
+            <div class="leetcode-cal-footer">
+              <div class="lc-legend-items">
+                <span class="lc-legend-item"><span class="lc-legend-tick">✓</span> Finished</span>
+                <span class="lc-legend-item"><span class="lc-legend-dot ch-test"></span> Ch Test</span>
+                <span class="lc-legend-item"><span class="lc-legend-dot mix-test"></span> Mix Test</span>
+                <span class="lc-legend-item"><span class="lc-legend-dot buffer"></span> Buffer</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Monthly Completion Stats -->
+          <div id="p2-leetcode-monthly-stats" class="leetcode-monthly-stats-card"></div>
         </div>
       </div>
 

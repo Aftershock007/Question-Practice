@@ -999,6 +999,13 @@ function finishTest(auto) {
   history.unshift(test);
   saveJSON("rbi_history", history);
 
+  if (typeof autoCompleteDailyQuestOnExam === "function") {
+    autoCompleteDailyQuestOnExam("phase2", test);
+  }
+  if (typeof renderP2Calendar === "function") {
+    renderP2Calendar();
+  }
+
   localStorage.removeItem("rbi_active_test");
   window.onbeforeunload = null;
 
@@ -3326,6 +3333,10 @@ function finishP1Test(auto = false) {
   history.unshift(test);
   saveJSON("rbi_p1_history", history);
 
+  if (typeof autoCompleteDailyQuestOnExam === "function") {
+    autoCompleteDailyQuestOnExam("phase1", test);
+  }
+
   if (typeof renderP1Calendar === "function") {
     renderP1Calendar();
   }
@@ -4528,6 +4539,437 @@ function saveCalendarSchedule() {
 // PHASE 1 CALENDAR: OBJECTIVE DRILLS & EXAM MARKS
 // ============================================================
 
+// ============================================================
+// CALENDAR & STREAK ENGINE (LEETCODE MINIMAL STYLE & DAILY QUESTS)
+// ============================================================
+
+// Check if a given date is finished (all tasks completed or exam logged)
+function isDayFinished(dateStr, phaseType) {
+  const p1ExamsMap = getPhase1ExamsByDate();
+  const p2ExamsMap = getPhase2ExamsByDate();
+  const dayExams = phaseType === "phase1" ? (p1ExamsMap[dateStr] || []) : (p2ExamsMap[dateStr] || []);
+
+  const tasks = (state.calendar || []).filter(t => {
+    if (t.date !== dateStr) return false;
+    if (phaseType === "phase1") {
+      return t.phase === "Phase-1" || t.phase === "General";
+    } else {
+      return t.phase === "Phase-2";
+    }
+  });
+
+  // A day is finished if:
+  // 1. It has tasks, and ALL of them are marked completed
+  // 2. OR it has logged exams taken on that day
+  if (tasks.length > 0) {
+    const allCompleted = tasks.every(t => t.status === "completed");
+    if (allCompleted) return true;
+  }
+  if (dayExams.length > 0) {
+    return true;
+  }
+  return false;
+}
+
+// Compute streak metrics: currentStreak, maxStreak, totalActiveDays, finishedDates, isTodayFinished
+// Rule: If one day is missed, streak is broken (0), and restarts from 1 on the next finished day.
+function getCalendarStreak(phaseType) {
+  const today = new Date();
+  const todayStr = getLocalDateString(today);
+
+  const allDatesSet = new Set();
+  (state.calendar || []).forEach(t => {
+    if (t.date) allDatesSet.add(t.date);
+  });
+  const examsMap = phaseType === "phase1" ? getPhase1ExamsByDate() : getPhase2ExamsByDate();
+  Object.keys(examsMap).forEach(d => allDatesSet.add(d));
+
+  const finishedDatesSet = new Set();
+  for (const d of allDatesSet) {
+    if (isDayFinished(d, phaseType)) {
+      finishedDatesSet.add(d);
+    }
+  }
+
+  const isTodayFinished = finishedDatesSet.has(todayStr);
+
+  // Current Streak Calculation:
+  let currentStreak = 0;
+  if (isTodayFinished) {
+    currentStreak = 1;
+    let checkDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    while (true) {
+      const dStr = getLocalDateString(checkDate);
+      if (finishedDatesSet.has(dStr)) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+  } else {
+    // Today not finished yet. Check yesterday:
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const yStr = getLocalDateString(yesterday);
+    if (finishedDatesSet.has(yStr)) {
+      currentStreak = 1;
+      let checkDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() - 1);
+      while (true) {
+        const dStr = getLocalDateString(checkDate);
+        if (finishedDatesSet.has(dStr)) {
+          currentStreak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    } else {
+      // Yesterday was missed! Streak is broken (0)
+      currentStreak = 0;
+    }
+  }
+
+  // Max Streak Calculation across all history
+  const sortedDates = Array.from(finishedDatesSet).sort();
+  let maxStreak = 0;
+  let tempStreak = 0;
+  let prevDate = null;
+
+  for (const dStr of sortedDates) {
+    const curDate = new Date(dStr + "T00:00:00");
+    if (prevDate) {
+      const diffDays = Math.round((curDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) {
+        tempStreak++;
+      } else {
+        tempStreak = 1;
+      }
+    } else {
+      tempStreak = 1;
+    }
+    prevDate = curDate;
+    if (tempStreak > maxStreak) {
+      maxStreak = tempStreak;
+    }
+  }
+
+  if (currentStreak > maxStreak) {
+    maxStreak = currentStreak;
+  }
+
+  return {
+    currentStreak,
+    maxStreak,
+    totalActiveDays: finishedDatesSet.size,
+    finishedDates: finishedDatesSet,
+    isTodayFinished
+  };
+}
+
+// Auto-populate 3 default quests for a date if it has no tasks yet or has legacy single task
+function ensureDailyQuestsForDate(dateStr, phaseType) {
+  if (!state.calendar) state.calendar = [];
+  const meta = getDayMetadata(dateStr);
+
+  if (phaseType === "phase2") {
+    const existing = state.calendar.filter(t => t.date === dateStr && t.phase === "Phase-2");
+    if (existing.length === 0 && meta && (meta.p2_topic || meta.p2_subject)) {
+      const ch = meta.p2_topic || meta.p2_subject || "Phase-2 Chapter Focus";
+      const sub = meta.p2_subject || "Phase-2";
+      const dNum = meta.dayNum || null;
+      const dType = meta.dayType || "normal-day";
+
+      state.calendar.push(
+        {
+          id: `quest-p2-obj-${dateStr}-${Date.now()}-1`,
+          date: dateStr,
+          dayNum: dNum,
+          dayType: dType,
+          phase: "Phase-2",
+          subject: sub,
+          topic: `Objective Exam: ${ch}`,
+          type: "Objective Exam",
+          time: "10:00 AM",
+          status: "pending",
+          autoGenerated: true
+        },
+        {
+          id: `quest-p2-sub-${dateStr}-${Date.now()}-2`,
+          date: dateStr,
+          dayNum: dNum,
+          dayType: dType,
+          phase: "Phase-2",
+          subject: sub,
+          topic: `Subjective Writing: ${ch}`,
+          type: "Subjective Exam",
+          time: "02:00 PM",
+          status: "pending",
+          autoGenerated: true
+        },
+        {
+          id: `quest-p2-std-${dateStr}-${Date.now()}-3`,
+          date: dateStr,
+          dayNum: dNum,
+          dayType: dType,
+          phase: "Phase-2",
+          subject: sub,
+          topic: `Chapter Study & Notes: ${ch}`,
+          type: "Study / Reading",
+          time: "05:00 PM",
+          status: "pending",
+          autoGenerated: true
+        }
+      );
+      saveCalendarSchedule();
+    } else if (existing.length === 1 && existing[0].id.startsWith("task-d") && existing[0].id.endsWith("-p2")) {
+      const orig = existing[0];
+      const wasDone = orig.status === "completed";
+      const ch = orig.topic;
+      const sub = orig.subject || "Phase-2";
+      const dNum = orig.dayNum;
+      const dType = orig.dayType || "normal-day";
+
+      state.calendar = state.calendar.filter(t => t.id !== orig.id);
+      state.calendar.push(
+        {
+          id: `quest-p2-obj-${dateStr}-${Date.now()}-1`,
+          date: dateStr,
+          dayNum: dNum,
+          dayType: dType,
+          phase: "Phase-2",
+          subject: sub,
+          topic: `Objective Exam: ${ch}`,
+          type: "Objective Exam",
+          time: "10:00 AM",
+          status: wasDone ? "completed" : "pending",
+          autoGenerated: true
+        },
+        {
+          id: `quest-p2-sub-${dateStr}-${Date.now()}-2`,
+          date: dateStr,
+          dayNum: dNum,
+          dayType: dType,
+          phase: "Phase-2",
+          subject: sub,
+          topic: `Subjective Writing: ${ch}`,
+          type: "Subjective Exam",
+          time: "02:00 PM",
+          status: wasDone ? "completed" : "pending",
+          autoGenerated: true
+        },
+        {
+          id: `quest-p2-std-${dateStr}-${Date.now()}-3`,
+          date: dateStr,
+          dayNum: dNum,
+          dayType: dType,
+          phase: "Phase-2",
+          subject: sub,
+          topic: `Chapter Study & Notes: ${ch}`,
+          type: "Study / Reading",
+          time: "05:00 PM",
+          status: wasDone ? "completed" : "pending",
+          autoGenerated: true
+        }
+      );
+      saveCalendarSchedule();
+    }
+  } else {
+    // Phase 1
+    const existing = state.calendar.filter(t => t.date === dateStr && (t.phase === "Phase-1" || t.phase === "General"));
+    if (existing.length === 0 && meta && (meta.p1_topic || meta.ca)) {
+      const p1Top = meta.p1_topic || "Objective Speed Drill";
+      const p1Sub = meta.p1_subject || "Phase-1";
+      const caTop = meta.ca || "Spotlight Current Affairs Drill";
+      const dNum = meta.dayNum || null;
+      const dType = meta.dayType || "normal-day";
+
+      state.calendar.push(
+        {
+          id: `quest-p1-obj-${dateStr}-${Date.now()}-1`,
+          date: dateStr,
+          dayNum: dNum,
+          dayType: dType,
+          phase: "Phase-1",
+          subject: p1Sub,
+          topic: `Objective Speed Drill: ${p1Top}`,
+          type: "Objective Exam",
+          time: "10:00 AM",
+          status: "pending",
+          autoGenerated: true
+        },
+        {
+          id: `quest-p1-ca-${dateStr}-${Date.now()}-2`,
+          date: dateStr,
+          dayNum: dNum,
+          dayType: dType,
+          phase: "General",
+          subject: "Current Affairs & Reports",
+          topic: `Daily Spotlight GA Drill: ${caTop}`,
+          type: "Current Affairs",
+          time: "02:00 PM",
+          status: "pending",
+          autoGenerated: true
+        },
+        {
+          id: `quest-p1-rev-${dateStr}-${Date.now()}-3`,
+          date: dateStr,
+          dayNum: dNum,
+          dayType: dType,
+          phase: "Phase-1",
+          subject: p1Sub,
+          topic: `Formula & Concepts Revision: ${p1Top}`,
+          type: "Study / Reading",
+          time: "06:00 PM",
+          status: "pending",
+          autoGenerated: true
+        }
+      );
+      saveCalendarSchedule();
+    }
+  }
+}
+
+// Add user-created dynamic quest / TODO item to the currently selected day
+function addQuickQuest(phaseType) {
+  const prefix = phaseType === "phase1" ? "p1" : "p2";
+  const titleInput = $(`${prefix}-input-quick-quest-title`);
+  const typeSelect = $(`${prefix}-select-quick-quest-type`);
+  if (!titleInput) return;
+  const title = (titleInput.value || "").trim();
+  if (!title) return;
+
+  const questType = typeSelect ? typeSelect.value : (phaseType === "phase1" ? "Objective Exam" : "Subjective Exam");
+  const selDateStr = phaseType === "phase1" ? state.p1_calendar_selectedDate : state.p2_calendar_selectedDate;
+  const dayMeta = getDayMetadata(selDateStr);
+  const subjectName = phaseType === "phase1" ? (dayMeta?.p1_subject || "Phase-1") : (dayMeta?.p2_subject || "Phase-2");
+
+  const newQuest = {
+    id: `quest-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+    date: selDateStr,
+    dayNum: dayMeta?.dayNum || null,
+    dayType: dayMeta?.dayType || "normal-day",
+    phase: phaseType === "phase1" ? (questType === "Current Affairs" ? "General" : "Phase-1") : "Phase-2",
+    subject: subjectName,
+    topic: sanitizeDashes(title),
+    type: questType,
+    time: "10:00 AM",
+    status: "pending",
+    createdManually: true
+  };
+
+  if (!state.calendar) state.calendar = [];
+  state.calendar.push(newQuest);
+  saveCalendarSchedule();
+
+  titleInput.value = "";
+
+  if (phaseType === "phase1") {
+    renderP1Calendar();
+  } else {
+    renderP2Calendar();
+  }
+}
+
+// Auto-complete matching daily quest when an exam finishes
+function autoCompleteDailyQuestOnExam(phaseType, test) {
+  const todayStr = getLocalDateString(new Date());
+  ensureDailyQuestsForDate(todayStr, phaseType);
+
+  const tasks = state.calendar || [];
+  let found = false;
+
+  for (const t of tasks) {
+    if (t.date === todayStr && t.status !== "completed") {
+      if (phaseType === "phase1" && (t.phase === "Phase-1" || t.phase === "General") && (t.type === "Objective Exam" || t.type === "MCQ Practice")) {
+        t.status = "completed";
+        found = true;
+        break;
+      } else if (phaseType === "phase2" && t.phase === "Phase-2" && (t.type === "Subjective Exam" || t.type === "Descriptive Writing")) {
+        t.status = "completed";
+        found = true;
+        break;
+      }
+    }
+  }
+
+  if (found) {
+    saveCalendarSchedule();
+  }
+}
+
+// Render single LeetCode calendar day cell
+function renderLeetCodeDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, isFinished, dayMeta, exams) {
+  const isToday = dateStr === todayStr;
+  const isSelected = dateStr === selectedStr;
+  const dayType = dayMeta?.dayType || "normal-day";
+
+  let dotHtml = "";
+  if (dayType === "chapter-test") {
+    dotHtml = `<span class="lc-type-dot ch-test" title="Chapter Test"></span>`;
+  } else if (dayType === "mix-test") {
+    dotHtml = `<span class="lc-type-dot mix-test" title="Mix Test"></span>`;
+  } else if (dayType === "buffer-day") {
+    dotHtml = `<span class="lc-type-dot buffer" title="Buffer Day"></span>`;
+  }
+
+  let tickHtml = "";
+  if (isFinished) {
+    tickHtml = `<span class="lc-tick-badge" title="Completed!">✓</span>`;
+  }
+
+  const classes = [
+    "lc-day-cell",
+    `day-type-${dayType}`,
+    isFinished ? "is-finished" : "",
+    isToday ? "is-today" : "",
+    isSelected ? "is-selected" : "",
+    isOtherMonth ? "is-other-month" : ""
+  ].filter(Boolean).join(" ");
+
+  return `
+    <div class="${classes}" data-date="${dateStr}" data-day-type="${dayType}">
+      <span class="lc-day-num">${dayNum}</span>
+      ${tickHtml}
+      ${dotHtml}
+    </div>
+  `;
+}
+
+// Render LeetCode monthly summary statistics below calendar
+function renderLeetCodeMonthlyStats(phaseType, streakData) {
+  const prefix = phaseType === "phase1" ? "p1" : "p2";
+  const container = $(`${prefix}-leetcode-monthly-stats`);
+  if (!container) return;
+
+  const curDate = phaseType === "phase1" ? state.p1_calendar_currentDate : state.p2_calendar_currentDate;
+  const year = curDate.getFullYear();
+  const month = curDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let finishedInMonth = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    if (streakData.finishedDates && streakData.finishedDates.has(dStr)) {
+      finishedInMonth++;
+    }
+  }
+  const pct = Math.round((finishedInMonth / daysInMonth) * 100);
+
+  container.innerHTML = `
+    <div>
+      <span style="font-weight:700; color:#1e293b;">${finishedInMonth} / ${daysInMonth} Days</span>
+      <span style="color:#64748b; font-size:11px;"> finished (${pct}%)</span>
+    </div>
+    <div style="font-weight:600; color:#10b981;">
+      ${streakData.currentStreak > 0 ? `🔥 ${streakData.currentStreak} d streak` : `⚡ Start streak`}
+    </div>
+  `;
+}
+
+// ============================================================
+// PHASE 1 CALENDAR: OBJECTIVE DRILLS & EXAM MARKS
+// ============================================================
+
 function renderP1Calendar() {
   if (!state.calendar || state.calendar.length < 30) {
     state.calendar = generateDefaultSchedule();
@@ -4536,27 +4978,57 @@ function renderP1Calendar() {
 
   rebuildCalendarMetadata();
   renderP1CalendarSummary();
-  renderP1CalendarControls();
 
-  const monthView = $("p1-calendar-month-view");
-  const agendaView = $("p1-calendar-agenda-view");
-  const viewMonthBtn = $("p1-cal-view-month");
-  const viewAgendaBtn = $("p1-cal-view-agenda");
-
-  if (state.p1_calendar_view === "month") {
-    if (monthView) monthView.style.display = "";
-    if (agendaView) agendaView.style.display = "none";
-    if (viewMonthBtn) viewMonthBtn.classList.add("active");
-    if (viewAgendaBtn) viewAgendaBtn.classList.remove("active");
-    renderP1MonthGrid();
-  } else {
-    if (monthView) monthView.style.display = "none";
-    if (agendaView) agendaView.style.display = "";
-    if (viewMonthBtn) viewMonthBtn.classList.remove("active");
-    if (viewAgendaBtn) viewAgendaBtn.classList.add("active");
-    renderP1AgendaView();
+  const heading = $("p1-cal-month-year-display");
+  if (heading) {
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    const year = state.p1_calendar_currentDate.getFullYear();
+    const month = state.p1_calendar_currentDate.getMonth();
+    heading.textContent = `${monthNames[month]} ${year}`;
   }
 
+  const planStartInput = $("p1-cal-upload-start-date");
+  if (planStartInput && state.calendar_planStartDate) {
+    planStartInput.value = state.calendar_planStartDate;
+  }
+
+  // Calculate streak & finished days
+  const streakData = getCalendarStreak("phase1");
+
+  // Update streak hero card
+  const daysCount = $("p1-streak-days-count");
+  if (daysCount) daysCount.textContent = streakData.currentStreak;
+  const maxCount = $("p1-streak-max-count");
+  if (maxCount) maxCount.textContent = streakData.maxStreak;
+  const totalActive = $("p1-streak-total-active");
+  if (totalActive) totalActive.textContent = streakData.totalActiveDays;
+
+  const statusPill = $("p1-streak-status-pill");
+  if (statusPill) {
+    if (streakData.currentStreak > 0) {
+      if (streakData.isTodayFinished) {
+        statusPill.textContent = "🔥 Streak Active";
+        statusPill.className = "streak-status-pill active";
+      } else {
+        statusPill.textContent = "⏳ Due Today";
+        statusPill.className = "streak-status-pill pending";
+      }
+    } else {
+      statusPill.textContent = "⚡ Start Streak";
+      statusPill.className = "streak-status-pill";
+    }
+  }
+
+  // Render minimal LeetCode calendar grid
+  renderP1MonthGrid(streakData);
+
+  // Render monthly stats
+  renderLeetCodeMonthlyStats("phase1", streakData);
+
+  // Render selected day's quests
   renderP1SelectedDayTasks();
 }
 
@@ -4594,25 +5066,7 @@ function renderP1CalendarSummary() {
   `;
 }
 
-function renderP1CalendarControls() {
-  const heading = $("p1-cal-month-year-display");
-  if (!heading) return;
-
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-  const year = state.p1_calendar_currentDate.getFullYear();
-  const month = state.p1_calendar_currentDate.getMonth();
-  heading.textContent = `${monthNames[month]} ${year}`;
-
-  const planStartInput = $("p1-cal-upload-start-date");
-  if (planStartInput && state.calendar_planStartDate) {
-    planStartInput.value = state.calendar_planStartDate;
-  }
-}
-
-function renderP1MonthGrid() {
+function renderP1MonthGrid(streakData) {
   const grid = $("p1-calendar-days-grid");
   if (!grid) return;
 
@@ -4628,24 +5082,7 @@ function renderP1MonthGrid() {
   const selectedStr = state.p1_calendar_selectedDate;
 
   const p1ExamsMap = getPhase1ExamsByDate();
-  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-1" || t.phase === "General");
-
-  // Filter tasks by status and day type
-  const filteredTasks = tasks.filter(t => {
-    if (state.p1_calendar_filterStatus === "pending" && t.status === "completed") return false;
-    if (state.p1_calendar_filterStatus === "completed" && t.status !== "completed") return false;
-    if (state.p1_calendar_filterDayType && state.p1_calendar_filterDayType !== "all") {
-      const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
-      if (dType !== state.p1_calendar_filterDayType) return false;
-    }
-    return true;
-  });
-
-  const taskMap = {};
-  for (const t of filteredTasks) {
-    if (!taskMap[t.date]) taskMap[t.date] = [];
-    taskMap[t.date].push(t);
-  }
+  const finishedDates = streakData ? streakData.finishedDates : new Set();
 
   let html = "";
 
@@ -4654,16 +5091,19 @@ function renderP1MonthGrid() {
     const dayNum = daysInPrevMonth - i;
     const prevDate = new Date(year, month - 1, dayNum);
     const dateStr = getLocalDateString(prevDate);
+    const isFinished = finishedDates.has(dateStr);
+    const dayMeta = getDayMetadata(dateStr);
     const dayExams = p1ExamsMap[dateStr] || [];
-    html += renderP1DayCell(dayNum, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
+    html += renderLeetCodeDayCell(dayNum, dateStr, true, todayStr, selectedStr, isFinished, dayMeta, dayExams);
   }
 
   // 2. Current month days
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const isFinished = finishedDates.has(dateStr);
+    const dayMeta = getDayMetadata(dateStr);
     const dayExams = p1ExamsMap[dateStr] || [];
-    if (state.p1_calendar_filterStatus === "exams" && dayExams.length === 0) continue;
-    html += renderP1DayCell(d, dateStr, false, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
+    html += renderLeetCodeDayCell(d, dateStr, false, todayStr, selectedStr, isFinished, dayMeta, dayExams);
   }
 
   // 3. Trailing days from next month
@@ -4672,88 +5112,157 @@ function renderP1MonthGrid() {
   for (let d = 1; d <= remainder; d++) {
     const nextDate = new Date(year, month + 1, d);
     const dateStr = getLocalDateString(nextDate);
+    const isFinished = finishedDates.has(dateStr);
+    const dayMeta = getDayMetadata(dateStr);
     const dayExams = p1ExamsMap[dateStr] || [];
-    html += renderP1DayCell(d, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
+    html += renderLeetCodeDayCell(d, dateStr, true, todayStr, selectedStr, isFinished, dayMeta, dayExams);
   }
 
   grid.innerHTML = html;
 }
 
-function renderP1DayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, dayTasks, exams) {
-  const isToday = dateStr === todayStr;
-  const isSelected = dateStr === selectedStr;
+function renderP1SelectedDayTasks() {
+  const selDateStr = state.p1_calendar_selectedDate;
+  ensureDailyQuestsForDate(selDateStr, "phase1");
 
-  const dayMeta = getDayMetadata(dateStr);
-  const dayType = dayMeta?.dayType || (dayTasks[0]?.dayType) || "normal-day";
+  const heading = $("p1-cal-selected-date-heading");
+  const dayNumBadge = $("p1-quest-daynum-badge");
+  const dayTypeBadge = $("p1-quest-daytype-badge");
+  const progressText = $("p1-quest-progress-text");
+  const progressBarFill = $("p1-quest-progress-bar-fill");
+  const chapterBanner = $("p1-quest-chapter-banner");
+  const sub = $("p1-cal-selected-date-sub");
+  const list = $("p1-cal-selected-day-tasks");
 
-  let badgeHtml = "";
-  if (dayType === "chapter-test") {
-    badgeHtml = `<span class="day-badge-tag tag-chapter" title="Chapter Test">📝 Ch Test</span>`;
-  } else if (dayType === "mix-test") {
-    badgeHtml = `<span class="day-badge-tag tag-mix" title="Mix Test">🔥 Mix Test</span>`;
-  } else if (dayType === "buffer-day") {
-    badgeHtml = `<span class="day-badge-tag tag-buffer" title="Buffer Day / Revision">⏳ Buffer</span>`;
-  } else if (dayMeta?.dayNum) {
-    badgeHtml = `<span class="day-badge-tag tag-normal" title="Normal Study Day">D-${dayMeta.dayNum}</span>`;
+  const dateObj = new Date(selDateStr + "T00:00:00");
+  const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+  const humanDate = dateObj.toLocaleDateString(undefined, options);
+
+  const dayMeta = getDayMetadata(selDateStr);
+  const dayType = dayMeta?.dayType || "normal-day";
+
+  let typeName = "📘 Normal Class";
+  if (dayType === "chapter-test") typeName = "📝 Chapter Test";
+  if (dayType === "mix-test") typeName = "🔥 Mix Test";
+  if (dayType === "buffer-day") typeName = "⏳ Buffer Day";
+
+  if (heading) heading.textContent = humanDate;
+  if (dayNumBadge) dayNumBadge.textContent = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} of 415` : "Custom Day";
+  if (dayTypeBadge) {
+    dayTypeBadge.className = `popover-type-badge ${dayType}`;
+    dayTypeBadge.textContent = typeName;
   }
 
-  // Phase-1 Exam Score Badge Pill
-  let examScorePill = "";
-  const hasExam = exams && exams.length > 0;
-  if (hasExam) {
-    const latest = exams[0];
-    const scoreVal = Number(latest.score || 0).toFixed(1);
-    const maxVal = Number(latest.maxScore || latest.totalQuestions || 50).toFixed(0);
-    const pctVal = latest.percentage || Math.round((Number(latest.score || 0) / Number(maxVal)) * 100);
-    examScorePill = `
-      <div class="cal-exam-score-pill p1-score-pill" title="Phase-1 Exam Taken: ${scoreVal}/${maxVal} Marks (${pctVal}% Accuracy)">
-        <span>🏆 ${scoreVal}/${maxVal} (${pctVal}%)</span>
-      </div>
-    `;
+  // Chapter Banner
+  if (chapterBanner) {
+    if (dayMeta && (dayMeta.p1_topic || dayMeta.ca)) {
+      chapterBanner.innerHTML = `
+        <span class="banner-icon">🎯</span>
+        <span class="banner-text">
+          <strong>Today's Focus:</strong> ${escapeHTML(dayMeta.p1_topic || "Objective Speed Drill")}
+          ${dayMeta.ca ? ` · <em>${escapeHTML(dayMeta.ca)}</em>` : ""}
+        </span>
+      `;
+      chapterBanner.style.display = "flex";
+    } else {
+      chapterBanner.style.display = "none";
+    }
   }
 
-  const countBadge = dayTasks.length > 0 ? `<span class="cal-day-task-count">${dayTasks.length}</span>` : "";
+  const tasks = (state.calendar || []).filter(t => t.date === selDateStr && (t.phase === "Phase-1" || t.phase === "General"));
+  const p1ExamsMap = getPhase1ExamsByDate();
+  const dayExams = p1ExamsMap[selDateStr] || [];
 
-  const maxPills = hasExam ? 2 : 3;
-  let pillsHtml = "";
-  for (let i = 0; i < Math.min(dayTasks.length, maxPills); i++) {
-    const t = dayTasks[i];
-    let phaseClass = t.phase === "Phase-1" ? "phase-1" : "general";
-    if (t.type === "Revision") phaseClass = "revision";
-    if (t.type === "Mock Test" || t.type === "Chapter Test" || t.type === "Mix Test") phaseClass = "mock";
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.status === "completed").length;
+  const pct = total > 0 ? Math.round((completed / total) * 100) : (dayExams.length > 0 ? 100 : 0);
 
-    const doneClass = t.status === "completed" ? "is-completed" : "";
-    const doneCheck = t.status === "completed" ? "✓ " : "• ";
-    pillsHtml += `
-      <div class="cal-event-pill ${phaseClass} ${doneClass}" title="${escapeHTML(t.subject + ': ' + t.topic)}">
-        <span>${doneCheck}<strong>${escapeHTML(t.subject)}</strong> ${escapeHTML(t.topic)}</span>
-      </div>
-    `;
-  }
-  if (dayTasks.length > maxPills) {
-    pillsHtml += `<div class="cal-more-pill">+${dayTasks.length - maxPills} more</div>`;
-  }
+  if (progressText) progressText.textContent = `${completed} / ${total} Completed (${pct}%)`;
+  if (progressBarFill) progressBarFill.style.width = `${pct}%`;
+  if (sub) sub.textContent = `${total} quest(s) scheduled · ${dayExams.length} exam(s) taken`;
 
-  return `
-    <div class="cal-day-cell day-type-${dayType} ${isOtherMonth ? 'is-other-month' : ''} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''} ${hasExam ? 'has-exam-score' : ''}" data-date="${dateStr}" data-day-type="${dayType}">
-      <div class="cal-day-header">
-        <div style="display:flex; align-items:center; gap:4px;">
-          <span class="cal-day-num">${dayNum}</span>
-          ${badgeHtml}
+  if (!list) return;
+
+  // Exam Score Cards
+  let examCardsHTML = "";
+  if (dayExams.length > 0) {
+    examCardsHTML = dayExams.map(ex => {
+      const scoreVal = Number(ex.score || 0).toFixed(1);
+      const maxVal = Number(ex.maxScore || ex.totalQuestions || 50).toFixed(0);
+      const pctVal = ex.percentage || Math.round((Number(ex.score || 0) / Number(maxVal)) * 100);
+      return `
+        <div class="daily-quest-card exam-score-card" style="border-left: 3.5px solid #10b981; background: #f0fdf4; margin-bottom: 10px;">
+          <div style="font-size: 20px;">🏆</div>
+          <div class="quest-card-content">
+            <div class="quest-meta-row">
+              <span class="quest-type-pill" style="background:#10b981; color:#fff;">Phase-1 Exam Taken</span>
+              <span style="font-size:11.5px; font-weight:700; color:#047857;">${ex.accuracy}% Accuracy</span>
+            </div>
+            <div class="quest-title-text" style="color:#065f46; font-size:14.5px; font-weight:700;">
+              Score: ${scoreVal} / ${maxVal} Marks (${pctVal}%)
+            </div>
+            <div style="font-size:11.5px; color:#047857; margin-top:2px;">
+              🟩 ${ex.correctCount || 0} Correct · 🟥 ${ex.incorrectCount || 0} Incorrect · ⬜ ${ex.unattemptedCount || 0} Skipped · ⏱️ ${formatDuration(ex.durationSeconds || ex.timeSpent || 0)}
+            </div>
+          </div>
+          <div class="quest-actions-row">
+            <button type="button" class="btn-minimal-primary p1-review-exam-btn" data-id="${escapeHTML(ex.id)}" style="font-size:11px; padding:4px 10px;">📊 View History</button>
+          </div>
         </div>
-        ${countBadge}
+      `;
+    }).join("");
+  }
+
+  if (tasks.length === 0 && dayExams.length === 0) {
+    list.innerHTML = `
+      <div style="text-align: center; padding: 32px 16px; color: var(--muted); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px;">
+        <span style="font-size: 22px; display: block; margin-bottom: 6px;">🎯</span>
+        <strong style="color: #334155; font-size: 13.5px; display: block;">No Quests for this day</strong>
+        <p style="font-size: 12px; margin: 4px 0 0 0;">Add custom quests above to track your daily progress!</p>
       </div>
-      ${examScorePill}
-      <div class="cal-day-events">
-        ${pillsHtml}
+    `;
+    return;
+  }
+
+  const questCardsHTML = tasks.map(t => {
+    const isDone = t.status === "completed";
+    let typeIcon = "📌";
+    let typePillClass = "tag-general";
+    if (t.type === "Objective Exam") { typeIcon = "🎯"; typePillClass = "tag-obj"; }
+    else if (t.type === "Current Affairs") { typeIcon = "📰"; typePillClass = "tag-ca"; }
+    else if (t.type === "Study / Reading") { typeIcon = "📖"; typePillClass = "tag-study"; }
+    else if (t.type === "Revision") { typeIcon = "🔄"; typePillClass = "tag-rev"; }
+
+    const practiceBtn = `<button type="button" class="btn-quest-action btn-quest-practice" data-action="practice-obj" data-phase="${t.phase}" data-topic="${escapeHTML(t.topic)}">▶ Practice</button>`;
+
+    return `
+      <div class="daily-quest-card ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
+        <label class="quest-checkbox-label">
+          <input type="checkbox" class="quest-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
+          <span class="quest-custom-checkbox"></span>
+        </label>
+        <div class="quest-card-content">
+          <div class="quest-meta-row">
+            <span class="quest-type-pill ${typePillClass}">${typeIcon} ${escapeHTML(t.type || "Quest")}</span>
+            ${t.subject ? `<span class="quest-subject-pill">${escapeHTML(t.subject)}</span>` : ""}
+            ${t.time ? `<span class="quest-time-pill">⏱️ ${escapeHTML(t.time)}</span>` : ""}
+          </div>
+          <div class="quest-title-text">${escapeHTML(t.topic)}</div>
+        </div>
+        <div class="quest-actions-row">
+          ${practiceBtn}
+          <button type="button" class="btn-quest-action btn-quest-delete" data-action="delete" data-id="${t.id}" title="Delete Quest">✕</button>
+        </div>
       </div>
-    </div>
-  `;
+    `;
+  }).join("");
+
+  list.innerHTML = examCardsHTML + questCardsHTML;
 }
 
 function buildP1PopoverHTML(dateStr, dayMeta, exams) {
   const dateObj = new Date(dateStr + "T00:00:00");
-  const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+  const options = { weekday: "short", month: "short", day: "numeric", year: "numeric" };
   const formattedDate = dateObj.toLocaleDateString(undefined, options);
 
   const dayType = dayMeta?.dayType || "normal-day";
@@ -4762,12 +5271,10 @@ function buildP1PopoverHTML(dateStr, dayMeta, exams) {
   if (dayType === "mix-test") badgeLabel = "🔥 Mix Test";
   if (dayType === "buffer-day") badgeLabel = "⏳ Buffer Day";
 
-  const dayTitle = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} • ${formattedDate}` : formattedDate;
-  const p1Subject = dayMeta?.p1_subject || "";
+  const dayTitle = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} · ${formattedDate}` : formattedDate;
   const p1Topic = dayMeta?.p1_topic || "";
+  const p1Sub = dayMeta?.p1_subject || "";
   const caTopic = dayMeta?.ca || "";
-  const p2Subject = dayMeta?.p2_subject || "";
-  const p2Topic = dayMeta?.p2_topic || "";
 
   let examSectionHTML = "";
   if (exams && exams.length > 0) {
@@ -4779,15 +5286,11 @@ function buildP1PopoverHTML(dateStr, dayMeta, exams) {
       <div class="popover-sec marks-sec">
         <div class="popover-sec-label" style="color:#065f46;">
           <span>🏆</span>
-          <span>TODAY'S PHASE-1 EXAM SCORE LOG</span>
+          <span>PHASE-1 EXAM SCORE</span>
         </div>
         <div class="popover-marks-row">
           <span class="marks-val">${scoreVal} / ${maxVal} Marks</span>
           <span style="font-size:12.5px; font-weight:700; color:#047857;">(${pctVal}%)</span>
-          <span style="font-size:11.5px; color:#065f46;">· ${latest.accuracy}% Accuracy</span>
-        </div>
-        <div style="font-size:11px; color:#047857; margin-top:2px;">
-          🟩 ${latest.correctCount || 0} Correct · 🟥 ${latest.incorrectCount || 0} Incorrect · ⬜ ${latest.unattemptedCount || 0} Skipped
         </div>
       </div>
     `;
@@ -4798,50 +5301,31 @@ function buildP1PopoverHTML(dateStr, dayMeta, exams) {
       <span class="popover-day-title">${escapeHTML(dayTitle)}</span>
       <span class="popover-type-badge ${dayType}">${escapeHTML(badgeLabel)}</span>
     </div>
-
     ${examSectionHTML}
-
-    <!-- Phase 1 Drill Details -->
     <div class="popover-sec p1">
       <div class="popover-sec-label">
         <span>🎯</span>
-        <span>PHASE-1 OBJECTIVE DRILL</span>
-        ${p1Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p1Subject)}</span>` : ""}
+        <span>OBJECTIVE FOCUS</span>
+        ${p1Sub ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p1Sub)}</span>` : ""}
       </div>
-      <div class="popover-topic-text">${escapeHTML(p1Topic || "No Phase-1 topic scheduled for today")}</div>
+      <div class="popover-topic-text">${escapeHTML(p1Topic || "General Speed Drills")}</div>
     </div>
-
-    <!-- Current Affairs -->
     ${caTopic ? `
     <div class="popover-sec ca">
       <div class="popover-sec-label">
         <span>📰</span>
-        <span>CURRENT AFFAIRS &amp; DRILLS</span>
+        <span>CURRENT AFFAIRS</span>
       </div>
       <div class="popover-topic-text">${escapeHTML(caTopic)}</div>
     </div>
     ` : ""}
-
-    <!-- Overall Phase 2 Subject Context -->
-    ${p2Topic ? `
-    <div class="popover-sec p2" style="opacity:0.85;">
-      <div class="popover-sec-label">
-        <span>📖</span>
-        <span>PHASE-2 STUDY CONTEXT</span>
-        ${p2Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p2Subject)}</span>` : ""}
-      </div>
-      <div class="popover-topic-text" style="font-size:12px;">${escapeHTML(p2Topic)}</div>
-    </div>
-    ` : ""}
-
-    <div class="popover-hint">Click day to view or mark tasks completed</div>
+    <div class="popover-hint">Click day to view or edit daily quests</div>
   `;
 }
 
 function showP1CalendarHoverPopover(e, cell) {
   const popover = $("p1-calendar-hover-popover");
   if (!popover) return;
-
   const dateStr = cell.dataset.date;
   if (!dateStr) return;
 
@@ -4849,228 +5333,15 @@ function showP1CalendarHoverPopover(e, cell) {
   const p1ExamsMap = getPhase1ExamsByDate();
   const dayExams = p1ExamsMap[dateStr] || [];
 
-  if (!dayMeta && !cell.querySelector(".cal-event-pill") && dayExams.length === 0) {
-    hideP1CalendarHoverPopover();
-    return;
-  }
-
   popover.innerHTML = buildP1PopoverHTML(dateStr, dayMeta, dayExams);
   popover.style.display = "block";
   popover.style.opacity = "1";
-
   positionCalendarPopover(e.clientX, e.clientY, popover);
 }
 
 function hideP1CalendarHoverPopover() {
   const popover = $("p1-calendar-hover-popover");
   if (popover) popover.style.display = "none";
-}
-
-function renderP1SelectedDayTasks() {
-  const heading = $("p1-cal-selected-date-heading");
-  const sub = $("p1-cal-selected-date-sub");
-  const list = $("p1-cal-selected-day-tasks");
-  if (!heading || !list) return;
-
-  const selDateStr = state.p1_calendar_selectedDate;
-  const dateObj = new Date(selDateStr + "T00:00:00");
-  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-  const humanDate = dateObj.toLocaleDateString(undefined, options);
-
-  const dayMeta = getDayMetadata(selDateStr);
-  let metaBadge = "";
-  if (dayMeta) {
-    let typeName = "📘 Normal Day";
-    if (dayMeta.dayType === "chapter-test") typeName = "📝 Chapter Test";
-    if (dayMeta.dayType === "mix-test") typeName = "🔥 Mix Test";
-    if (dayMeta.dayType === "buffer-day") typeName = "⏳ Buffer Day";
-    const dayNumStr = dayMeta.dayNum ? `Day ${dayMeta.dayNum} of 415 • ` : "";
-    metaBadge = `
-      <div style="margin-top: 4px;">
-        <span class="popover-type-badge ${dayMeta.dayType}" style="font-size:11px; padding:3px 9px;">
-          ${dayNumStr}${typeName}
-        </span>
-      </div>
-    `;
-  }
-
-  heading.innerHTML = `${escapeHTML(humanDate)}${metaBadge}`;
-
-  const tasks = (state.calendar || []).filter(t => t.date === selDateStr && (t.phase === "Phase-1" || t.phase === "General"));
-  const p1ExamsMap = getPhase1ExamsByDate();
-  const dayExams = p1ExamsMap[selDateStr] || [];
-
-  sub.textContent = `${tasks.length} task(s) scheduled · ${dayExams.length} exam(s) taken`;
-
-  let examCardsHTML = "";
-  if (dayExams.length > 0) {
-    examCardsHTML = dayExams.map(ex => {
-      const scoreVal = Number(ex.score || 0).toFixed(1);
-      const maxVal = Number(ex.maxScore || ex.totalQuestions || 50).toFixed(0);
-      const pctVal = ex.percentage || Math.round((Number(ex.score || 0) / Number(maxVal)) * 100);
-      return `
-        <div class="task-card" style="border-left: 3.5px solid #10b981; background: #f0fdf4; margin-bottom: 10px;">
-          <div class="task-card-top">
-            <span class="task-phase-badge" style="background:#10b981; color:#fff;">🏆 Phase-1 Exam Score</span>
-            <span style="font-size:11.5px; font-weight:700; color:#047857;">${ex.accuracy}% Accuracy</span>
-          </div>
-          <div class="task-title" style="color:#065f46; font-size:15px; margin:4px 0;">
-            Score: ${scoreVal} / ${maxVal} Marks (${pctVal}%)
-          </div>
-          <div style="font-size:12px; color:#047857; line-height:1.4;">
-            🟩 ${ex.correctCount || 0} Correct · 🟥 ${ex.incorrectCount || 0} Incorrect · ⬜ ${ex.unattemptedCount || 0} Skipped<br>
-            ⏱️ Duration: ${formatDuration(ex.durationSeconds || ex.timeSpent || 0)}
-          </div>
-          <div style="margin-top:8px;">
-            <button type="button" class="btn-minimal-primary p1-review-exam-btn" data-id="${escapeHTML(ex.id)}" style="font-size:11.5px; padding:4px 10px;">📊 View in Phase-1 History</button>
-          </div>
-        </div>
-      `;
-    }).join("");
-  }
-
-  if (tasks.length === 0 && dayExams.length === 0) {
-    list.innerHTML = `
-      <div style="text-align: center; padding: 36px 16px; color: var(--muted); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px;">
-        <span style="font-size: 24px; display: block; margin-bottom: 6px;">📅</span>
-        <strong style="color: #334155; font-size: 13.5px; display: block;">No Phase-1 tasks scheduled for this day</strong>
-        <p style="font-size: 12px; margin: 4px 0 12px 0;">Stay consistent with your RBI Grade B objective drills!</p>
-        <button type="button" id="btn-p1-empty-add-task" class="btn-minimal-primary" style="font-size: 12.5px; padding: 6px 14px;">+ Add Task</button>
-      </div>
-    `;
-    const emptyBtn = $("btn-p1-empty-add-task");
-    if (emptyBtn) emptyBtn.addEventListener("click", () => openTaskModal(null, "Phase-1"));
-    return;
-  }
-
-  const taskCardsHTML = tasks.map(t => {
-    const isDone = t.status === "completed";
-    let phaseClass = t.phase === "Phase-1" ? "phase-1" : "general";
-    const practiceAction = `<button type="button" class="task-action-btn practice-btn" data-action="practice" data-phase="${t.phase}">▶ Practice</button>`;
-
-    return `
-      <div class="task-card ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
-        <div class="task-card-top">
-          <div class="task-badges">
-            <span class="task-phase-badge ${phaseClass}">${escapeHTML(t.phase)}</span>
-            <span class="task-type-badge">${escapeHTML(t.type)}</span>
-          </div>
-          ${t.time ? `<span class="task-time-badge">⏱️ ${escapeHTML(t.time)}</span>` : ""}
-        </div>
-        <div class="task-title">${escapeHTML(t.topic)}</div>
-        <div class="task-subject">${escapeHTML(t.subject)}</div>
-        <div class="task-actions-row">
-          <label class="task-complete-toggle">
-            <input type="checkbox" class="task-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
-            <span>${isDone ? 'Completed' : 'Mark done'}</span>
-          </label>
-          <div class="task-btn-group">
-            ${practiceAction}
-            <button type="button" class="task-action-btn" data-action="edit" data-id="${t.id}">✏️</button>
-            <button type="button" class="task-action-btn danger-btn" data-action="delete" data-id="${t.id}">✕</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  list.innerHTML = examCardsHTML + taskCardsHTML;
-}
-
-function renderP1AgendaView() {
-  const container = $("p1-calendar-agenda-list");
-  if (!container) return;
-
-  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-1" || t.phase === "General");
-  const filteredTasks = tasks.filter(t => {
-    if (state.p1_calendar_filterStatus === "pending" && t.status === "completed") return false;
-    if (state.p1_calendar_filterStatus === "completed" && t.status !== "completed") return false;
-    if (state.p1_calendar_filterDayType && state.p1_calendar_filterDayType !== "all") {
-      const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
-      if (dType !== state.p1_calendar_filterDayType) return false;
-    }
-    return true;
-  });
-
-  if (filteredTasks.length === 0) {
-    container.innerHTML = `
-      <div style="text-align: center; padding: 40px; color: var(--muted);">
-        No Phase-1 tasks match your selected status or day type filter.
-      </div>
-    `;
-    return;
-  }
-
-  filteredTasks.sort((a, b) => a.date.localeCompare(b.date));
-
-  const groups = {};
-  for (const t of filteredTasks) {
-    if (!groups[t.date]) groups[t.date] = [];
-    groups[t.date].push(t);
-  }
-
-  const p1ExamsMap = getPhase1ExamsByDate();
-  let html = "";
-  for (const [dateStr, dateTasks] of Object.entries(groups)) {
-    const dateObj = new Date(dateStr + "T00:00:00");
-    const humanDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-    const dayMeta = getDayMetadata(dateStr);
-
-    let agendaBadge = "";
-    if (dayMeta) {
-      let typeLabel = "📘 Normal Day";
-      if (dayMeta.dayType === "chapter-test") typeLabel = "📝 Chapter Test";
-      if (dayMeta.dayType === "mix-test") typeLabel = "🔥 Mix Test";
-      if (dayMeta.dayType === "buffer-day") typeLabel = "⏳ Buffer Day";
-      const dayNumStr = dayMeta.dayNum ? `Day ${dayMeta.dayNum} • ` : "";
-      agendaBadge = `<span class="popover-type-badge ${dayMeta.dayType}" style="font-size:10px; margin-left:8px; padding:1px 6px;">${dayNumStr}${typeLabel}</span>`;
-    }
-
-    const dayExams = p1ExamsMap[dateStr] || [];
-    let examTag = "";
-    if (dayExams.length > 0) {
-      const ex = dayExams[0];
-      examTag = `<span class="cal-exam-score-pill p1-score-pill" style="display:inline-flex; margin-left:8px;">🏆 ${Number(ex.score).toFixed(1)}/${Number(ex.maxScore || 50).toFixed(0)} (${ex.accuracy}%)</span>`;
-    }
-
-    html += `
-      <div class="agenda-date-group">
-        <div class="agenda-date-header">
-          <div style="display:flex; align-items:center;">
-            <span>📅 ${humanDate}</span>
-            ${agendaBadge}
-            ${examTag}
-          </div>
-          <span style="font-size:12px; font-weight:normal; color:var(--muted);">${dateTasks.length} task(s)</span>
-        </div>
-        <div class="agenda-tasks-list">
-    `;
-
-    for (const t of dateTasks) {
-      const isDone = t.status === "completed";
-      let phaseClass = t.phase === "Phase-1" ? "phase-1" : "general";
-
-      html += `
-        <div class="agenda-task-item ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
-          <div class="agenda-task-left">
-            <input type="checkbox" class="task-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
-            <div>
-              <div style="font-weight: 600; font-size: 13.5px; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escapeHTML(t.topic)}</div>
-              <div style="font-size: 11.5px; color: var(--muted);">${escapeHTML(t.subject)} · <span class="task-phase-badge ${phaseClass}">${escapeHTML(t.phase)}</span> (${escapeHTML(t.type)})</div>
-            </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            ${t.time ? `<span style="font-size:11.5px; color:var(--muted);">⏱️ ${escapeHTML(t.time)}</span>` : ""}
-            <button type="button" class="task-action-btn danger-btn" data-action="delete" data-id="${t.id}">✕</button>
-          </div>
-        </div>
-      `;
-    }
-
-    html += `</div></div>`;
-  }
-
-  container.innerHTML = html;
 }
 
 // ============================================================
@@ -5085,27 +5356,57 @@ function renderP2Calendar() {
 
   rebuildCalendarMetadata();
   renderP2CalendarSummary();
-  renderP2CalendarControls();
 
-  const monthView = $("p2-calendar-month-view");
-  const agendaView = $("p2-calendar-agenda-view");
-  const viewMonthBtn = $("p2-cal-view-month");
-  const viewAgendaBtn = $("p2-cal-view-agenda");
-
-  if (state.p2_calendar_view === "month") {
-    if (monthView) monthView.style.display = "";
-    if (agendaView) agendaView.style.display = "none";
-    if (viewMonthBtn) viewMonthBtn.classList.add("active");
-    if (viewAgendaBtn) viewAgendaBtn.classList.remove("active");
-    renderP2MonthGrid();
-  } else {
-    if (monthView) monthView.style.display = "none";
-    if (agendaView) agendaView.style.display = "";
-    if (viewMonthBtn) viewMonthBtn.classList.remove("active");
-    if (viewAgendaBtn) viewAgendaBtn.classList.add("active");
-    renderP2AgendaView();
+  const heading = $("p2-cal-month-year-display");
+  if (heading) {
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    const year = state.p2_calendar_currentDate.getFullYear();
+    const month = state.p2_calendar_currentDate.getMonth();
+    heading.textContent = `${monthNames[month]} ${year}`;
   }
 
+  const planStartInput = $("p2-cal-upload-start-date");
+  if (planStartInput && state.calendar_planStartDate) {
+    planStartInput.value = state.calendar_planStartDate;
+  }
+
+  // Calculate streak & finished days
+  const streakData = getCalendarStreak("phase2");
+
+  // Update streak hero card
+  const daysCount = $("p2-streak-days-count");
+  if (daysCount) daysCount.textContent = streakData.currentStreak;
+  const maxCount = $("p2-streak-max-count");
+  if (maxCount) maxCount.textContent = streakData.maxStreak;
+  const totalActive = $("p2-streak-total-active");
+  if (totalActive) totalActive.textContent = streakData.totalActiveDays;
+
+  const statusPill = $("p2-streak-status-pill");
+  if (statusPill) {
+    if (streakData.currentStreak > 0) {
+      if (streakData.isTodayFinished) {
+        statusPill.textContent = "🔥 Streak Active";
+        statusPill.className = "streak-status-pill active";
+      } else {
+        statusPill.textContent = "⏳ Due Today";
+        statusPill.className = "streak-status-pill pending";
+      }
+    } else {
+      statusPill.textContent = "⚡ Start Streak";
+      statusPill.className = "streak-status-pill";
+    }
+  }
+
+  // Render minimal LeetCode calendar grid
+  renderP2MonthGrid(streakData);
+
+  // Render monthly stats
+  renderLeetCodeMonthlyStats("phase2", streakData);
+
+  // Render selected day's quests
   renderP2SelectedDayTasks();
 }
 
@@ -5143,25 +5444,7 @@ function renderP2CalendarSummary() {
   `;
 }
 
-function renderP2CalendarControls() {
-  const heading = $("p2-cal-month-year-display");
-  if (!heading) return;
-
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-  const year = state.p2_calendar_currentDate.getFullYear();
-  const month = state.p2_calendar_currentDate.getMonth();
-  heading.textContent = `${monthNames[month]} ${year}`;
-
-  const planStartInput = $("p2-cal-upload-start-date");
-  if (planStartInput && state.calendar_planStartDate) {
-    planStartInput.value = state.calendar_planStartDate;
-  }
-}
-
-function renderP2MonthGrid() {
+function renderP2MonthGrid(streakData) {
   const grid = $("p2-calendar-days-grid");
   if (!grid) return;
 
@@ -5177,24 +5460,7 @@ function renderP2MonthGrid() {
   const selectedStr = state.p2_calendar_selectedDate;
 
   const p2ExamsMap = getPhase2ExamsByDate();
-  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-2");
-
-  // Filter tasks by status and day type
-  const filteredTasks = tasks.filter(t => {
-    if (state.p2_calendar_filterStatus === "pending" && t.status === "completed") return false;
-    if (state.p2_calendar_filterStatus === "completed" && t.status !== "completed") return false;
-    if (state.p2_calendar_filterDayType && state.p2_calendar_filterDayType !== "all") {
-      const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
-      if (dType !== state.p2_calendar_filterDayType) return false;
-    }
-    return true;
-  });
-
-  const taskMap = {};
-  for (const t of filteredTasks) {
-    if (!taskMap[t.date]) taskMap[t.date] = [];
-    taskMap[t.date].push(t);
-  }
+  const finishedDates = streakData ? streakData.finishedDates : new Set();
 
   let html = "";
 
@@ -5203,16 +5469,19 @@ function renderP2MonthGrid() {
     const dayNum = daysInPrevMonth - i;
     const prevDate = new Date(year, month - 1, dayNum);
     const dateStr = getLocalDateString(prevDate);
+    const isFinished = finishedDates.has(dateStr);
+    const dayMeta = getDayMetadata(dateStr);
     const dayExams = p2ExamsMap[dateStr] || [];
-    html += renderP2DayCell(dayNum, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
+    html += renderLeetCodeDayCell(dayNum, dateStr, true, todayStr, selectedStr, isFinished, dayMeta, dayExams);
   }
 
   // 2. Current month days
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const isFinished = finishedDates.has(dateStr);
+    const dayMeta = getDayMetadata(dateStr);
     const dayExams = p2ExamsMap[dateStr] || [];
-    if (state.p2_calendar_filterStatus === "written" && dayExams.length === 0) continue;
-    html += renderP2DayCell(d, dateStr, false, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
+    html += renderLeetCodeDayCell(d, dateStr, false, todayStr, selectedStr, isFinished, dayMeta, dayExams);
   }
 
   // 3. Trailing days from next month
@@ -5221,97 +5490,169 @@ function renderP2MonthGrid() {
   for (let d = 1; d <= remainder; d++) {
     const nextDate = new Date(year, month + 1, d);
     const dateStr = getLocalDateString(nextDate);
+    const isFinished = finishedDates.has(dateStr);
+    const dayMeta = getDayMetadata(dateStr);
     const dayExams = p2ExamsMap[dateStr] || [];
-    html += renderP2DayCell(d, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || [], dayExams);
+    html += renderLeetCodeDayCell(d, dateStr, true, todayStr, selectedStr, isFinished, dayMeta, dayExams);
   }
 
   grid.innerHTML = html;
 }
 
-function renderP2DayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, dayTasks, exams) {
-  const isToday = dateStr === todayStr;
-  const isSelected = dateStr === selectedStr;
+function renderP2SelectedDayTasks() {
+  const selDateStr = state.p2_calendar_selectedDate;
+  ensureDailyQuestsForDate(selDateStr, "phase2");
 
-  const dayMeta = getDayMetadata(dateStr);
-  const dayType = dayMeta?.dayType || (dayTasks[0]?.dayType) || "normal-day";
+  const heading = $("p2-cal-selected-date-heading");
+  const dayNumBadge = $("p2-quest-daynum-badge");
+  const dayTypeBadge = $("p2-quest-daytype-badge");
+  const progressText = $("p2-quest-progress-text");
+  const progressBarFill = $("p2-quest-progress-bar-fill");
+  const chapterBanner = $("p2-quest-chapter-banner");
+  const sub = $("p2-cal-selected-date-sub");
+  const list = $("p2-cal-selected-day-tasks");
 
-  let badgeHtml = "";
-  if (dayType === "chapter-test") {
-    badgeHtml = `<span class="day-badge-tag tag-chapter" title="Chapter Test">📝 Ch Test</span>`;
-  } else if (dayType === "mix-test") {
-    badgeHtml = `<span class="day-badge-tag tag-mix" title="Mix Test">🔥 Mix Test</span>`;
-  } else if (dayType === "buffer-day") {
-    badgeHtml = `<span class="day-badge-tag tag-buffer" title="Buffer Day / Revision">⏳ Buffer</span>`;
-  } else if (dayMeta?.dayNum) {
-    badgeHtml = `<span class="day-badge-tag tag-normal" title="Normal Study Day">D-${dayMeta.dayNum}</span>`;
+  const dateObj = new Date(selDateStr + "T00:00:00");
+  const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+  const humanDate = dateObj.toLocaleDateString(undefined, options);
+
+  const dayMeta = getDayMetadata(selDateStr);
+  const dayType = dayMeta?.dayType || "normal-day";
+
+  let typeName = "📘 Normal Class";
+  if (dayType === "chapter-test") typeName = "📝 Chapter Test";
+  if (dayType === "mix-test") typeName = "🔥 Mix Test";
+  if (dayType === "buffer-day") typeName = "⏳ Buffer Day";
+
+  if (heading) heading.textContent = humanDate;
+  if (dayNumBadge) dayNumBadge.textContent = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} of 415` : "Custom Day";
+  if (dayTypeBadge) {
+    dayTypeBadge.className = `popover-type-badge ${dayType}`;
+    dayTypeBadge.textContent = typeName;
   }
 
-  // Phase-2 Exam / Writing Badge Pill
-  let examScorePill = "";
-  const hasExam = exams && exams.length > 0;
-  if (hasExam) {
-    const test = exams[0];
-    const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
-    if (hasScore) {
-      const scoreVal = Number(test.totalScore).toFixed(1);
-      const maxVal = Number(test.maxMarks || 25).toFixed(0);
-      examScorePill = `
-        <div class="cal-exam-score-pill p2-score-pill" title="Phase-2 Writing: ${scoreVal}/${maxVal} Marks Scored">
-          <span>🏆 ${scoreVal}/${maxVal} M</span>
-        </div>
+  // Chapter Banner
+  if (chapterBanner) {
+    if (dayMeta && (dayMeta.p2_topic || dayMeta.p2_subject)) {
+      chapterBanner.innerHTML = `
+        <span class="banner-icon">📖</span>
+        <span class="banner-text">
+          <strong>Today's Focus:</strong> ${escapeHTML(dayMeta.p2_topic || "Phase-2 Focus")}
+          ${dayMeta.p2_subject ? ` · <em>${escapeHTML(dayMeta.p2_subject)}</em>` : ""}
+        </span>
       `;
+      chapterBanner.style.display = "flex";
     } else {
-      const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
-      examScorePill = `
-        <div class="cal-exam-score-pill p2-written-pill" title="Phase-2 Test Written (${totalWords} words · Pending score)">
-          <span>✍️ Written (${totalWords}w)</span>
-        </div>
-      `;
+      chapterBanner.style.display = "none";
     }
   }
 
-  const countBadge = dayTasks.length > 0 ? `<span class="cal-day-task-count">${dayTasks.length}</span>` : "";
+  const tasks = (state.calendar || []).filter(t => t.date === selDateStr && t.phase === "Phase-2");
+  const p2ExamsMap = getPhase2ExamsByDate();
+  const dayExams = p2ExamsMap[selDateStr] || [];
 
-  const maxPills = hasExam ? 2 : 3;
-  let pillsHtml = "";
-  for (let i = 0; i < Math.min(dayTasks.length, maxPills); i++) {
-    const t = dayTasks[i];
-    let phaseClass = "phase-2";
-    if (t.type === "Revision") phaseClass = "revision";
-    if (t.type === "Mock Test" || t.type === "Chapter Test" || t.type === "Mix Test") phaseClass = "mock";
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.status === "completed").length;
+  const pct = total > 0 ? Math.round((completed / total) * 100) : (dayExams.length > 0 ? 100 : 0);
 
-    const doneClass = t.status === "completed" ? "is-completed" : "";
-    const doneCheck = t.status === "completed" ? "✓ " : "• ";
-    pillsHtml += `
-      <div class="cal-event-pill ${phaseClass} ${doneClass}" title="${escapeHTML(t.subject + ': ' + t.topic)}">
-        <span>${doneCheck}<strong>${escapeHTML(t.subject)}</strong> ${escapeHTML(t.topic)}</span>
+  if (progressText) progressText.textContent = `${completed} / ${total} Completed (${pct}%)`;
+  if (progressBarFill) progressBarFill.style.width = `${pct}%`;
+  if (sub) sub.textContent = `${total} quest(s) scheduled · ${dayExams.length} written test(s)`;
+
+  if (!list) return;
+
+  // Exam Score Cards
+  let examCardsHTML = "";
+  if (dayExams.length > 0) {
+    examCardsHTML = dayExams.map(test => {
+      const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
+      const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
+      const scoreLabel = hasScore ? `Score: ${Number(test.totalScore).toFixed(1)} / ${Number(test.maxMarks || 25).toFixed(0)} Marks` : "Score Pending Evaluation";
+
+      return `
+        <div class="daily-quest-card exam-score-card" style="border-left: 3.5px solid #9333ea; background: #faf5ff; margin-bottom: 10px;">
+          <div style="font-size: 20px;">🏆</div>
+          <div class="quest-card-content">
+            <div class="quest-meta-row">
+              <span class="quest-type-pill" style="background:#9333ea; color:#fff;">Phase-2 Submission</span>
+              <span style="font-size:11.5px; font-weight:700; color:#7e22ce;">${totalWords} Words Written</span>
+            </div>
+            <div class="quest-title-text" style="color:#581c87; font-size:14.5px; font-weight:700;">
+              ${escapeHTML(scoreLabel)}
+            </div>
+            <div style="font-size:11.5px; color:#6b21a8; margin-top:2px;">
+              ${(test.questions || []).length} Question(s) · Time used: ${formatDuration(test.usedSeconds || 0)} of ${test.totalMinutes || 30} min${test.autoSubmitted ? ' (auto-submitted)' : ''}
+            </div>
+          </div>
+          <div class="quest-actions-row">
+            <button type="button" class="btn-minimal-primary p2-review-exam-btn" data-test-id="${escapeHTML(test.id)}" style="font-size:11px; padding:4px 10px;">📖 Review Answers</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  if (tasks.length === 0 && dayExams.length === 0) {
+    list.innerHTML = `
+      <div style="text-align: center; padding: 32px 16px; color: var(--muted); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px;">
+        <span style="font-size: 22px; display: block; margin-bottom: 6px;">✍️</span>
+        <strong style="color: #334155; font-size: 13.5px; display: block;">No Quests for this day</strong>
+        <p style="font-size: 12px; margin: 4px 0 0 0;">Add custom quests above to track your daily progress!</p>
       </div>
     `;
-  }
-  if (dayTasks.length > maxPills) {
-    pillsHtml += `<div class="cal-more-pill">+${dayTasks.length - maxPills} more</div>`;
+    return;
   }
 
-  return `
-    <div class="cal-day-cell day-type-${dayType} ${isOtherMonth ? 'is-other-month' : ''} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''} ${hasExam ? 'has-exam-score' : ''}" data-date="${dateStr}" data-day-type="${dayType}">
-      <div class="cal-day-header">
-        <div style="display:flex; align-items:center; gap:4px;">
-          <span class="cal-day-num">${dayNum}</span>
-          ${badgeHtml}
+  const questCardsHTML = tasks.map(t => {
+    const isDone = t.status === "completed";
+    let typeIcon = "📌";
+    let typePillClass = "tag-general";
+    let practiceBtn = "";
+
+    if (t.type === "Objective Exam") {
+      typeIcon = "🎯";
+      typePillClass = "tag-obj";
+      practiceBtn = `<button type="button" class="btn-quest-action btn-quest-practice" data-action="practice-obj" data-phase="Phase-2" data-topic="${escapeHTML(t.topic)}">▶ Quiz</button>`;
+    } else if (t.type === "Subjective Exam" || t.type === "Descriptive Writing") {
+      typeIcon = "✍️";
+      typePillClass = "tag-sub";
+      practiceBtn = `<button type="button" class="btn-quest-action btn-quest-practice" data-action="practice-p2-sub" data-topic="${escapeHTML(t.topic)}" data-subject="${escapeHTML(t.subject || '')}">▶ Write Answer</button>`;
+    } else if (t.type === "Study / Reading") {
+      typeIcon = "📖";
+      typePillClass = "tag-study";
+    } else if (t.type === "Revision") {
+      typeIcon = "🔄";
+      typePillClass = "tag-rev";
+    }
+
+    return `
+      <div class="daily-quest-card ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
+        <label class="quest-checkbox-label">
+          <input type="checkbox" class="quest-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
+          <span class="quest-custom-checkbox"></span>
+        </label>
+        <div class="quest-card-content">
+          <div class="quest-meta-row">
+            <span class="quest-type-pill ${typePillClass}">${typeIcon} ${escapeHTML(t.type || "Quest")}</span>
+            ${t.subject ? `<span class="quest-subject-pill">${escapeHTML(t.subject)}</span>` : ""}
+            ${t.time ? `<span class="quest-time-pill">⏱️ ${escapeHTML(t.time)}</span>` : ""}
+          </div>
+          <div class="quest-title-text">${escapeHTML(t.topic)}</div>
         </div>
-        ${countBadge}
+        <div class="quest-actions-row">
+          ${practiceBtn}
+          <button type="button" class="btn-quest-action btn-quest-delete" data-action="delete" data-id="${t.id}" title="Delete Quest">✕</button>
+        </div>
       </div>
-      ${examScorePill}
-      <div class="cal-day-events">
-        ${pillsHtml}
-      </div>
-    </div>
-  `;
+    `;
+  }).join("");
+
+  list.innerHTML = examCardsHTML + questCardsHTML;
 }
 
 function buildP2PopoverHTML(dateStr, dayMeta, exams) {
   const dateObj = new Date(dateStr + "T00:00:00");
-  const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+  const options = { weekday: "short", month: "short", day: "numeric", year: "numeric" };
   const formattedDate = dateObj.toLocaleDateString(undefined, options);
 
   const dayType = dayMeta?.dayType || "normal-day";
@@ -5320,12 +5661,9 @@ function buildP2PopoverHTML(dateStr, dayMeta, exams) {
   if (dayType === "mix-test") badgeLabel = "🔥 Mix Test";
   if (dayType === "buffer-day") badgeLabel = "⏳ Buffer Day";
 
-  const dayTitle = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} • ${formattedDate}` : formattedDate;
-  const p2Subject = dayMeta?.p2_subject || "";
+  const dayTitle = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} · ${formattedDate}` : formattedDate;
   const p2Topic = dayMeta?.p2_topic || "";
-  const p1Subject = dayMeta?.p1_subject || "";
-  const p1Topic = dayMeta?.p1_topic || "";
-  const caTopic = dayMeta?.ca || "";
+  const p2Sub = dayMeta?.p2_subject || "";
 
   let examSectionHTML = "";
   if (exams && exams.length > 0) {
@@ -5338,14 +5676,11 @@ function buildP2PopoverHTML(dateStr, dayMeta, exams) {
       <div class="popover-sec marks-sec p2">
         <div class="popover-sec-label" style="color:#6b21a8;">
           <span>🏆</span>
-          <span>TODAY'S PHASE-2 WRITING LOG</span>
+          <span>PHASE-2 WRITING LOG</span>
         </div>
         <div class="popover-marks-row">
           <span class="marks-val">${scoreVal}</span>
-          <span style="font-size:12px; color:#6b21a8;">· ${totalWords} words written</span>
-        </div>
-        <div style="font-size:11px; color:#7e22ce; margin-top:2px;">
-          ${(test.questions || []).length} Question(s) · Time used: ${formatDuration(test.usedSeconds || 0)}
+          <span style="font-size:12px; color:#6b21a8;">· ${totalWords} words</span>
         </div>
       </div>
     `;
@@ -5356,50 +5691,22 @@ function buildP2PopoverHTML(dateStr, dayMeta, exams) {
       <span class="popover-day-title">${escapeHTML(dayTitle)}</span>
       <span class="popover-type-badge ${dayType}">${escapeHTML(badgeLabel)}</span>
     </div>
-
     ${examSectionHTML}
-
-    <!-- Phase 2 Descriptive Writing Details -->
     <div class="popover-sec p2">
       <div class="popover-sec-label">
         <span>📖</span>
-        <span>PHASE-2 DESCRIPTIVE WRITING</span>
-        ${p2Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p2Subject)}</span>` : ""}
+        <span>DESCRIPTIVE FOCUS</span>
+        ${p2Sub ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p2Sub)}</span>` : ""}
       </div>
-      <div class="popover-topic-text">${escapeHTML(p2Topic || "No Phase-2 topic scheduled for today")}</div>
+      <div class="popover-topic-text">${escapeHTML(p2Topic || "Phase-2 Descriptive Writing")}</div>
     </div>
-
-    <!-- Overall Phase 1 Subject Context -->
-    ${p1Topic ? `
-    <div class="popover-sec p1" style="opacity:0.85;">
-      <div class="popover-sec-label">
-        <span>🎯</span>
-        <span>PHASE-1 STUDY CONTEXT</span>
-        ${p1Subject ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p1Subject)}</span>` : ""}
-      </div>
-      <div class="popover-topic-text" style="font-size:12px;">${escapeHTML(p1Topic)}</div>
-    </div>
-    ` : ""}
-
-    <!-- Current Affairs -->
-    ${caTopic ? `
-    <div class="popover-sec ca" style="opacity:0.85;">
-      <div class="popover-sec-label">
-        <span>📰</span>
-        <span>CURRENT AFFAIRS &amp; DRILLS</span>
-      </div>
-      <div class="popover-topic-text" style="font-size:12px;">${escapeHTML(caTopic)}</div>
-    </div>
-    ` : ""}
-
-    <div class="popover-hint">Click day to view or mark tasks completed</div>
+    <div class="popover-hint">Click day to view or edit daily quests</div>
   `;
 }
 
 function showP2CalendarHoverPopover(e, cell) {
   const popover = $("p2-calendar-hover-popover");
   if (!popover) return;
-
   const dateStr = cell.dataset.date;
   if (!dateStr) return;
 
@@ -5407,15 +5714,9 @@ function showP2CalendarHoverPopover(e, cell) {
   const p2ExamsMap = getPhase2ExamsByDate();
   const dayExams = p2ExamsMap[dateStr] || [];
 
-  if (!dayMeta && !cell.querySelector(".cal-event-pill") && dayExams.length === 0) {
-    hideP2CalendarHoverPopover();
-    return;
-  }
-
   popover.innerHTML = buildP2PopoverHTML(dateStr, dayMeta, dayExams);
   popover.style.display = "block";
   popover.style.opacity = "1";
-
   positionCalendarPopover(e.clientX, e.clientY, popover);
 }
 
@@ -5424,216 +5725,6 @@ function hideP2CalendarHoverPopover() {
   if (popover) popover.style.display = "none";
 }
 
-function renderP2SelectedDayTasks() {
-  const heading = $("p2-cal-selected-date-heading");
-  const sub = $("p2-cal-selected-date-sub");
-  const list = $("p2-cal-selected-day-tasks");
-  if (!heading || !list) return;
-
-  const selDateStr = state.p2_calendar_selectedDate;
-  const dateObj = new Date(selDateStr + "T00:00:00");
-  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-  const humanDate = dateObj.toLocaleDateString(undefined, options);
-
-  const dayMeta = getDayMetadata(selDateStr);
-  let metaBadge = "";
-  if (dayMeta) {
-    let typeName = "📘 Normal Day";
-    if (dayMeta.dayType === "chapter-test") typeName = "📝 Chapter Test";
-    if (dayMeta.dayType === "mix-test") typeName = "🔥 Mix Test";
-    if (dayMeta.dayType === "buffer-day") typeName = "⏳ Buffer Day";
-    const dayNumStr = dayMeta.dayNum ? `Day ${dayMeta.dayNum} of 415 • ` : "";
-    metaBadge = `
-      <div style="margin-top: 4px;">
-        <span class="popover-type-badge ${dayMeta.dayType}" style="font-size:11px; padding:3px 9px;">
-          ${dayNumStr}${typeName}
-        </span>
-      </div>
-    `;
-  }
-
-  heading.innerHTML = `${escapeHTML(humanDate)}${metaBadge}`;
-
-  const tasks = (state.calendar || []).filter(t => t.date === selDateStr && t.phase === "Phase-2");
-  const p2ExamsMap = getPhase2ExamsByDate();
-  const dayExams = p2ExamsMap[selDateStr] || [];
-
-  sub.textContent = `${tasks.length} task(s) scheduled · ${dayExams.length} written test(s)`;
-
-  let examCardsHTML = "";
-  if (dayExams.length > 0) {
-    examCardsHTML = dayExams.map(test => {
-      const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
-      const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
-      const scoreLabel = hasScore ? `Score: ${Number(test.totalScore).toFixed(1)} / ${Number(test.maxMarks || 25).toFixed(0)} Marks` : "Score Pending Evaluation";
-
-      return `
-        <div class="task-card" style="border-left: 3.5px solid #9333ea; background: #faf5ff; margin-bottom: 10px;">
-          <div class="task-card-top">
-            <span class="task-phase-badge" style="background:#9333ea; color:#fff;">🏆 Phase-2 Submission</span>
-            <span style="font-size:11.5px; font-weight:700; color:#7e22ce;">${totalWords} Words Written</span>
-          </div>
-          <div class="task-title" style="color:#581c87; font-size:15px; margin:4px 0;">
-            ${escapeHTML(scoreLabel)}
-          </div>
-          <div style="font-size:12px; color:#6b21a8; line-height:1.4;">
-            ${(test.questions || []).length} Question(s) · Time used: ${formatDuration(test.usedSeconds || 0)} of ${test.totalMinutes || 30} min${test.autoSubmitted ? ' (auto-submitted)' : ''}
-          </div>
-          <div style="margin-top:8px;">
-            <button type="button" class="btn-minimal-primary p2-review-exam-btn" data-test-id="${escapeHTML(test.id)}" style="font-size:11.5px; padding:4px 10px;">📖 Review Answers &amp; Marks</button>
-          </div>
-        </div>
-      `;
-    }).join("");
-  }
-
-  if (tasks.length === 0 && dayExams.length === 0) {
-    list.innerHTML = `
-      <div style="text-align: center; padding: 36px 16px; color: var(--muted); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px;">
-        <span style="font-size: 24px; display: block; margin-bottom: 6px;">📅</span>
-        <strong style="color: #334155; font-size: 13.5px; display: block;">No Phase-2 tasks scheduled for this day</strong>
-        <p style="font-size: 12px; margin: 4px 0 12px 0;">Stay consistent with your RBI Grade B descriptive writing!</p>
-        <button type="button" id="btn-p2-empty-add-task" class="btn-minimal-primary" style="font-size: 12.5px; padding: 6px 14px;">+ Add Task</button>
-      </div>
-    `;
-    const emptyBtn = $("btn-p2-empty-add-task");
-    if (emptyBtn) emptyBtn.addEventListener("click", () => openTaskModal(null, "Phase-2"));
-    return;
-  }
-
-  const taskCardsHTML = tasks.map(t => {
-    const isDone = t.status === "completed";
-    const practiceAction = `<button type="button" class="task-action-btn practice-btn" data-action="practice" data-phase="${t.phase}">▶ Practice</button>`;
-
-    return `
-      <div class="task-card ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
-        <div class="task-card-top">
-          <div class="task-badges">
-            <span class="task-phase-badge phase-2">${escapeHTML(t.phase)}</span>
-            <span class="task-type-badge">${escapeHTML(t.type)}</span>
-          </div>
-          ${t.time ? `<span class="task-time-badge">⏱️ ${escapeHTML(t.time)}</span>` : ""}
-        </div>
-        <div class="task-title">${escapeHTML(t.topic)}</div>
-        <div class="task-subject">${escapeHTML(t.subject)}</div>
-        <div class="task-actions-row">
-          <label class="task-complete-toggle">
-            <input type="checkbox" class="task-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
-            <span>${isDone ? 'Completed' : 'Mark done'}</span>
-          </label>
-          <div class="task-btn-group">
-            ${practiceAction}
-            <button type="button" class="task-action-btn" data-action="edit" data-id="${t.id}">✏️</button>
-            <button type="button" class="task-action-btn danger-btn" data-action="delete" data-id="${t.id}">✕</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  list.innerHTML = examCardsHTML + taskCardsHTML;
-}
-
-function renderP2AgendaView() {
-  const container = $("p2-calendar-agenda-list");
-  if (!container) return;
-
-  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-2");
-  const filteredTasks = tasks.filter(t => {
-    if (state.p2_calendar_filterStatus === "pending" && t.status === "completed") return false;
-    if (state.p2_calendar_filterStatus === "completed" && t.status !== "completed") return false;
-    if (state.p2_calendar_filterDayType && state.p2_calendar_filterDayType !== "all") {
-      const dType = t.dayType || (getDayMetadata(t.date)?.dayType);
-      if (dType !== state.p2_calendar_filterDayType) return false;
-    }
-    return true;
-  });
-
-  if (filteredTasks.length === 0) {
-    container.innerHTML = `
-      <div style="text-align: center; padding: 40px; color: var(--muted);">
-        No Phase-2 tasks match your selected status or day type filter.
-      </div>
-    `;
-    return;
-  }
-
-  filteredTasks.sort((a, b) => a.date.localeCompare(b.date));
-
-  const groups = {};
-  for (const t of filteredTasks) {
-    if (!groups[t.date]) groups[t.date] = [];
-    groups[t.date].push(t);
-  }
-
-  const p2ExamsMap = getPhase2ExamsByDate();
-  let html = "";
-  for (const [dateStr, dateTasks] of Object.entries(groups)) {
-    const dateObj = new Date(dateStr + "T00:00:00");
-    const humanDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-    const dayMeta = getDayMetadata(dateStr);
-
-    let agendaBadge = "";
-    if (dayMeta) {
-      let typeLabel = "📘 Normal Day";
-      if (dayMeta.dayType === "chapter-test") typeLabel = "📝 Chapter Test";
-      if (dayMeta.dayType === "mix-test") typeLabel = "🔥 Mix Test";
-      if (dayMeta.dayType === "buffer-day") typeLabel = "⏳ Buffer Day";
-      const dayNumStr = dayMeta.dayNum ? `Day ${dayMeta.dayNum} • ` : "";
-      agendaBadge = `<span class="popover-type-badge ${dayMeta.dayType}" style="font-size:10px; margin-left:8px; padding:1px 6px;">${dayNumStr}${typeLabel}</span>`;
-    }
-
-    const dayExams = p2ExamsMap[dateStr] || [];
-    let examTag = "";
-    if (dayExams.length > 0) {
-      const test = dayExams[0];
-      const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
-      if (hasScore) {
-        examTag = `<span class="cal-exam-score-pill p2-score-pill" style="display:inline-flex; margin-left:8px;">🏆 ${Number(test.totalScore).toFixed(1)}/${test.maxMarks || 25} M</span>`;
-      } else {
-        const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
-        examTag = `<span class="cal-exam-score-pill p2-written-pill" style="display:inline-flex; margin-left:8px;">✍️ Written (${totalWords}w)</span>`;
-      }
-    }
-
-    html += `
-      <div class="agenda-date-group">
-        <div class="agenda-date-header">
-          <div style="display:flex; align-items:center;">
-            <span>📅 ${humanDate}</span>
-            ${agendaBadge}
-            ${examTag}
-          </div>
-          <span style="font-size:12px; font-weight:normal; color:var(--muted);">${dateTasks.length} task(s)</span>
-        </div>
-        <div class="agenda-tasks-list">
-    `;
-
-    for (const t of dateTasks) {
-      const isDone = t.status === "completed";
-
-      html += `
-        <div class="agenda-task-item ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
-          <div class="agenda-task-left">
-            <input type="checkbox" class="task-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
-            <div>
-              <div style="font-weight: 600; font-size: 13.5px; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escapeHTML(t.topic)}</div>
-              <div style="font-size: 11.5px; color: var(--muted);">${escapeHTML(t.subject)} · <span class="task-phase-badge phase-2">${escapeHTML(t.phase)}</span> (${escapeHTML(t.type)})</div>
-            </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            ${t.time ? `<span style="font-size:11.5px; color:var(--muted);">⏱️ ${escapeHTML(t.time)}</span>` : ""}
-            <button type="button" class="task-action-btn danger-btn" data-action="delete" data-id="${t.id}">✕</button>
-          </div>
-        </div>
-      `;
-    }
-
-    html += `</div></div>`;
-  }
-
-  container.innerHTML = html;
-}
 
 // Dynamically position hover popover keeping it inside viewport
 function positionCalendarPopover(mouseX, mouseY, popover) {
@@ -6921,44 +7012,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const p1CalFilterDayType = $("p1-cal-filter-day-type");
-  if (p1CalFilterDayType) {
-    p1CalFilterDayType.value = state.p1_calendar_filterDayType || "all";
-    p1CalFilterDayType.addEventListener("change", (e) => {
-      state.p1_calendar_filterDayType = e.target.value;
-      renderP1Calendar();
+  // Phase-1 Quick Add Quest Form
+  const p1FormQuickAdd = $("p1-form-quick-add-quest");
+  if (p1FormQuickAdd) {
+    p1FormQuickAdd.addEventListener("submit", (e) => {
+      e.preventDefault();
+      addQuickQuest("phase1");
     });
   }
 
-  const p1CalFilterStatus = $("p1-cal-filter-status");
-  if (p1CalFilterStatus) {
-    p1CalFilterStatus.value = state.p1_calendar_filterStatus || "all";
-    p1CalFilterStatus.addEventListener("change", (e) => {
-      state.p1_calendar_filterStatus = e.target.value;
-      renderP1Calendar();
-    });
-  }
-
-  const p1CalViewMonthBtn = $("p1-cal-view-month");
-  if (p1CalViewMonthBtn) {
-    p1CalViewMonthBtn.addEventListener("click", () => {
-      state.p1_calendar_view = "month";
-      renderP1Calendar();
-    });
-  }
-
-  const p1CalViewAgendaBtn = $("p1-cal-view-agenda");
-  if (p1CalViewAgendaBtn) {
-    p1CalViewAgendaBtn.addEventListener("click", () => {
-      state.p1_calendar_view = "agenda";
-      renderP1Calendar();
-    });
-  }
-
+  // Phase-1 LeetCode Days Grid
   const p1DaysGrid = $("p1-calendar-days-grid");
   if (p1DaysGrid) {
     p1DaysGrid.addEventListener("mousemove", (e) => {
-      const cell = e.target.closest(".cal-day-cell");
+      const cell = e.target.closest(".lc-day-cell");
       if (cell) {
         showP1CalendarHoverPopover(e, cell);
       } else {
@@ -6972,7 +7039,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     p1DaysGrid.addEventListener("click", (e) => {
       hideP1CalendarHoverPopover();
-      const cell = e.target.closest(".cal-day-cell");
+      const cell = e.target.closest(".lc-day-cell");
       if (cell && cell.dataset.date) {
         state.p1_calendar_selectedDate = cell.dataset.date;
         renderP1Calendar();
@@ -6980,10 +7047,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Phase-1 Daily Quests List
   const p1DayTasksList = $("p1-cal-selected-day-tasks");
   if (p1DayTasksList) {
     p1DayTasksList.addEventListener("change", (e) => {
-      if (e.target && e.target.classList.contains("task-status-check")) {
+      if (e.target && (e.target.classList.contains("quest-status-check") || e.target.classList.contains("task-status-check"))) {
         const id = e.target.dataset.id;
         toggleTaskComplete(id, "phase1");
       }
@@ -7000,7 +7068,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!btn) return;
       const action = btn.dataset.action;
       const id = btn.dataset.id;
-      if (action === "practice") {
+
+      if (action === "practice-obj" || action === "practice") {
         setPhase("phase1");
         renderP1SetupList();
         showScreen("setup");
@@ -7009,23 +7078,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (t) openTaskModal(t, "Phase-1");
       } else if (action === "delete") {
         deleteTask(id, "phase1");
-      }
-    });
-  }
-
-  const p1AgendaList = $("p1-calendar-agenda-list");
-  if (p1AgendaList) {
-    p1AgendaList.addEventListener("change", (e) => {
-      if (e.target && e.target.classList.contains("task-status-check")) {
-        const id = e.target.dataset.id;
-        toggleTaskComplete(id, "phase1");
-      }
-    });
-
-    p1AgendaList.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-action='delete']");
-      if (btn && btn.dataset.id) {
-        deleteTask(btn.dataset.id, "phase1");
       }
     });
   }
@@ -7053,8 +7105,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+
+
   // ==========================================
-  // PHASE-2 CALENDAR EVENTS
+  // PHASE-2 CALENDAR EVENTS & DAILY QUESTS
   // ==========================================
   const p2CalExcelImport = $("p2-calendar-excel-import");
   if (p2CalExcelImport) {
@@ -7113,44 +7167,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const p2CalFilterDayType = $("p2-cal-filter-day-type");
-  if (p2CalFilterDayType) {
-    p2CalFilterDayType.value = state.p2_calendar_filterDayType || "all";
-    p2CalFilterDayType.addEventListener("change", (e) => {
-      state.p2_calendar_filterDayType = e.target.value;
-      renderP2Calendar();
+  // Phase-2 Quick Add Quest Form
+  const p2FormQuickAdd = $("p2-form-quick-add-quest");
+  if (p2FormQuickAdd) {
+    p2FormQuickAdd.addEventListener("submit", (e) => {
+      e.preventDefault();
+      addQuickQuest("phase2");
     });
   }
 
-  const p2CalFilterStatus = $("p2-cal-filter-status");
-  if (p2CalFilterStatus) {
-    p2CalFilterStatus.value = state.p2_calendar_filterStatus || "all";
-    p2CalFilterStatus.addEventListener("change", (e) => {
-      state.p2_calendar_filterStatus = e.target.value;
-      renderP2Calendar();
-    });
-  }
-
-  const p2CalViewMonthBtn = $("p2-cal-view-month");
-  if (p2CalViewMonthBtn) {
-    p2CalViewMonthBtn.addEventListener("click", () => {
-      state.p2_calendar_view = "month";
-      renderP2Calendar();
-    });
-  }
-
-  const p2CalViewAgendaBtn = $("p2-cal-view-agenda");
-  if (p2CalViewAgendaBtn) {
-    p2CalViewAgendaBtn.addEventListener("click", () => {
-      state.p2_calendar_view = "agenda";
-      renderP2Calendar();
-    });
-  }
-
+  // Phase-2 LeetCode Days Grid
   const p2DaysGrid = $("p2-calendar-days-grid");
   if (p2DaysGrid) {
     p2DaysGrid.addEventListener("mousemove", (e) => {
-      const cell = e.target.closest(".cal-day-cell");
+      const cell = e.target.closest(".lc-day-cell");
       if (cell) {
         showP2CalendarHoverPopover(e, cell);
       } else {
@@ -7164,7 +7194,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     p2DaysGrid.addEventListener("click", (e) => {
       hideP2CalendarHoverPopover();
-      const cell = e.target.closest(".cal-day-cell");
+      const cell = e.target.closest(".lc-day-cell");
       if (cell && cell.dataset.date) {
         state.p2_calendar_selectedDate = cell.dataset.date;
         renderP2Calendar();
@@ -7172,10 +7202,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Phase-2 Daily Quests List
   const p2DayTasksList = $("p2-cal-selected-day-tasks");
   if (p2DayTasksList) {
     p2DayTasksList.addEventListener("change", (e) => {
-      if (e.target && e.target.classList.contains("task-status-check")) {
+      if (e.target && (e.target.classList.contains("quest-status-check") || e.target.classList.contains("task-status-check"))) {
         const id = e.target.dataset.id;
         toggleTaskComplete(id, "phase2");
       }
@@ -7204,7 +7235,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!btn) return;
       const action = btn.dataset.action;
       const id = btn.dataset.id;
-      if (action === "practice") {
+
+      if (action === "practice-p2-sub" || action === "practice") {
+        setPhase("phase2");
+        renderSetupList();
+        showScreen("setup");
+      } else if (action === "practice-obj") {
         setPhase("phase2");
         renderSetupList();
         showScreen("setup");
@@ -7213,23 +7249,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (t) openTaskModal(t, "Phase-2");
       } else if (action === "delete") {
         deleteTask(id, "phase2");
-      }
-    });
-  }
-
-  const p2AgendaList = $("p2-calendar-agenda-list");
-  if (p2AgendaList) {
-    p2AgendaList.addEventListener("change", (e) => {
-      if (e.target && e.target.classList.contains("task-status-check")) {
-        const id = e.target.dataset.id;
-        toggleTaskComplete(id, "phase2");
-      }
-    });
-
-    p2AgendaList.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-action='delete']");
-      if (btn && btn.dataset.id) {
-        deleteTask(btn.dataset.id, "phase2");
       }
     });
   }
@@ -7256,6 +7275,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
 
   window.addEventListener("scroll", () => {
     hideP1CalendarHoverPopover();
