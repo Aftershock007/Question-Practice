@@ -90,7 +90,7 @@ function getCombinedFilename(test) {
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.hidden = true);
   let targetId = "screen-" + name;
-  if (name === "setup" || name === "exam" || name === "result" || name === "bank" || name === "history") {
+  if (name === "setup" || name === "exam" || name === "result" || name === "history") {
     targetId = state.phase === "phase1" ? `screen-${name}-p1` : `screen-${name}`;
   }
   const target = $(targetId) || $(name) || $("screen-" + name);
@@ -185,7 +185,6 @@ const state = {
   lastAutoSave: 0,     // timestamp of last throttled exam autosave
   lastResultTest: null, // test object currently being viewed on Phase 2 result screen
   setup_page: 1,       // current page for Phase 2 setup questions list
-  bank_page: 1,        // current page for Phase 2 question bank list
 
   // Phase 1 (Objective / MCQs) state
   p1_setup: loadJSON("rbi_p1_setup", {
@@ -202,8 +201,7 @@ const state = {
   p1_lastAutoSave: 0,
   p1_lastResultTest: null,
   p1_resultFilter: "all",
-  p1_setup_page: 1,    // current page for Phase 1 setup questions list
-  p1_bank_page: 1      // current page for Phase 1 question bank list
+  p1_setup_page: 1     // current page for Phase 1 setup questions list
 };
 
 // Render reusable pagination controls (50 items per page; hidden if totalPages <= 1)
@@ -284,16 +282,13 @@ function setPhase(phase) {
     const sid = String(curScreen.id);
     if (sid.includes("calendar")) activeScreenType = "calendar";
     else if (sid.includes("history")) activeScreenType = "history";
-    else if (sid.includes("bank")) activeScreenType = "bank";
   }
 
   if (state.phase === "phase1") {
     if (activeScreenType === "history") renderP1History();
-    else if (activeScreenType === "bank") renderP1Bank();
     else renderP1SetupList();
   } else {
     if (activeScreenType === "history") renderHistory();
-    else if (activeScreenType === "bank") renderBank();
     else renderSetupList();
   }
 
@@ -366,19 +361,6 @@ function handleDeleteAllSetup() {
     state.setup.questions = [];
     saveSetup();
     renderSetupList();
-  }
-}
-
-// Delete all questions stored in Question Bank after confirmation
-function handleClearAllBank() {
-  const bank = loadJSON("rbi_question_bank", []);
-  if (bank.length === 0) {
-    alert("Question bank is already empty.");
-    return;
-  }
-  if (confirm(`Permanently delete all ${bank.length} question(s) from Question Bank? This cannot be undone.`)) {
-    saveJSON("rbi_question_bank", []);
-    renderBank();
   }
 }
 
@@ -488,11 +470,11 @@ function renderSetupList() {
 function editSetupQuestion(id) {
   const q = state.setup.questions.find(item => item.id === id);
   if (!q) return;
-  fillQuestionForm(q, "setup");
+  fillQuestionForm(q);
 }
 
-// Load a descriptive question into the manual form for editing (origin: "setup" or "bank")
-function fillQuestionForm(q, origin) {
+// Load a descriptive question into the manual form for editing
+function fillQuestionForm(q) {
   const acc = $("p2-manual-accordion");
   if (acc) acc.open = true;
   selectValueEnsuringOption("q-paper", q.paper || "ESI");
@@ -502,8 +484,7 @@ function fillQuestionForm(q, origin) {
   $("q-wordlimit").value = q.wordLimit || defaultWordLimit(q.marks || 10);
   $("q-model").value = q.modelAnswer || "";
   $("q-edit-id").value = q.id;
-  $("q-edit-id").dataset.origin = origin;
-  $("btn-add-question").textContent = origin === "bank" ? "Update question in bank" : "Update question";
+  $("btn-add-question").textContent = "Update question";
   const cancel = $("btn-cancel-edit");
   if (cancel) cancel.hidden = false;
   $("question-form").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -556,7 +537,6 @@ function handleQuestionFormSubmit(event) {
   const wordLimit = Math.max(50, Number($("q-wordlimit").value) || defaultWordLimit(marks));
   const modelAnswer = $("q-model").value.trim();
   const editId = $("q-edit-id").value;
-  const saveToBank = $("q-save-bank").checked;
 
   if (!text) {
     errorElem.textContent = "Please enter the question text.";
@@ -573,19 +553,6 @@ function handleQuestionFormSubmit(event) {
     modelAnswer
   };
 
-  const editOrigin = $("q-edit-id").dataset.origin || "";
-  if (editId && editOrigin === "bank" && !state.setup.questions.some(q => q.id === editId)) {
-    const bank = loadJSON("rbi_question_bank", []);
-    const bankIndex = bank.findIndex(item => item.id === editId);
-    if (bankIndex >= 0) bank[bankIndex] = JSON.parse(JSON.stringify(questionObj));
-    else bank.push(JSON.parse(JSON.stringify(questionObj)));
-    saveJSON("rbi_question_bank", bank);
-    resetQuestionForm();
-    renderBank();
-    showScreen("bank");
-    return;
-  }
-
   if (editId) {
     const idx = state.setup.questions.findIndex(q => q.id === editId);
     if (idx >= 0) {
@@ -595,17 +562,6 @@ function handleQuestionFormSubmit(event) {
     }
   } else {
     state.setup.questions.push(questionObj);
-  }
-
-  if (saveToBank) {
-    const bank = loadJSON("rbi_question_bank", []);
-    const bankIndex = bank.findIndex(item => item.id === questionObj.id);
-    if (bankIndex >= 0) {
-      bank[bankIndex] = JSON.parse(JSON.stringify(questionObj));
-    } else {
-      bank.push(JSON.parse(JSON.stringify(questionObj)));
-    }
-    saveJSON("rbi_question_bank", bank);
   }
 
   saveSetup();
@@ -1547,343 +1503,6 @@ function clearAllHistory() {
   }
 }
 
-// Add filter options for any paper / subject values found in a bank (e.g. from imported files)
-function syncFilterOptions(selectId, values) {
-  const sel = $(selectId);
-  if (!sel) return;
-  const known = new Set(Array.from(sel.options).map(o => o.value));
-  values.forEach(v => {
-    if (v && !known.has(v)) {
-      const o = document.createElement("option");
-      o.value = v;
-      o.textContent = v;
-      sel.appendChild(o);
-      known.add(v);
-    }
-  });
-}
-
-// Update the visibility and count of the bank batch delete and add buttons based on checkbox selection
-function updateBankBatchState() {
-  const checkboxes = document.querySelectorAll("#bank-list .bank-select-check");
-  const checked = document.querySelectorAll("#bank-list .bank-select-check:checked");
-  const count = checked.length;
-
-  const countElem = $("bank-selected-count");
-  if (countElem) countElem.textContent = count;
-
-  const addCountElem = $("bank-add-selected-count");
-  if (addCountElem) addCountElem.textContent = count;
-
-  const btnDeleteSelected = $("btn-bank-delete-selected");
-  if (btnDeleteSelected) {
-    btnDeleteSelected.style.display = count > 0 ? "inline-block" : "none";
-  }
-
-  const btnAddSelected = $("btn-bank-add-selected");
-  if (btnAddSelected) {
-    btnAddSelected.style.display = count > 0 ? "inline-block" : "none";
-  }
-
-  const selectAll = $("bank-select-all");
-  if (selectAll) {
-    selectAll.checked = checkboxes.length > 0 && count === checkboxes.length;
-    selectAll.indeterminate = count > 0 && count < checkboxes.length;
-  }
-}
-
-// Toggle selection of all question checkboxes in the bank list
-function handleSelectAllBank(event) {
-  const checked = event.target.checked;
-  const checkboxes = document.querySelectorAll("#bank-list .bank-select-check");
-  checkboxes.forEach(cb => { cb.checked = checked; });
-  updateBankBatchState();
-}
-
-// Delete all questions currently checked in the question bank list
-function handleDeleteSelectedBank() {
-  const checked = document.querySelectorAll("#bank-list .bank-select-check:checked");
-  const idsToDelete = new Set(Array.from(checked).map(cb => cb.dataset.id));
-  if (idsToDelete.size === 0) return;
-
-  if (confirm(`Permanently delete ${idsToDelete.size} selected question(s) from Question Bank? This cannot be undone.`)) {
-    let bank = loadJSON("rbi_question_bank", []);
-    bank = bank.filter(q => !idsToDelete.has(q.id));
-    saveJSON("rbi_question_bank", bank);
-    renderBank();
-  }
-}
-
-// Add all questions currently checked in the question bank into today's test setup
-function handleAddSelectedBank() {
-  const checked = document.querySelectorAll("#bank-list .bank-select-check:checked");
-  const idsToAdd = new Set(Array.from(checked).map(cb => cb.dataset.id));
-  if (idsToAdd.size === 0) return;
-
-  const bank = loadJSON("rbi_question_bank", []);
-  let addedCount = 0;
-  bank.forEach(q => {
-    if (idsToAdd.has(q.id)) {
-      if (!state.setup.questions.some(sq => sq.id === q.id)) {
-        state.setup.questions.push(JSON.parse(JSON.stringify(q)));
-        addedCount++;
-      }
-    }
-  });
-
-  if (addedCount > 0) {
-    saveSetup();
-    renderSetupList();
-    alert(`Added ${addedCount} question(s) to today's test.`);
-  } else {
-    alert("All selected questions are already in today's test.");
-  }
-  updateBankBatchState();
-}
-
-// Render the questions stored in the question bank based on search and paper filters
-function renderBank() {
-  const bank = loadJSON("rbi_question_bank", []);
-  const listElem = $("bank-list");
-  if (!listElem) return;
-  syncFilterOptions("bank-filter-paper", bank.map(q => q.paper));
-
-  const paperFilter = $("bank-filter-paper") ? $("bank-filter-paper").value : "";
-  const searchText = $("bank-search") ? $("bank-search").value.trim().toLowerCase() : "";
-
-  const filtered = bank.filter(q => {
-    if (paperFilter && q.paper !== paperFilter) return false;
-    if (searchText) {
-      const matchText = (q.text || "").toLowerCase().includes(searchText);
-      const matchTopic = (q.topic || "").toLowerCase().includes(searchText);
-      if (!matchText && !matchTopic) return false;
-    }
-    return true;
-  });
-
-  const batchActions = $("bank-batch-actions");
-  if (batchActions) {
-    batchActions.style.display = filtered.length > 0 ? "flex" : "none";
-  }
-
-  const bankTotalInfo = $("bank-total-info");
-  if (bankTotalInfo) {
-    bankTotalInfo.textContent = filtered.length === bank.length
-      ? `${bank.length} questions`
-      : `Showing ${filtered.length} of ${bank.length} questions`;
-  }
-
-  listElem.innerHTML = "";
-
-  if (filtered.length === 0) {
-    listElem.innerHTML = `<div class="empty-state">${bank.length === 0 ? "Your question bank is empty. Questions you add with “Also save to Question Bank” appear here." : "No questions match your search."}</div>`;
-    renderPaginationControls({
-      containerId: "bank-pagination",
-      currentPage: 1,
-      totalPages: 0,
-      totalItems: 0,
-      onPageChange: () => {}
-    });
-    updateBankBatchState();
-    return;
-  }
-
-  const PAGE_SIZE = 50;
-  const totalItems = filtered.length;
-  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
-  if (state.bank_page > totalPages) state.bank_page = totalPages;
-  if (state.bank_page < 1) state.bank_page = 1;
-
-  const startIndex = (state.bank_page - 1) * PAGE_SIZE;
-  const pageItems = filtered.slice(startIndex, startIndex + PAGE_SIZE);
-
-  pageItems.forEach((q, localIdx) => {
-    const globalIdx = startIndex + localIdx;
-    const card = document.createElement("div");
-    card.className = "bank-card";
-
-    const modelNote = (q.modelAnswer && q.modelAnswer.trim())
-      ? "<span style='color:var(--ok);font-weight:500;'>Has model answer</span>"
-      : "<span class='no-model-warn'>No model answer</span>";
-    card.innerHTML = `
-      <div style="display: flex; align-items: flex-start; gap: 10px;">
-        <input type="checkbox" class="bank-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select question" style="margin-top: 4px; transform: scale(1.15); cursor: pointer;">
-        <div style="flex: 1; min-width: 0;">
-          <div class="bank-card-header">
-            <span class="badge-subject">${escapeHTML(q.paper)}</span>
-            <span>${escapeHTML(q.marks)} marks · ${escapeHTML(q.wordLimit)} words</span>
-            ${q.topic ? `<span>Topic: ${escapeHTML(q.topic)}</span>` : ""}
-            ${modelNote}
-            <span class="bank-card-num">Q${globalIdx + 1}</span>
-          </div>
-          <div class="bank-card-text" style="white-space: pre-wrap; line-height: 1.5; margin: 6px 0 10px 0;">${escapeHTML(q.text)}</div>
-          <div class="bank-card-actions">
-            <button type="button" class="btn-bank-add" data-id="${escapeHTML(q.id)}">Add to today's test</button>
-            <button type="button" class="btn-bank-edit secondary" data-id="${escapeHTML(q.id)}">Edit</button>
-            <button type="button" class="btn-bank-delete danger" data-id="${escapeHTML(q.id)}">Delete from bank</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    listElem.appendChild(card);
-  });
-
-  renderPaginationControls({
-    containerId: "bank-pagination",
-    currentPage: state.bank_page,
-    totalPages: totalPages,
-    totalItems: totalItems,
-    onPageChange: (newPage) => {
-      state.bank_page = newPage;
-      renderBank();
-      $("bank-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  });
-
-  updateBankBatchState();
-}
-
-// Add a single question from the Question Bank into today's setup list
-function addQuestionFromBank(id, buttonElem) {
-  const bank = loadJSON("rbi_question_bank", []);
-  const question = bank.find(q => q.id === id);
-  if (!question) return;
-
-  const alreadyAdded = state.setup.questions.some(q => q.id === id);
-  if (!alreadyAdded) {
-    state.setup.questions.push(JSON.parse(JSON.stringify(question)));
-    saveSetup();
-    renderSetupList();
-  }
-
-  if (buttonElem) {
-    const old = buttonElem.textContent;
-    buttonElem.textContent = "Added ✓";
-    setTimeout(() => buttonElem.textContent = old, 1500);
-  }
-}
-
-// Load a bank question into the setup form for modification
-function editBankQuestion(id) {
-  const bank = loadJSON("rbi_question_bank", []);
-  const q = bank.find(item => item.id === id);
-  if (!q) return;
-
-  renderSetupList();
-  showScreen("setup");
-  fillQuestionForm(q, state.setup.questions.some(sq => sq.id === q.id) ? "setup" : "bank");
-}
-
-// Remove a question from the question bank permanently
-function deleteBankQuestion(id) {
-  if (confirm("Delete this question from Question Bank?")) {
-    let bank = loadJSON("rbi_question_bank", []);
-    bank = bank.filter(q => q.id !== id);
-    saveJSON("rbi_question_bank", bank);
-    renderBank();
-  }
-}
-
-// Select and add up to 3 random questions from the filtered bank into today's test
-function handleAddRandomQuestions() {
-  const bank = loadJSON("rbi_question_bank", []);
-  if (bank.length === 0) {
-    alert("The Question Bank is empty. Add questions to the bank first.");
-    return;
-  }
-
-  const paperFilter = $("bank-filter-paper") ? $("bank-filter-paper").value : "";
-  const searchText = $("bank-search") ? $("bank-search").value.trim().toLowerCase() : "";
-
-  const filtered = bank.filter(q => {
-    if (paperFilter && q.paper !== paperFilter) return false;
-    if (searchText) {
-      const matchText = (q.text || "").toLowerCase().includes(searchText);
-      const matchTopic = (q.topic || "").toLowerCase().includes(searchText);
-      if (!matchText && !matchTopic) return false;
-    }
-    return true;
-  });
-
-  const available = filtered.filter(bq => !state.setup.questions.some(sq => sq.id === bq.id));
-  if (available.length === 0) {
-    alert("All matching questions are already in today's test.");
-    return;
-  }
-
-  const shuffled = available.slice();
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  const picked = shuffled.slice(0, 3);
-
-  picked.forEach(q => {
-    state.setup.questions.push(JSON.parse(JSON.stringify(q)));
-  });
-
-  saveSetup();
-  renderSetupList();
-  alert(`Added ${picked.length} question(s) to today's test.`);
-  renderBank();
-}
-
-// Export the entire Question Bank as a downloadable JSON file
-function handleBankExport() {
-  const bank = loadJSON("rbi_question_bank", []);
-  const dateStr = getLocalDateString();
-  downloadText(`Question_bank_${dateStr}.json`, JSON.stringify(bank, null, 2));
-}
-
-// Read and merge an imported JSON question file into the question bank
-function handleBankImport(event) {
-  const file = event.target.files && event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  // Process imported file content once read as text
-  reader.onload = function(e) {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (!Array.isArray(data)) {
-        throw new Error("File content is not a valid JSON array.");
-      }
-      const bank = loadJSON("rbi_question_bank", []);
-      let importedCount = 0;
-
-      data.forEach(item => {
-        if (!item || typeof item.text !== "string" || !item.text.trim()) {
-          return;
-        }
-        if (item.id && bank.some(b => b.id === item.id)) {
-          return;
-        }
-        const newQuestion = {
-          id: item.id || makeId("q"),
-          paper: item.paper || "Other",
-          topic: item.topic || "",
-          text: item.text.trim(),
-          marks: Number(item.marks) || 10,
-          wordLimit: Number(item.wordLimit) || defaultWordLimit(item.marks || 10),
-          modelAnswer: item.modelAnswer || ""
-        };
-        bank.push(newQuestion);
-        importedCount++;
-      });
-
-      saveJSON("rbi_question_bank", bank);
-      renderBank();
-      alert(`Imported ${importedCount} questions.`);
-    } catch (err) {
-      alert("Failed to import Question Bank: " + err.message);
-    } finally {
-      $("bank-import").value = "";
-    }
-  };
-  reader.readAsText(file);
-}
-
 // Safe concurrent stream decompression helper preventing WHATWG stream backpressure deadlocks
 async function decompressBuffer(data, format = "deflate-raw") {
   const ds = new DecompressionStream(format);
@@ -2448,12 +2067,12 @@ function parseQuestionsAndAnswers(rawText) {
 }
 
 // Read an uploaded DOCX or PDF file, extract its questions, and insert them into the target list
-async function handleDocImport(event, targetScreen) {
+async function handleDocImport(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
 
   const statusElem = $("setup-doc-status");
-  if (statusElem && targetScreen === "setup") {
+  if (statusElem) {
     statusElem.textContent = "Reading " + file.name + "...";
   }
 
@@ -2483,9 +2102,9 @@ async function handleDocImport(event, targetScreen) {
     // An MCQ file (options [a]-[e]) must not be imported as descriptive questions
     const mcqLike = parseMCQDocument(rawText, inferMCQSubject(rawText)).filter(q => (q.options || []).length >= 4);
     if (mcqLike.length >= 5) {
-      if (statusElem && targetScreen === "setup") statusElem.textContent = "";
-      if (confirm(`"${file.name}" is an objective (MCQ) file with ${mcqLike.length} MCQs, not descriptive questions.\n\nOK = add them to the Objective (MCQ) ${targetScreen === "bank" ? "question bank" : "test"} instead\nCancel = do not import`)) {
-        addImportedMCQs(mcqLike, targetScreen, file.name);
+      if (statusElem) statusElem.textContent = "";
+      if (confirm(`"${file.name}" is an objective (MCQ) file with ${mcqLike.length} MCQs, not descriptive questions.\n\nOK = add them to the Objective (MCQ) test instead\nCancel = do not import`)) {
+        addImportedMCQs(mcqLike, file.name);
       }
       return;
     }
@@ -2495,37 +2114,19 @@ async function handleDocImport(event, targetScreen) {
       throw new Error("Could not detect any questions in the file.");
     }
 
-    const saveToBank = $("q-save-bank") ? $("q-save-bank").checked : true;
-    const bank = loadJSON("rbi_question_bank", []);
-
     parsedQuestions.forEach(q => {
       q.id = makeId("q");
-      if (saveToBank) {
-        bank.push(JSON.parse(JSON.stringify(q)));
-      }
+      state.setup.questions.push(q);
     });
+    saveSetup();
+    renderSetupList();
 
-    if (saveToBank) {
-      saveJSON("rbi_question_bank", bank);
-    }
-
-    if (targetScreen === "setup") {
-      parsedQuestions.forEach(q => {
-        state.setup.questions.push(q);
-      });
-      saveSetup();
-      renderSetupList();
-
-      if (statusElem) {
-        statusElem.textContent = `✓ Added ${parsedQuestions.length} question(s) from ${file.name}${saveToBank ? " (also saved to the Question Bank)" : ""}.`;
-        setTimeout(() => { statusElem.textContent = ""; }, 6000);
-      }
-    } else if (targetScreen === "bank") {
-      renderBank();
-      alert(`Successfully imported ${parsedQuestions.length} question(s) from "${file.name}" into Question Bank!`);
+    if (statusElem) {
+      statusElem.textContent = `✓ Added ${parsedQuestions.length} question(s) from ${file.name}.`;
+      setTimeout(() => { statusElem.textContent = ""; }, 6000);
     }
   } catch (err) {
-    if (statusElem && targetScreen === "setup") {
+    if (statusElem) {
       statusElem.textContent = "Could not import: " + err.message;
       statusElem.classList.add("is-error");
       setTimeout(() => { statusElem.classList.remove("is-error"); }, 6000);
@@ -2751,12 +2352,12 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
 }
 
 // Handle importing DOCX / PDF files for Phase 1
-async function handleP1DocImport(event, targetScreen = "setup") {
+async function handleP1DocImport(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
 
   const statusElem = $("setup-p1-doc-status");
-  if (statusElem && targetScreen === "setup") {
+  if (statusElem) {
     statusElem.textContent = "Reading " + file.name + "...";
   }
 
@@ -2787,7 +2388,7 @@ async function handleP1DocImport(event, targetScreen = "setup") {
     if (parsedQuestions.length < 3) {
       const descriptive = parseQuestionsAndAnswers(rawText).filter(q => (q.modelAnswer || "").length > 200);
       if (descriptive.length >= 2) {
-        if (statusElem && targetScreen === "setup") statusElem.textContent = "";
+        if (statusElem) statusElem.textContent = "";
         alert(`"${file.name}" contains descriptive (subjective) questions with model answers, not MCQs.\n\nSwitch to "✍️ Subjective (Phase-2)" and upload it on that New Test screen.`);
         return;
       }
@@ -2795,9 +2396,9 @@ async function handleP1DocImport(event, targetScreen = "setup") {
     if (!parsedQuestions || parsedQuestions.length === 0) {
       throw new Error("Could not detect any MCQs with options in the file.");
     }
-    addImportedMCQs(parsedQuestions, targetScreen, file.name);
+    addImportedMCQs(parsedQuestions, file.name);
   } catch (err) {
-    if (statusElem && targetScreen === "setup") {
+    if (statusElem) {
       statusElem.textContent = "Error: " + err.message;
     }
     alert("File read error: " + err.message);
@@ -2820,36 +2421,23 @@ function inferMCQSubject(rawText) {
   return "General Awareness";
 }
 
-// Add imported MCQs to today's objective test (and the MCQ bank) or only to the bank
-function addImportedMCQs(parsedQuestions, targetScreen, fileName) {
-  const bank = loadJSON("rbi_p1_bank", []);
-  let addedToBank = 0;
-  parsedQuestions.forEach(q => {
-    if (!bank.some(b => b.text === q.text)) {
-      bank.push({ ...q });
-      addedToBank++;
-    }
-  });
-  saveJSON("rbi_p1_bank", bank);
+// Add imported MCQs to today's objective test
+function addImportedMCQs(parsedQuestions, fileName) {
   const withAns = parsedQuestions.filter(q => q.correctAnswer).length;
   const subject = parsedQuestions[0] ? parsedQuestions[0].subject : "";
 
-  if (targetScreen === "setup") {
-    state.p1_setup.questions = state.p1_setup.questions.concat(parsedQuestions.filter(q => !state.p1_setup.questions.some(sq => sq.text === q.text)));
-    saveP1Setup();
-    if (state.phase !== "phase1") setPhase("phase1");
-    renderP1SetupList();
-    showScreen("setup");
-    const statusElem = $("setup-p1-doc-status");
-    if (statusElem) {
-      statusElem.classList.remove("is-error");
-      statusElem.textContent = `✓ Imported ${parsedQuestions.length} MCQs (${subject}) from ${fileName}: ${withAns} with answer key, ${addedToBank} new in the MCQ bank.`;
-    }
-  } else {
-    if (state.phase !== "phase1") setPhase("phase1");
-    renderP1Bank();
-    showScreen("bank");
-    alert(`Imported ${parsedQuestions.length} MCQs (${subject}) from "${fileName}". ${addedToBank} new MCQ(s) added to the bank.`);
+  state.p1_setup.questions = state.p1_setup.questions.concat(
+    parsedQuestions.filter(q => !state.p1_setup.questions.some(sq => sq.text === q.text))
+  );
+  saveP1Setup();
+  if (state.phase !== "phase1") setPhase("phase1");
+  renderP1SetupList();
+  showScreen("setup");
+  const statusElem = $("setup-p1-doc-status");
+  if (statusElem) {
+    statusElem.classList.remove("is-error");
+    statusElem.textContent = `✓ Imported ${parsedQuestions.length} MCQs (${subject}) from ${fileName}: ${withAns} with answer key.`;
+    setTimeout(() => { statusElem.textContent = ""; }, 6000);
   }
 }
 
@@ -3003,7 +2591,7 @@ function handleP1QuestionFormSubmit(e) {
   const optE = ($("p1-q-opt-e").value || "").trim();
   const correct = ($("p1-q-correct").value || "a").toLowerCase();
   const explanation = ($("p1-q-explanation").value || "").trim();
-  const saveToBank = $("p1-q-save-bank") ? $("p1-q-save-bank").checked : true;
+
 
   if (!text) {
     alert("Please enter the question statement.");
@@ -3044,11 +2632,7 @@ function handleP1QuestionFormSubmit(e) {
   state.p1_setup.questions.push(newMCQ);
   saveP1Setup();
 
-  if (saveToBank) {
-    const bank = loadJSON("rbi_p1_bank", []);
-    bank.push({ ...newMCQ });
-    saveJSON("rbi_p1_bank", bank);
-  }
+
 
   $("p1-question-form").reset();
   renderP1SetupList();
@@ -3623,265 +3207,6 @@ function downloadP1Result(test) {
   downloadText(filename, lines.join("\n"));
 }
 
-// Render Objective Question Bank
-function renderP1Bank() {
-  const container = $("p1-bank-list");
-  if (!container) return;
-
-  const bank = loadJSON("rbi_p1_bank", []);
-  syncFilterOptions("p1-bank-filter-subject", bank.map(q => q.subject));
-  const searchQuery = ($("p1-bank-search")?.value || "").toLowerCase().trim();
-  const subjectFilter = $("p1-bank-filter-subject")?.value || "All";
-
-  const filtered = bank.filter(q => {
-    if (subjectFilter !== "All" && q.subject !== subjectFilter) return false;
-    if (searchQuery) {
-      const textMatch = (q.text || "").toLowerCase().includes(searchQuery);
-      const topicMatch = (q.topic || "").toLowerCase().includes(searchQuery);
-      const optsMatch = (q.options || []).some(o => (o.text || "").toLowerCase().includes(searchQuery));
-      return textMatch || topicMatch || optsMatch;
-    }
-    return true;
-  });
-
-  const totalInfo = $("p1-bank-total-info");
-  if (totalInfo) {
-    totalInfo.textContent = `Showing ${filtered.length} of ${bank.length} MCQs`;
-  }
-  const p1Batch = $("p1-bank-batch-actions");
-  if (p1Batch) p1Batch.style.display = filtered.length > 0 ? "flex" : "none";
-
-  if (filtered.length === 0) {
-    container.innerHTML = `<div class="empty-state">${bank.length === 0 ? "Your MCQ bank is empty. Import a DOCX / PDF / JSON file below, or upload one on the New Test screen." : "No MCQs match your search."}</div>`;
-    renderPaginationControls({
-      containerId: "p1-bank-pagination",
-      currentPage: 1,
-      totalPages: 0,
-      totalItems: 0,
-      onPageChange: () => {}
-    });
-    updateP1BankBatchState();
-    return;
-  }
-
-  const PAGE_SIZE = 50;
-  const totalItems = filtered.length;
-  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
-  if (state.p1_bank_page > totalPages) state.p1_bank_page = totalPages;
-  if (state.p1_bank_page < 1) state.p1_bank_page = 1;
-
-  const startIndex = (state.p1_bank_page - 1) * PAGE_SIZE;
-  const pageItems = filtered.slice(startIndex, startIndex + PAGE_SIZE);
-
-  container.innerHTML = pageItems.map((q, localIdx) => {
-    const globalIdx = startIndex + localIdx;
-    const optsPreview = (q.options || []).map(o => {
-      const isKey = q.correctAnswer && q.correctAnswer.toLowerCase() === o.label.toLowerCase();
-      return `<span class="opt-pill ${isKey ? 'is-correct' : ''}"><strong>[${escapeHTML(String(o.label).toUpperCase())}]</strong> ${escapeHTML(o.text || "")}</span>`;
-    }).join("");
-
-    return `
-      <div class="mcq-bank-card">
-        <input type="checkbox" class="p1-bank-select-check" data-id="${escapeHTML(q.id)}" style="margin-top:4px;">
-        <div class="mcq-bank-body">
-          <div class="p1-q-meta-badges">
-            <span class="badge-subject">${escapeHTML(q.subject || "General Awareness")}</span>
-            ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
-            ${q.correctAnswer ? `<span class="badge-ans">Key: [${escapeHTML(String(q.correctAnswer).toUpperCase())}]</span>` : ""}
-            <span style="font-size:11px; color:var(--muted);">Q${globalIdx + 1}</span>
-          </div>
-          <div class="mcq-bank-prompt" style="font-size:14px; font-weight:600; color:var(--text); line-height:1.5; white-space:pre-wrap; margin:6px 0 10px 0;">${escapeHTML(q.text)}</div>
-          <div class="p1-opts-preview">${optsPreview}</div>
-          <div class="mcq-bank-actions">
-            <button type="button" class="btn-p1-bank-add" data-id="${escapeHTML(q.id)}" style="background:#059669; color:white;">+ Add to Test</button>
-            <button type="button" class="danger btn-p1-bank-delete" data-id="${escapeHTML(q.id)}">Delete</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  renderPaginationControls({
-    containerId: "p1-bank-pagination",
-    currentPage: state.p1_bank_page,
-    totalPages: totalPages,
-    totalItems: totalItems,
-    onPageChange: (newPage) => {
-      state.p1_bank_page = newPage;
-      renderP1Bank();
-      $("p1-bank-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  });
-
-  updateP1BankBatchState();
-}
-
-// Update batch selection state in Phase-1 Bank
-function updateP1BankBatchState() {
-  const checkboxes = document.querySelectorAll("#p1-bank-list .p1-bank-select-check");
-  const checked = document.querySelectorAll("#p1-bank-list .p1-bank-select-check:checked");
-  const count = checked.length;
-
-  const countDel = $("p1-bank-selected-count");
-  if (countDel) countDel.textContent = count;
-
-  const countAdd = $("p1-bank-add-selected-count");
-  if (countAdd) countAdd.textContent = count;
-
-  const btnDel = $("btn-p1-bank-delete-selected");
-  if (btnDel) btnDel.style.display = count > 0 ? "inline-block" : "none";
-
-  const btnAdd = $("btn-p1-bank-add-selected");
-  if (btnAdd) btnAdd.style.display = count > 0 ? "inline-block" : "none";
-
-  const selectAll = $("p1-bank-select-all");
-  if (selectAll) {
-    selectAll.checked = checkboxes.length > 0 && count === checkboxes.length;
-    selectAll.indeterminate = count > 0 && count < checkboxes.length;
-  }
-}
-
-// Select/deselect all questions in Phase-1 Bank
-function handleP1BankSelectAll(e) {
-  const checked = e.target.checked;
-  document.querySelectorAll("#p1-bank-list .p1-bank-select-check").forEach(cb => cb.checked = checked);
-  updateP1BankBatchState();
-}
-
-// Delete selected questions from Phase-1 Bank
-function handleP1BankDeleteSelected() {
-  const checked = document.querySelectorAll("#p1-bank-list .p1-bank-select-check:checked");
-  if (checked.length === 0) return;
-  if (!confirm(`Delete ${checked.length} selected MCQ(s) from the Bank?`)) return;
-
-  const ids = new Set(Array.from(checked).map(cb => cb.dataset.id));
-  let bank = loadJSON("rbi_p1_bank", []);
-  bank = bank.filter(q => !ids.has(q.id));
-  saveJSON("rbi_p1_bank", bank);
-  renderP1Bank();
-}
-
-// Add selected questions from Bank to Today's Test
-function handleP1BankAddSelected() {
-  const checked = document.querySelectorAll("#p1-bank-list .p1-bank-select-check:checked");
-  if (checked.length === 0) return;
-
-  const ids = new Set(Array.from(checked).map(cb => cb.dataset.id));
-  const bank = loadJSON("rbi_p1_bank", []);
-  const selectedQuestions = bank.filter(q => ids.has(q.id));
-
-  let added = 0;
-  selectedQuestions.forEach(q => {
-    if (!state.p1_setup.questions.some(sq => sq.id === q.id || sq.text === q.text)) {
-      state.p1_setup.questions.push({ ...q });
-      added++;
-    }
-  });
-
-  saveP1Setup();
-  renderP1SetupList();
-  alert(added > 0 ? `Added ${added} MCQ(s) to today's test.` : "All selected MCQs are already in today's test.");
-}
-
-// Add random questions from Bank
-function addP1RandomQuestions(count) {
-  const bank = loadJSON("rbi_p1_bank", []);
-  if (bank.length === 0) {
-    alert("Question bank is empty. Import MCQs first.");
-    return;
-  }
-
-  const subjectFilter = $("p1-bank-filter-subject")?.value || "";
-  const available = bank.filter(q =>
-    (!subjectFilter || q.subject === subjectFilter) &&
-    !state.p1_setup.questions.some(sq => sq.id === q.id || sq.text === q.text));
-  if (available.length === 0) {
-    alert("All matching MCQs are already in today's test.");
-    return;
-  }
-  // Fisher-Yates shuffle (sort with Math.random is biased)
-  for (let i = available.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [available[i], available[j]] = [available[j], available[i]];
-  }
-  const picked = available.slice(0, count);
-  picked.forEach(q => state.p1_setup.questions.push({ ...q }));
-
-  saveP1Setup();
-  renderP1SetupList();
-  alert(`Added ${picked.length} random MCQ(s)${subjectFilter ? ` from ${subjectFilter}` : ""} to today's test.`);
-  showScreen("setup");
-}
-
-// Export Phase-1 Bank to JSON
-function exportP1Bank() {
-  const bank = loadJSON("rbi_p1_bank", []);
-  if (bank.length === 0) {
-    alert("Question bank is empty.");
-    return;
-  }
-  const jsonStr = JSON.stringify(bank, null, 2);
-  downloadText("RBI_Phase1_MCQs_Bank.json", jsonStr);
-}
-
-// Import Phase-1 Bank from JSON
-function importP1Bank(e) {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = (evt) => {
-    try {
-      const data = JSON.parse(evt.target.result);
-      if (!Array.isArray(data)) throw new Error("JSON must be an array of questions.");
-
-      const bank = loadJSON("rbi_p1_bank", []);
-      let imported = 0;
-      let skipped = 0;
-      data.forEach(item => {
-        const validOptions = item && Array.isArray(item.options) &&
-          item.options.filter(o => o && typeof o.label === "string" && String(o.text || "").trim()).length >= 2;
-        if (!item || typeof item.text !== "string" || !item.text.trim() || !validOptions) {
-          skipped++;
-          return;
-        }
-        if (!bank.some(b => b.text === item.text)) {
-          bank.push({
-            id: (item.id && !bank.some(b => b.id === item.id)) ? item.id : makeId("mcq"),
-            subject: item.subject || "General Awareness",
-            topic: item.topic || "",
-            text: item.text,
-            options: item.options || [],
-            correctAnswer: item.correctAnswer || "",
-            explanation: item.explanation || "",
-            marks: item.marks || 1.0,
-            negativeMarks: item.negativeMarks || 0.25
-          });
-          imported++;
-        }
-      });
-
-      saveJSON("rbi_p1_bank", bank);
-      renderP1Bank();
-      alert(`Imported ${imported} new MCQ(s) into the bank.${skipped ? ` Skipped ${skipped} invalid item(s) (need text and at least 2 options).` : ""}`);
-    } catch (err) {
-      alert("Failed to import MCQs: " + err.message);
-    } finally {
-      e.target.value = "";
-    }
-  };
-  reader.readAsText(file);
-}
-
-// Clear all questions in Phase-1 Bank
-function clearP1Bank() {
-  const bank = loadJSON("rbi_p1_bank", []);
-  if (bank.length === 0) return;
-  if (!confirm(`Are you sure you want to delete all ${bank.length} MCQs in the Question Bank? This cannot be undone.`)) return;
-  saveJSON("rbi_p1_bank", []);
-  renderP1Bank();
-}
-
 // Render Phase-1 History
 function renderP1History() {
   const statsElem = $("p1-history-stats");
@@ -4229,18 +3554,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const navBank = $("nav-bank");
-  if (navBank) {
-    navBank.addEventListener("click", () => {
-      if (state.phase === "phase1") {
-        renderP1Bank();
-      } else {
-        renderBank();
-      }
-      showScreen("bank");
-    });
-  }
-
   const navHistory = $("nav-history");
   if (navHistory) {
     navHistory.addEventListener("click", () => {
@@ -4269,12 +3582,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnCancelEdit = $("btn-cancel-edit");
   if (btnCancelEdit) {
     btnCancelEdit.addEventListener("click", () => {
-      const wasBank = $("q-edit-id").dataset.origin === "bank";
       resetQuestionForm();
-      if (wasBank) {
-        renderBank();
-        showScreen("bank");
-      }
     });
   }
 
@@ -4697,90 +4005,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnClearHistory.addEventListener("click", clearAllHistory);
   }
 
-  // Question Bank Screen
-  const bankSearch = $("bank-search");
-  if (bankSearch) {
-    bankSearch.addEventListener("input", () => {
-      state.bank_page = 1;
-      renderBank();
-    });
-  }
-
-  const bankFilter = $("bank-filter-paper");
-  if (bankFilter) {
-    bankFilter.addEventListener("change", () => {
-      state.bank_page = 1;
-      renderBank();
-    });
-  }
-
-  const btnBankRandom = $("btn-bank-random");
-  if (btnBankRandom) {
-    btnBankRandom.addEventListener("click", handleAddRandomQuestions);
-  }
-
-  const bankSelectAll = $("bank-select-all");
-  if (bankSelectAll) {
-    bankSelectAll.addEventListener("change", handleSelectAllBank);
-  }
-
-  const btnBankDeleteSelected = $("btn-bank-delete-selected");
-  if (btnBankDeleteSelected) {
-    btnBankDeleteSelected.addEventListener("click", handleDeleteSelectedBank);
-  }
-
-  const btnBankAddSelected = $("btn-bank-add-selected");
-  if (btnBankAddSelected) {
-    btnBankAddSelected.addEventListener("click", handleAddSelectedBank);
-  }
-
-  const bankList = $("bank-list");
-  if (bankList) {
-    bankList.addEventListener("change", (e) => {
-      if (e.target && e.target.classList.contains("bank-select-check")) {
-        updateBankBatchState();
-      }
-    });
-
-    bankList.addEventListener("click", (e) => {
-      const addBtn = e.target.closest(".btn-bank-add");
-      if (addBtn) {
-        addQuestionFromBank(addBtn.dataset.id, addBtn);
-        return;
-      }
-      const editBtn = e.target.closest(".btn-bank-edit");
-      if (editBtn) {
-        editBankQuestion(editBtn.dataset.id);
-        return;
-      }
-      const delBtn = e.target.closest(".btn-bank-delete");
-      if (delBtn) {
-        deleteBankQuestion(delBtn.dataset.id);
-        return;
-      }
-    });
-  }
-
-  const btnBankExport = $("btn-bank-export");
-  if (btnBankExport) {
-    btnBankExport.addEventListener("click", handleBankExport);
-  }
-
-  const bankImport = $("bank-import");
-  if (bankImport) {
-    bankImport.addEventListener("change", handleBankImport);
-  }
-
-  const bankDocImport = $("bank-doc-import");
-  if (bankDocImport) {
-    bankDocImport.addEventListener("change", (e) => handleDocImport(e, "bank"));
-  }
-
-  const btnBankClearAll = $("btn-bank-clear-all");
-  if (btnBankClearAll) {
-    btnBankClearAll.addEventListener("click", handleClearAllBank);
-  }
-
   // ==========================================
   // PHASE 1: EVENT LISTENERS
   // ==========================================
@@ -4990,108 +4214,6 @@ document.addEventListener("DOMContentLoaded", () => {
       renderP1History();
       showScreen("history");
     });
-  }
-
-  // Phase-1 Bank Events
-  const btnP1Random20 = $("btn-p1-bank-random-20");
-  if (btnP1Random20) {
-    btnP1Random20.addEventListener("click", () => addP1RandomQuestions(20));
-  }
-
-  const btnP1Random50 = $("btn-p1-bank-random-50");
-  if (btnP1Random50) {
-    btnP1Random50.addEventListener("click", () => addP1RandomQuestions(50));
-  }
-
-  const p1BankSearch = $("p1-bank-search");
-  if (p1BankSearch) {
-    p1BankSearch.addEventListener("input", () => {
-      state.p1_bank_page = 1;
-      renderP1Bank();
-    });
-  }
-
-  const p1BankFilter = $("p1-bank-filter-subject");
-  if (p1BankFilter) {
-    p1BankFilter.addEventListener("change", () => {
-      state.p1_bank_page = 1;
-      renderP1Bank();
-    });
-  }
-
-  const p1BankSelectAll = $("p1-bank-select-all");
-  if (p1BankSelectAll) {
-    p1BankSelectAll.addEventListener("change", handleP1BankSelectAll);
-  }
-
-  const btnP1BankDeleteSelected = $("btn-p1-bank-delete-selected");
-  if (btnP1BankDeleteSelected) {
-    btnP1BankDeleteSelected.addEventListener("click", handleP1BankDeleteSelected);
-  }
-
-  const btnP1BankAddSelected = $("btn-p1-bank-add-selected");
-  if (btnP1BankAddSelected) {
-    btnP1BankAddSelected.addEventListener("click", handleP1BankAddSelected);
-  }
-
-  const p1BankList = $("p1-bank-list");
-  if (p1BankList) {
-    p1BankList.addEventListener("change", (e) => {
-      if (e.target && e.target.classList.contains("p1-bank-select-check")) {
-        updateP1BankBatchState();
-      }
-    });
-
-    p1BankList.addEventListener("click", (e) => {
-      const addBtn = e.target.closest(".btn-p1-bank-add");
-      if (addBtn) {
-        const id = addBtn.dataset.id;
-        const bank = loadJSON("rbi_p1_bank", []);
-        const q = bank.find(x => x.id === id);
-        if (q) {
-          if (!state.p1_setup.questions.some(sq => sq.id === q.id || sq.text === q.text)) {
-            state.p1_setup.questions.push({ ...q });
-            saveP1Setup();
-            renderP1SetupList();
-            addBtn.textContent = "Added ✓";
-            setTimeout(() => { addBtn.textContent = "+ Add to Test"; }, 1500);
-          } else {
-            alert("This MCQ is already in today's test!");
-          }
-        }
-        return;
-      }
-
-      const delBtn = e.target.closest(".btn-p1-bank-delete");
-      if (delBtn) {
-        const id = delBtn.dataset.id;
-        let bank = loadJSON("rbi_p1_bank", []);
-        bank = bank.filter(x => x.id !== id);
-        saveJSON("rbi_p1_bank", bank);
-        renderP1Bank();
-        return;
-      }
-    });
-  }
-
-  const btnP1BankExport = $("btn-p1-bank-export");
-  if (btnP1BankExport) {
-    btnP1BankExport.addEventListener("click", exportP1Bank);
-  }
-
-  const p1BankImport = $("p1-bank-import");
-  if (p1BankImport) {
-    p1BankImport.addEventListener("change", importP1Bank);
-  }
-
-  const p1BankDocImport = $("p1-bank-doc-import");
-  if (p1BankDocImport) {
-    p1BankDocImport.addEventListener("change", (e) => handleP1DocImport(e, "bank"));
-  }
-
-  const btnP1BankClearAll = $("btn-p1-bank-clear-all");
-  if (btnP1BankClearAll) {
-    btnP1BankClearAll.addEventListener("click", clearP1Bank);
   }
 
   // Phase-1 History Events

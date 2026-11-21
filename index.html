@@ -17,7 +17,6 @@
     </div>
     <nav>
       <button type="button" id="nav-setup">New Test</button>
-      <button type="button" id="nav-bank">Question Bank</button>
       <button type="button" id="nav-calendar">📅 Calendar &amp; TODO</button>
       <button type="button" id="nav-history">History</button>
     </nav>
@@ -111,8 +110,6 @@
               <input id="p1-q-explanation" type="text" placeholder="e.g. As announced by MoES...">
             </label>
           </div>
-
-          <label class="checkbox-label"><input id="p1-q-save-bank" type="checkbox" checked> Also save to Objective Question Bank</label>
 
           <button type="submit" id="btn-add-p1-question" class="btn-minimal-secondary">Add MCQ to Test</button>
         </form>
@@ -320,48 +317,6 @@
       </div>
     </section>
 
-    <!-- Screen: Phase-1 Question Bank -->
-    <section id="screen-bank-p1" class="screen" hidden>
-      <h2>Objective (MCQ) Question Bank</h2>
-      <div class="bank-top-actions">
-        <button type="button" id="btn-p1-bank-random-20">Add 20 Random MCQs to Today's Test</button>
-        <button type="button" id="btn-p1-bank-random-50" class="secondary">Add 50 Random MCQs</button>
-      </div>
-      <div class="bank-search-row">
-        <input id="p1-bank-search" type="text" placeholder="Search question, keyword, or topic...">
-        <select id="p1-bank-filter-subject">
-          <option value="">All subjects</option>
-          <option value="General Awareness">General Awareness (Spotlight)</option>
-          <option value="Reasoning Ability">Reasoning Ability</option>
-          <option value="Quantitative Aptitude">Quantitative Aptitude</option>
-          <option value="English Language">English Language</option>
-          <option value="ESI (Phase-2)">ESI (Phase-2)</option>
-          <option value="Finance & Management (Phase-2)">Finance &amp; Management (Phase-2)</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
-
-      <div class="bank-list-header">
-        <div id="p1-bank-batch-actions" class="batch-actions-group">
-          <label class="select-all-label">
-            <input type="checkbox" id="p1-bank-select-all"> Select All
-          </label>
-          <button type="button" id="btn-p1-bank-delete-selected" class="danger batch-btn" style="display: none;">Delete Selected (<span id="p1-bank-selected-count">0</span>)</button>
-          <button type="button" id="btn-p1-bank-add-selected" class="batch-btn" style="display: none; background: #059669;">Add Selected to Test (<span id="p1-bank-add-selected-count">0</span>)</button>
-        </div>
-        <span id="p1-bank-total-info" style="font-size: 13px; color: var(--muted);"></span>
-      </div>
-
-      <div id="p1-bank-list"></div>
-      <div id="p1-bank-pagination" class="pagination-wrapper" style="display: none;"></div>
-      <div class="bank-footer-actions">
-        <button type="button" id="btn-p1-bank-export">Export MCQs (.json)</button>
-        <label class="file-btn">Import MCQs (.json) <input id="p1-bank-import" type="file" accept=".json" hidden></label>
-        <label class="file-btn secondary-file-btn">Import DOCX / PDF <input id="p1-bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
-        <button type="button" id="btn-p1-bank-clear-all" class="danger">Delete all MCQs in bank</button>
-      </div>
-    </section>
-
     <!-- Screen: Phase-1 History -->
     <section id="screen-history-p1" class="screen" hidden>
       <h2>Objective (MCQ) Test History</h2>
@@ -444,8 +399,6 @@
           <label>Model answer (reference)
             <textarea id="q-model" rows="6" placeholder="Reference answer or key evaluation points..."></textarea>
           </label>
-
-          <label class="checkbox-label"><input id="q-save-bank" type="checkbox" checked> Also save to Question Bank</label>
 
           <div class="form-actions">
             <button type="submit" id="btn-add-question" class="btn-minimal-secondary">Add question</button>
@@ -661,45 +614,6 @@
       <div id="history-stats"></div>
       <div id="history-list"></div>
       <button type="button" id="btn-clear-history" class="danger">Delete all history</button>
-    </section>
-
-    <!-- Screen: Question Bank -->
-    <section id="screen-bank" class="screen" hidden>
-      <h2>Subjective (Descriptive) Question Bank</h2>
-      <div class="bank-top-actions">
-        <button type="button" id="btn-bank-random">Add 3 random questions to today's test</button>
-      </div>
-      <div class="bank-search-row">
-        <input id="bank-search" type="text" placeholder="Search question or topic...">
-        <select id="bank-filter-paper">
-          <option value="">All subjects</option>
-          <option value="ESI">ESI</option>
-          <option value="Finance">Finance</option>
-          <option value="Management">Management</option>
-          <option value="English Descriptive">English Descriptive</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
-
-      <div class="bank-list-header">
-        <div id="bank-batch-actions" class="batch-actions-group">
-          <label class="select-all-label">
-            <input type="checkbox" id="bank-select-all"> Select All
-          </label>
-          <button type="button" id="btn-bank-delete-selected" class="danger batch-btn" style="display: none;">Delete Selected (<span id="bank-selected-count">0</span>)</button>
-          <button type="button" id="btn-bank-add-selected" class="batch-btn" style="display: none; background: #059669;">Add Selected to Today's Test (<span id="bank-add-selected-count">0</span>)</button>
-        </div>
-        <span id="bank-total-info" style="font-size: 13px; color: var(--muted);"></span>
-      </div>
-
-      <div id="bank-list"></div>
-      <div id="bank-pagination" class="pagination-wrapper" style="display: none;"></div>
-      <div class="bank-footer-actions">
-        <button type="button" id="btn-bank-export">Export bank (.json)</button>
-        <label class="file-btn">Import bank (.json) <input id="bank-import" type="file" accept=".json" hidden></label>
-        <label class="file-btn secondary-file-btn">Import DOCX / PDF <input id="bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
-        <button type="button" id="btn-bank-clear-all" class="danger">Delete all questions in bank</button>
-      </div>
     </section>
 
     <!-- Screen: Calendar & TODO for the whole daily routine (content is built by calendar.js) -->

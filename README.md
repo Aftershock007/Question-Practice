@@ -27,7 +27,6 @@ A personal, offline typing test and descriptive answer practice website designed
 - **Included Example Practice Documents:**
   - `Spotlight-Questions-1-6-Nov-2026.docx`: 200 General Awareness Phase-1 MCQs with options and full answer key table.
   - `CH-1-National_Income-Answer-Writing.docx`: ESI Chapter 1 National Income descriptive practice questions with model answers.
-- **Question Bank & Batch Management:** Multi-select checkbox deletion, subject filtering, keyword search, random question generator, and JSON import/export.
 - **History Tracking:** Comprehensive logs of test scores, accuracy %, time spent, and performance trends for both phases.
 
 ---
@@ -51,11 +50,10 @@ No backend server, Node.js runtime, build steps, or external dependencies are re
 
 ---
 
-## Data Storage & Backup
+## Data Storage & Privacy
 
-- **Local Storage:** All questions, active tests, and attempt histories are stored strictly inside your browser's `localStorage`.
-- **Backup Regularly:** Use the **Export bank (.json)** button on the Question Bank screen to create regular backup files of your question library.
-- **Clearing Browser Data:** Clearing your browser cache and cookies will erase locally saved test histories unless exported.
+- **Local Storage:** All active tests, timetable plans, and attempt histories are stored strictly inside your browser's `localStorage`.
+- **Clearing Browser Data:** Clearing your browser cache and cookies will erase locally saved test histories.
 
 ---
 
