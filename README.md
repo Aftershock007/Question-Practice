@@ -6,6 +6,7 @@ A personal, offline typing test and descriptive answer practice website designed
 
 ## Features
 
+- **Four Dedicated Subjects:** Organize and practice questions across four distinct subjects: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
 - **Custom Practice Setup:** Add custom questions, specify topics, paper categories, target word limits, and reference model answers.
 - **Realistic Typing Interface:** Countdown timer with visual warning thresholds, live word count adherence tracking, Tab indentation support, and optional paste prevention to simulate genuine test conditions.
 - **AI Evaluation Prompt Generation:** Instantly exports comprehensive `.txt` evaluation prompts containing your typed answer, word count, time spent, and reference model answer ready to paste directly into AI tools for scoring and feedback.
@@ -25,7 +26,7 @@ No backend server, Node.js runtime, build steps, or external dependencies are re
 
 ## Recommended Daily Routine
 
-1. **Select Questions:** Pick 2–3 questions with target word limits (e.g., 400 or 600 words).
+1. **Select Questions:** Pick 2–3 questions with target word limits (e.g., 400 or 600 words) across your focus subjects (**ESI**, **Finance**, **Management**, or **English Descriptive**).
 2. **Set Strict Timing:** Aim for a focused writing pace (e.g., ~25 words per minute) to build typing speed, focus, and answer structure discipline.
 3. **Simulate Real Exam Conditions:** Type continuously without pausing, without browser autocorrect or spell-check, and with copy-paste blocked.
 4. **Submit & Evaluate with AI:** Click **Copy** (or Download .txt) for each completed question, paste the complete generated prompt into Gemini or Claude, and let the AI grade your response against standard assessment criteria.

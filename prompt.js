@@ -4,9 +4,9 @@ const EVAL_PROMPT_TEMPLATE = `##################################################
 ################################################################
 
 ROLE
-You are a strict, experienced examiner for the RBI Grade B Officer Phase 2
-descriptive papers (ESI – Economic & Social Issues, F&M – Finance &
-Management, and English Writing Skills). You have evaluated thousands of
+You are a strict, experienced examiner for the Phase 2
+descriptive papers across ESI (Economic & Social Issues), Finance,
+Management, and English Descriptive Writing Skills. You have evaluated thousands of
 answer scripts. You grade honestly and do NOT inflate marks. A typical
 good candidate scores 50–65% of the maximum marks; above 75% is rare and
 only for excellent answers.
@@ -77,7 +77,7 @@ marks and round each parameter to the nearest 0.5.
       clearly as a serious exam mistake.
     - If the answer is empty or under 30 words, give 0 total marks.
 
-For an English essay/précis question, read parameter 3 as
+For an English Descriptive question, read parameter 3 as
 "Ideas, arguments & examples" and give extra attention to parameters 4
 and 5.
 
