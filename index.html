@@ -8,7 +8,13 @@
 </head>
 <body>
   <header id="app-header">
-    <h1>Subjective Typing &amp; Answer Practice</h1>
+    <div class="header-main-bar">
+      <h1>RBI Grade B Practice Console</h1>
+      <div class="phase-switcher-container">
+        <button type="button" id="phase-btn-p1" class="phase-toggle-btn active">🎯 Phase-1 (Objective / MCQs)</button>
+        <button type="button" id="phase-btn-p2" class="phase-toggle-btn">✍️ Phase-2 (Descriptive)</button>
+      </div>
+    </div>
     <nav>
       <button type="button" id="nav-setup">New Test</button>
       <button type="button" id="nav-bank">Question Bank</button>
@@ -17,8 +23,316 @@
   </header>
 
   <main>
-    <!-- Screen: Setup -->
-    <section id="screen-setup" class="screen">
+    <!-- Screen: Phase-1 Setup (Objective / MCQs) -->
+    <section id="screen-setup-p1" class="screen">
+      <div class="p1-hero-banner">
+        <h2>Phase-1: Objective MCQ Practice</h2>
+        <p>Prepare for General Awareness (Spotlight), Quant, Reasoning &amp; English with real TCS iON simulation.</p>
+      </div>
+
+      <div class="doc-import-bar" style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <label class="file-btn" style="background: #4f46e5;">
+          📄 Import MCQs from DOCX / PDF
+          <input id="setup-p1-doc-import" type="file" accept=".docx,.pdf" hidden>
+        </label>
+        <button type="button" id="btn-load-spotlight-sample" class="file-btn" style="background: #0284c7;">
+          ⚡ Load Included Spotlight (200 MCQs)
+        </button>
+        <span id="setup-p1-doc-status" style="font-size: 14px; color: var(--muted);"></span>
+      </div>
+
+      <form id="p1-question-form" class="p1-form-card">
+        <h3>Add an MCQ Manually</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <label>Subject / Section
+            <select id="p1-q-subject">
+              <option value="General Awareness">General Awareness (Spotlight)</option>
+              <option value="Reasoning Ability">Reasoning Ability</option>
+              <option value="Quantitative Aptitude">Quantitative Aptitude</option>
+              <option value="English Language">English Language</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label>Topic / Sub-section (optional)
+            <input id="p1-q-topic" type="text" placeholder="e.g. Banking &amp; Financial Awareness">
+          </label>
+        </div>
+
+        <label>Question Prompt
+          <textarea id="p1-q-text" rows="3" required placeholder="Type the question statement..."></textarea>
+        </label>
+
+        <div class="p1-options-grid">
+          <label>Option [A] <input id="p1-q-opt-a" type="text" required placeholder="Option A text"></label>
+          <label>Option [B] <input id="p1-q-opt-b" type="text" required placeholder="Option B text"></label>
+          <label>Option [C] <input id="p1-q-opt-c" type="text" required placeholder="Option C text"></label>
+          <label>Option [D] <input id="p1-q-opt-d" type="text" required placeholder="Option D text"></label>
+          <label>Option [E] <input id="p1-q-opt-e" type="text" required placeholder="Option E text"></label>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; align-items: start;">
+          <label>Correct Answer
+            <select id="p1-q-correct" required>
+              <option value="a">[A]</option>
+              <option value="b">[B]</option>
+              <option value="c">[C]</option>
+              <option value="d">[D]</option>
+              <option value="e">[E]</option>
+            </select>
+          </label>
+          <label>Explanation / Source (optional)
+            <input id="p1-q-explanation" type="text" placeholder="e.g. As announced by MoES...">
+          </label>
+        </div>
+
+        <label style="margin-top: 8px;"><input id="p1-q-save-bank" type="checkbox" checked> Also save to Objective Question Bank</label>
+
+        <button type="submit" id="btn-add-p1-question">Add MCQ to Test</button>
+      </form>
+
+      <div class="setup-list-header">
+        <h3>Questions in this test (<span id="setup-p1-count">0</span>)</h3>
+        <div id="setup-p1-batch-actions">
+          <label class="select-all-label">
+            <input type="checkbox" id="setup-p1-select-all"> Select All
+          </label>
+          <button type="button" id="btn-p1-delete-selected" class="danger batch-btn" style="display: none;">Delete Selected (<span id="p1-selected-count">0</span>)</button>
+          <button type="button" id="btn-p1-delete-all-setup" class="danger batch-btn">Delete All</button>
+        </div>
+      </div>
+      <ol id="setup-p1-question-list" class="p1-question-list"></ol>
+
+      <div id="setup-p1-time-box" class="config-box">
+        <h4>Test Settings &amp; Marking Scheme</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 8px;">
+          <label>Total Time (minutes) <input id="setup-p1-minutes" type="number" min="1" value="120"></label>
+          <label>Marks for Correct <input id="setup-p1-positive" type="number" step="0.25" min="0" value="1.00"></label>
+          <label>Negative Marking <input id="setup-p1-negative" type="number" step="0.05" min="0" value="0.25"></label>
+        </div>
+      </div>
+
+      <button type="button" id="btn-start-p1-test" class="rbi-btn primary" style="font-size: 16px; padding: 12px 24px; width: 100%; margin-top: 14px;">Start Phase-1 Objective Test</button>
+      <p id="setup-p1-error" class="error"></p>
+    </section>
+
+    <!-- Screen: Phase-1 Exam (TCS iON Objective Console) -->
+    <section id="screen-exam-p1" class="screen" hidden>
+      <div class="rbi-exam-header">
+        <div class="rbi-exam-title">
+          <div class="rbi-emblem">🏛️</div>
+          <div>
+            <h3>RESERVE BANK OF INDIA</h3>
+            <p>Phase-I Online Examination — Objective MCQ Console</p>
+          </div>
+        </div>
+        <div class="rbi-candidate-box">
+          <div class="candidate-avatar">👤</div>
+          <div class="candidate-details">
+            <span class="cand-name">Candidate: <strong>Practice Candidate</strong></span>
+            <span class="cand-roll">Roll No: <strong>RBI-2026-P1</strong> | System: <strong>C-104</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rbi-section-bar">
+        <div class="rbi-section-tabs">
+          <div class="rbi-section-tab active">
+            <span class="sec-label">SECTION:</span>
+            <span id="p1-exam-section-name">General Awareness (Spotlight)</span>
+          </div>
+        </div>
+        <div class="rbi-timer-box">
+          <span class="timer-label">⏱️ Time Left :</span>
+          <span id="p1-exam-timer">120:00</span>
+        </div>
+      </div>
+
+      <div class="rbi-exam-body">
+        <div class="rbi-work-panel">
+          <div class="rbi-q-header">
+            <span id="p1-exam-qpos" class="rbi-q-badge">Question No. 1</span>
+            <div class="rbi-q-meta">
+              <span id="p1-exam-marks" class="rbi-meta-item">Marks: +1.00</span>
+              <span id="p1-exam-neg" class="rbi-meta-item rbi-neg-mark">Negative: -0.25</span>
+            </div>
+          </div>
+
+          <div class="rbi-q-instruction-strip">
+            <span>Select one option from the choices below. Click <strong>'Save &amp; Next'</strong> to save your answer.</span>
+          </div>
+
+          <div id="p1-exam-question-text" class="rbi-question-box"></div>
+
+          <div class="rbi-answer-header">
+            <span class="ans-label">Options:</span>
+          </div>
+
+          <div id="p1-exam-options-list" class="mcq-options-list"></div>
+
+          <div class="rbi-action-bar">
+            <div class="action-left">
+              <button type="button" id="p1-btn-prev" class="rbi-btn secondary">◀ Previous</button>
+              <button type="button" id="p1-btn-clear" class="rbi-btn outline">Clear Response</button>
+            </div>
+            <div class="action-right">
+              <button type="button" id="p1-btn-review" class="rbi-btn purple">Mark for Review &amp; Next</button>
+              <button type="button" id="p1-btn-next" class="rbi-btn primary">Save &amp; Next ▶</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="rbi-side-panel">
+          <div class="rbi-palette-legend">
+            <h4>Question Status Legend</h4>
+            <div class="legend-grid">
+              <div class="legend-item"><span class="legend-badge answered">0</span> Answered</div>
+              <div class="legend-item"><span class="legend-badge not-answered">0</span> Not Answered</div>
+              <div class="legend-item"><span class="legend-badge not-visited">0</span> Not Visited</div>
+              <div class="legend-item"><span class="legend-badge review">0</span> Marked for Review</div>
+            </div>
+          </div>
+
+          <div class="rbi-palette-box">
+            <div class="palette-header">
+              <h4>Question Palette</h4>
+              <span class="palette-sub">Click number to navigate</span>
+            </div>
+            <div id="p1-exam-palette" class="rbi-palette-grid"></div>
+          </div>
+
+          <div class="rbi-summary-box">
+            <div class="summary-row"><span>Total Questions:</span><strong id="p1-summary-total">0</strong></div>
+            <div class="summary-row"><span>Answered:</span><strong id="p1-summary-answered" class="text-green">0</strong></div>
+            <div class="summary-row"><span>Not Answered:</span><strong id="p1-summary-not-answered" class="text-red">0</strong></div>
+            <div class="summary-row"><span>Marked for Review:</span><strong id="p1-summary-review" class="text-purple">0</strong></div>
+            <div class="summary-row"><span>Not Visited:</span><strong id="p1-summary-not-visited" class="text-muted">0</strong></div>
+          </div>
+
+          <div class="rbi-submit-container">
+            <button type="button" id="p1-btn-submit" class="rbi-btn submit-btn">Submit Test</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="p1-confirm-submit" class="modal" hidden>
+        <div class="modal-content rbi-modal-content">
+          <div class="rbi-modal-header">
+            <h3>Exam Summary &amp; Confirmation</h3>
+          </div>
+          <div class="rbi-modal-body">
+            <table class="rbi-summary-table">
+              <thead>
+                <tr>
+                  <th>Section</th>
+                  <th>Total Questions</th>
+                  <th>Answered</th>
+                  <th>Not Answered</th>
+                  <th>Marked for Review</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Objective Test</td>
+                  <td id="p1-modal-total">0</td>
+                  <td id="p1-modal-answered" style="color:var(--ok); font-weight:bold;">0</td>
+                  <td id="p1-modal-not-answered" style="color:var(--danger); font-weight:bold;">0</td>
+                  <td id="p1-modal-marked" style="color:#7e22ce; font-weight:bold;">0</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="rbi-modal-warning">⚠️ Are you sure you want to submit the test? No changes will be allowed after submission.</p>
+          </div>
+          <div class="rbi-modal-actions">
+            <button type="button" id="p1-btn-confirm-yes" class="rbi-btn primary">Yes, Submit Test</button>
+            <button type="button" id="p1-btn-confirm-no" class="rbi-btn secondary">Cancel &amp; Continue Test</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen: Phase-1 Result (Objective Scorecard & Review) -->
+    <section id="screen-result-p1" class="screen" hidden>
+      <div class="result-scorecard">
+        <h2>Phase-1 Test Result &amp; Analysis</h2>
+        <div class="score-main-grid">
+          <div class="score-big-box">
+            <span class="score-title">Final Score</span>
+            <div class="score-val"><span id="p1-score-val">0.00</span> / <span id="p1-score-max">0.00</span></div>
+            <div class="score-pct"><span id="p1-score-pct">0%</span> Accuracy</div>
+          </div>
+          <div class="score-stat-pills">
+            <div class="stat-pill correct"><span>Correct (🟩):</span> <strong id="p1-stat-correct">0</strong></div>
+            <div class="stat-pill incorrect"><span>Incorrect (🟥):</span> <strong id="p1-stat-incorrect">0</strong></div>
+            <div class="stat-pill unattempted"><span>Unattempted (⬜):</span> <strong id="p1-stat-unattempted">0</strong></div>
+            <div class="stat-pill time"><span>Time Spent:</span> <strong id="p1-stat-time">0 min</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-filter-toolbar">
+        <h3>Question-by-Question Review</h3>
+        <div class="review-filters">
+          <button type="button" class="rf-btn active" data-filter="all">All Questions (<span id="rf-count-all">0</span>)</button>
+          <button type="button" class="rf-btn" data-filter="incorrect">Incorrect Only (<span id="rf-count-incorrect">0</span>)</button>
+          <button type="button" class="rf-btn" data-filter="unattempted">Unattempted (<span id="rf-count-unattempted">0</span>)</button>
+          <button type="button" class="rf-btn" data-filter="correct">Correct Only (<span id="rf-count-correct">0</span>)</button>
+        </div>
+      </div>
+
+      <div id="p1-result-list" class="p1-result-list"></div>
+
+      <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
+        <button type="button" id="p1-btn-download-results">Download Analysis (.txt)</button>
+        <button type="button" id="p1-btn-retake" class="secondary">Retake Test</button>
+        <button type="button" id="p1-btn-go-history">Go to History</button>
+      </div>
+    </section>
+
+    <!-- Screen: Phase-1 Question Bank -->
+    <section id="screen-bank-p1" class="screen" hidden>
+      <h2>Phase-1 Objective Question Bank</h2>
+      <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="button" id="btn-p1-bank-random-20">Add 20 Random MCQs to Today's Test</button>
+        <button type="button" id="btn-p1-bank-random-50" class="secondary">Add 50 Random MCQs</button>
+      </div>
+      <input id="p1-bank-search" type="text" placeholder="Search question, keyword, or topic...">
+      <select id="p1-bank-filter-subject">
+        <option value="">All subjects</option>
+        <option value="General Awareness">General Awareness (Spotlight)</option>
+        <option value="Reasoning Ability">Reasoning Ability</option>
+        <option value="Quantitative Aptitude">Quantitative Aptitude</option>
+        <option value="English Language">English Language</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <div class="bank-list-header">
+        <div id="p1-bank-batch-actions">
+          <label class="select-all-label">
+            <input type="checkbox" id="p1-bank-select-all"> Select All
+          </label>
+          <button type="button" id="btn-p1-bank-delete-selected" class="danger batch-btn" style="display: none;">Delete Selected (<span id="p1-bank-selected-count">0</span>)</button>
+          <button type="button" id="btn-p1-bank-add-selected" class="batch-btn" style="display: none; background: #059669;">Add Selected to Test (<span id="p1-bank-add-selected-count">0</span>)</button>
+        </div>
+        <span id="p1-bank-total-info" style="font-size: 13px; color: var(--muted);"></span>
+      </div>
+
+      <div id="p1-bank-list"></div>
+      <button type="button" id="btn-p1-bank-export">Export MCQs (.json)</button>
+      <label class="file-btn">Import MCQs (.json) <input id="p1-bank-import" type="file" accept=".json" hidden></label>
+      <label class="file-btn" style="background: #4f46e5;">Import DOCX / PDF <input id="p1-bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
+      <button type="button" id="btn-p1-bank-clear-all" class="danger">Delete all MCQs in bank</button>
+    </section>
+
+    <!-- Screen: Phase-1 History -->
+    <section id="screen-history-p1" class="screen" hidden>
+      <h2>Phase-1 Objective Practice History</h2>
+      <div id="p1-history-stats" class="history-stats-bar"></div>
+      <div id="p1-history-list"></div>
+      <button type="button" id="btn-clear-p1-history" class="danger">Delete all Phase-1 history</button>
+    </section>
+
+    <!-- Screen: Phase-2 Setup (Descriptive) -->
+    <section id="screen-setup" class="screen" hidden>
       <h2>Set up today's test</h2>
 
       <div class="doc-import-bar" style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">

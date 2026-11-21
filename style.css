@@ -32,12 +32,49 @@ body {
 #app-header {
   background: #ffffff;
   border-bottom: 1px solid var(--border);
-  padding: 12px 20px;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.header-main-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.phase-switcher-container {
+  display: inline-flex;
+  background: #e2e8f0;
+  padding: 3px;
+  border-radius: 8px;
+  gap: 4px;
+}
+
+.phase-toggle-btn {
+  background: transparent;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.phase-toggle-btn:hover {
+  color: #0f172a;
+}
+
+.phase-toggle-btn.active {
+  background: #003366;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
 
 #app-header h1 {
@@ -1224,3 +1261,442 @@ button.secondary:hover {
     justify-content: center;
   }
 }
+
+/* Phase-1 Objective / MCQ Styles */
+.p1-hero-banner {
+  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  color: #ffffff;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.p1-hero-banner h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #ffffff;
+}
+
+.p1-hero-banner p {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #bfdbfe;
+}
+
+.p1-form-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.p1-form-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+}
+
+.p1-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.p1-options-grid label {
+  margin-bottom: 0;
+  font-size: 13px;
+}
+
+.config-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.config-box h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.p1-question-list {
+  padding-left: 20px;
+  margin-bottom: 20px;
+}
+
+.p1-question-list li {
+  background: var(--card);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.p1-q-meta-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.badge-subject {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.badge-ans {
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.p1-opts-preview {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.opt-pill {
+  font-size: 12px;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.opt-pill.is-correct {
+  background: #dcfce7;
+  border-color: #86efac;
+  font-weight: 600;
+  color: #15803d;
+}
+
+/* Exam Screen Options */
+.mcq-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 16px 0;
+}
+
+.mcq-option-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  user-select: none;
+}
+
+.mcq-option-item:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.mcq-option-item.selected {
+  background: #eff6ff;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 1px #0284c7;
+}
+
+.mcq-option-item input[type="radio"] {
+  display: none;
+}
+
+.mcq-option-item .opt-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #1e293b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.mcq-option-item.selected .opt-badge {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.mcq-option-item .opt-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: #1e293b;
+}
+
+/* Phase 1 Result Scorecard */
+.result-scorecard {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.result-scorecard h2 {
+  margin: 0 0 14px 0;
+  font-size: 1.25rem;
+}
+
+.score-main-grid {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.score-big-box {
+  background: #003366;
+  color: #ffffff;
+  padding: 16px 24px;
+  border-radius: 8px;
+  text-align: center;
+  min-width: 180px;
+}
+
+.score-title {
+  font-size: 12px;
+  color: #93c5fd;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.score-val {
+  font-size: 28px;
+  font-weight: 800;
+  margin: 4px 0;
+}
+
+.score-pct {
+  font-size: 13px;
+  color: #86efac;
+  font-weight: 600;
+}
+
+.score-stat-pills {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  flex: 1;
+}
+
+.stat-pill {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+}
+
+.stat-pill.correct {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.stat-pill.incorrect {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.stat-pill.unattempted {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.stat-pill.time {
+  background: #fefce8;
+  border-color: #fef08a;
+  color: #854d0e;
+}
+
+/* Result Filter Bar */
+.result-filter-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.result-filter-toolbar h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.review-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rf-btn {
+  background: #ffffff;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.rf-btn.active {
+  background: #003366;
+  color: #ffffff;
+  border-color: #003366;
+}
+
+/* Review Cards */
+.mcq-review-card {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.mcq-review-card.correct {
+  border-left: 5px solid #16a34a;
+}
+
+.mcq-review-card.incorrect {
+  border-left: 5px solid #dc2626;
+}
+
+.mcq-review-card.unattempted {
+  border-left: 5px solid #94a3b8;
+}
+
+.review-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.review-card-prompt {
+  font-size: 15px;
+  line-height: 1.5;
+  color: #1e293b;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+}
+
+.review-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rev-opt {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.rev-opt.chosen-wrong {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.rev-opt.is-correct-opt {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+  font-weight: 600;
+}
+
+.rev-explanation {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  border-radius: 0 4px 4px 0;
+  font-size: 13px;
+  color: #1e40af;
+}
+
+/* Phase 1 Palette & Bank Cards */
+#p1-exam-palette {
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  max-height: 380px;
+  gap: 5px;
+}
+
+#p1-exam-palette button {
+  min-height: 36px;
+  padding: 6px 2px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.mcq-bank-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.mcq-bank-body {
+  flex: 1;
+}
+
+.mcq-bank-prompt {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 6px 0 10px 0;
+  white-space: pre-wrap;
+}
+
+.mcq-bank-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mcq-bank-actions button {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+

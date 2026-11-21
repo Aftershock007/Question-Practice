@@ -83,12 +83,17 @@ function getCombinedFilename(test) {
 // Show one screen, hide all others
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.hidden = true);
-  const target = $("screen-" + name);
+  let targetId = "screen-" + name;
+  if (name === "setup" || name === "exam" || name === "result" || name === "bank" || name === "history") {
+    targetId = state.phase === "phase1" ? `screen-${name}-p1` : `screen-${name}`;
+  }
+  const target = $(targetId) || $(name) || $("screen-" + name);
   if (target) target.hidden = false;
 
   const header = $("app-header");
   if (header) {
-    header.style.display = (name === "exam") ? "none" : "";
+    const isExam = (name === "exam" || name === "exam-p1" || targetId === "screen-exam" || targetId === "screen-exam-p1");
+    header.style.display = isExam ? "none" : "";
   }
 
   window.scrollTo(0, 0);
@@ -133,15 +138,61 @@ function defaultWordLimit(marks) {
 
 // Global application state
 const state = {
+  phase: loadJSON("rbi_current_phase", "phase1"),
   setup: loadJSON("rbi_current_setup", { totalMinutes: 30, questions: [] }),
-  test: null,          // active Test object during the exam
+  test: null,          // active Test object during the Phase 2 exam
   currentIndex: 0,     // which question is on screen
   timerId: null,       // setInterval id
   endTime: 0,          // Date.now() value when time ends
   questionShownAt: 0,  // Date.now() when current question was shown
   lastAutoSave: 0,     // timestamp of last throttled exam autosave
-  lastResultTest: null // test object currently being viewed on the result screen
+  lastResultTest: null, // test object currently being viewed on Phase 2 result screen
+
+  // Phase 1 (Objective / MCQs) state
+  p1_setup: loadJSON("rbi_p1_setup", {
+    totalMinutes: 120,
+    positiveMarks: 1.0,
+    negativeMarks: 0.25,
+    questions: []
+  }),
+  p1_test: null,
+  p1_currentIndex: 0,
+  p1_timerId: null,
+  p1_endTime: 0,
+  p1_questionShownAt: 0,
+  p1_lastAutoSave: 0,
+  p1_lastResultTest: null,
+  p1_resultFilter: "all"
 };
+
+function saveP1Setup() {
+  saveJSON("rbi_p1_setup", state.p1_setup);
+}
+
+function setPhase(phase) {
+  state.phase = (phase === "phase2") ? "phase2" : "phase1";
+  saveJSON("rbi_current_phase", state.phase);
+
+  const btnP1 = $("phase-btn-p1");
+  const btnP2 = $("phase-btn-p2");
+  if (btnP1 && btnP2) {
+    if (state.phase === "phase1") {
+      btnP1.classList.add("active");
+      btnP2.classList.remove("active");
+    } else {
+      btnP2.classList.add("active");
+      btnP1.classList.remove("active");
+    }
+  }
+
+  if (state.phase === "phase1") {
+    renderP1SetupList();
+  } else {
+    renderSetupList();
+  }
+  showScreen("setup");
+}
+
 
 // Persist the current setup into localStorage
 function saveSetup() {
@@ -791,21 +842,44 @@ function finishTest(auto) {
 
 // Check for and resume an interrupted test on page load
 function checkResumeActiveTest() {
-  const active = loadJSON("rbi_active_test", null);
-  if (!active || !active.endTime) return;
-
-  const now = Date.now();
-  state.test = active;
-  state.endTime = active.endTime;
-
-  if (active.endTime > now) {
-    if (confirm("You have a test in progress. Resume it?")) {
-      resumeExam();
+  if (state.phase === "phase1") {
+    const active = loadJSON("rbi_p1_active_test", null);
+    if (!active || !active.endTime) return;
+    const now = Date.now();
+    state.p1_test = active;
+    state.p1_endTime = active.endTime;
+    if (active.endTime > now) {
+      if (confirm("You have a Phase-1 objective test in progress. Resume it?")) {
+        startP1ExamTimer();
+        showP1Question(state.p1_test.currentIndex || 0);
+        renderP1Palette();
+        updateP1ExamSummary();
+        showScreen("exam");
+      } else {
+        localStorage.removeItem("rbi_p1_active_test");
+        state.p1_test = null;
+      }
     } else {
-      finishTest(false);
+      alert("Your previous Phase-1 test session has expired.");
+      finishP1Test(true);
     }
   } else {
-    finishTest(true);
+    const active = loadJSON("rbi_active_test", null);
+    if (!active || !active.endTime) return;
+
+    const now = Date.now();
+    state.test = active;
+    state.endTime = active.endTime;
+
+    if (active.endTime > now) {
+      if (confirm("You have a test in progress. Resume it?")) {
+        resumeExam();
+      } else {
+        finishTest(false);
+      }
+    } else {
+      finishTest(true);
+    }
   }
 }
 
@@ -1975,13 +2049,1263 @@ async function handleDocImport(event, targetScreen) {
   }
 }
 
+// ==========================================
+// PHASE 1: OBJECTIVE / MCQ TEST FUNCTIONS
+// ==========================================
+
+// Parse plain text from DOCX or PDF into MCQ objects with options and answer keys
+function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
+  if (!rawText || !rawText.trim()) return [];
+
+  const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const paragraphs = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+
+  // 1. Locate Answer Key section if present
+  let ansKeyIdx = -1;
+  for (let i = 0; i < paragraphs.length; i++) {
+    const pLower = paragraphs[i].toLowerCase();
+    if (pLower === "answer key" || pLower === "answers" || pLower.startsWith("answer key:") || pLower === "answer keys") {
+      ansKeyIdx = i;
+      break;
+    }
+  }
+
+  const qParagraphs = ansKeyIdx !== -1 ? paragraphs.slice(0, ansKeyIdx) : paragraphs;
+  const ansParagraphs = ansKeyIdx !== -1 ? paragraphs.slice(ansKeyIdx) : [];
+
+  // Parse Answer Key
+  const answersMap = {}; // questionIndex (1-based) -> 'a' | 'b' | 'c' | 'd' | 'e'
+
+  if (ansParagraphs.length > 0) {
+    let i = 0;
+    while (i < ansParagraphs.length) {
+      const p = ansParagraphs[i].trim();
+      const rangeMatch = p.match(/^(\d+)\s+to\s+(\d+)$/i);
+      if (rangeMatch) {
+        const startQ = parseInt(rangeMatch[1], 10);
+        const endQ = parseInt(rangeMatch[2], 10);
+        i++;
+        let currQ = startQ;
+        while (i < ansParagraphs.length && currQ <= endQ) {
+          const val = ansParagraphs[i].trim().toLowerCase();
+          if (/^[a-e]$/.test(val)) {
+            answersMap[currQ] = val;
+            currQ++;
+            i++;
+          } else {
+            break;
+          }
+        }
+      } else {
+        const singleMatches = [...p.matchAll(/(?:(?:^|\s+)(?:Q\.?\s*)?(\d+)[\.:\-\)\s]+(?:\(?([a-eA-E])\)?))/g)];
+        if (singleMatches.length > 0) {
+          for (const sm of singleMatches) {
+            answersMap[parseInt(sm[1], 10)] = sm[2].toLowerCase();
+          }
+        }
+        i++;
+      }
+    }
+  }
+
+  // 2. Parse Questions & Options
+  const questions = [];
+  let currQ = [];
+  let currOpts = [];
+  const optRegex = /(?:\[([a-eA-E])\]|\(([a-eA-E])\)|(?:\b|^)([a-eA-E])[\.\)])/g;
+
+  for (let idxP = 0; idxP < qParagraphs.length; idxP++) {
+    const p = qParagraphs[idxP];
+
+    if (idxP < 3 && (p.toLowerCase().includes("question bank") || p.toLowerCase() === "questions")) {
+      continue;
+    }
+
+    const inlineAnsMatch = p.match(/^(?:(?:Correct\s+)?Answer|Ans|Correct\s*Option)\s*[:\.\-]?\s*\(?([a-eA-E])\)?/i);
+    if (inlineAnsMatch) {
+      if (questions.length > 0) {
+        questions[questions.length - 1].correctAnswer = inlineAnsMatch[1].toLowerCase();
+      }
+      continue;
+    }
+
+    const explMatch = p.match(/^(?:Explanation|Exp|Solution|Notes?)\s*[:\.\-]?\s*(.*)/i);
+    if (explMatch) {
+      if (questions.length > 0) {
+        questions[questions.length - 1].explanation = explMatch[1] || "";
+      }
+      continue;
+    }
+
+    const matches = [];
+    let m;
+    const re = new RegExp(optRegex);
+    while ((m = re.exec(p)) !== null) {
+      const label = (m[1] || m[2] || m[3]).toLowerCase();
+      matches.push({ label, start: m.index, end: m.index + m[0].length });
+    }
+
+    if (matches.length > 0) {
+      const beforeFirst = p.slice(0, matches[0].start).trim();
+      if (beforeFirst) {
+        currQ.push(beforeFirst);
+      }
+
+      for (let iM = 0; iM < matches.length; iM++) {
+        const curM = matches[iM];
+        const nextM = matches[iM + 1];
+        const optVal = p.slice(curM.end, nextM ? nextM.start : p.length).trim();
+
+        if (currOpts.some(o => o.label === curM.label)) {
+          if (currQ.length > 0 || currOpts.length > 0) {
+            questions.push({
+              id: makeId("mcq"),
+              subject: defaultSubject,
+              text: currQ.join("\n").trim(),
+              options: currOpts,
+              correctAnswer: "",
+              explanation: "",
+              marks: 1.0,
+              negativeMarks: 0.25
+            });
+            currQ = [];
+            currOpts = [];
+          }
+        }
+
+        currOpts.push({ label: curM.label, text: optVal });
+      }
+    } else {
+      if (currOpts.length >= 4) {
+        questions.push({
+          id: makeId("mcq"),
+          subject: defaultSubject,
+          text: currQ.join("\n").trim(),
+          options: currOpts,
+          correctAnswer: "",
+          explanation: "",
+          marks: 1.0,
+          negativeMarks: 0.25
+        });
+        currQ = [];
+        currOpts = [];
+      }
+      currQ.push(p);
+    }
+  }
+
+  if (currQ.length > 0 || currOpts.length > 0) {
+    questions.push({
+      id: makeId("mcq"),
+      subject: defaultSubject,
+      text: currQ.join("\n").trim(),
+      options: currOpts,
+      correctAnswer: "",
+      explanation: "",
+      marks: 1.0,
+      negativeMarks: 0.25
+    });
+  }
+
+  // Assign answers from answersMap to questions
+  for (let qIdx = 0; qIdx < questions.length; qIdx++) {
+    const qNum = qIdx + 1;
+    if (answersMap[qNum]) {
+      questions[qIdx].correctAnswer = answersMap[qNum];
+    }
+  }
+
+  return questions;
+}
+
+// One-click loader for the included Spotlight DOCX file
+async function loadSpotlightSample() {
+  const statusElem = $("setup-p1-doc-status");
+  if (statusElem) statusElem.textContent = "Loading Spotlight-Questions-1-6-Nov-2026.docx...";
+  try {
+    const resp = await fetch("Spotlight-Questions-1-6-Nov-2026.docx");
+    if (!resp.ok) {
+      throw new Error("Could not fetch file: " + resp.statusText);
+    }
+    const arrayBuffer = await resp.arrayBuffer();
+    const rawText = await extractDocxText(arrayBuffer);
+    const parsed = parseMCQDocument(rawText, "General Awareness");
+    if (!parsed || parsed.length === 0) {
+      throw new Error("No MCQs parsed from document.");
+    }
+
+    state.p1_setup.questions = parsed;
+    saveP1Setup();
+    renderP1SetupList();
+
+    const bank = loadJSON("rbi_p1_bank", []);
+    let bankAdded = 0;
+    parsed.forEach(q => {
+      if (!bank.some(b => b.text === q.text)) {
+        bank.push({ ...q });
+        bankAdded++;
+      }
+    });
+    saveJSON("rbi_p1_bank", bank);
+
+    const withAns = parsed.filter(q => q.correctAnswer).length;
+    if (statusElem) {
+      statusElem.textContent = `✅ Successfully loaded all ${parsed.length} MCQs (${withAns} with Answer Key)! Bank updated (+${bankAdded}).`;
+    }
+  } catch (err) {
+    if (statusElem) {
+      statusElem.textContent = `File load note: ${err.message}. (You can also click 'Import DOCX / PDF' to select the file directly).`;
+    }
+    const fileInput = $("setup-p1-doc-import");
+    if (fileInput) fileInput.click();
+  }
+}
+
+// Handle importing DOCX / PDF files for Phase 1
+async function handleP1DocImport(event, targetScreen = "setup") {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const statusElem = $("setup-p1-doc-status");
+  if (statusElem && targetScreen === "setup") {
+    statusElem.textContent = "Reading " + file.name + "...";
+  }
+
+  try {
+    const arrayBuffer = file.arrayBuffer ? await file.arrayBuffer() : await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsArrayBuffer(file);
+    });
+
+    const fileName = file.name.toLowerCase();
+    let rawText = "";
+
+    if (fileName.endsWith(".docx")) {
+      rawText = await extractDocxText(arrayBuffer);
+    } else if (fileName.endsWith(".pdf")) {
+      rawText = await extractPdfText(arrayBuffer);
+    } else {
+      throw new Error("Unsupported format. Please upload a .docx or .pdf file.");
+    }
+
+    if (!rawText || !rawText.trim()) {
+      throw new Error("No readable text found in the document.");
+    }
+
+    const parsedQuestions = parseMCQDocument(rawText, "General Awareness");
+    if (!parsedQuestions || parsedQuestions.length === 0) {
+      throw new Error("Could not detect any MCQs with options in the file.");
+    }
+
+    if (targetScreen === "setup") {
+      state.p1_setup.questions = state.p1_setup.questions.concat(parsedQuestions);
+      saveP1Setup();
+      renderP1SetupList();
+
+      const bank = loadJSON("rbi_p1_bank", []);
+      parsedQuestions.forEach(q => {
+        if (!bank.some(b => b.text === q.text)) {
+          bank.push({ ...q });
+        }
+      });
+      saveJSON("rbi_p1_bank", bank);
+
+      const withAns = parsedQuestions.filter(q => q.correctAnswer).length;
+      if (statusElem) {
+        statusElem.textContent = `Imported ${parsedQuestions.length} MCQs (${withAns} with Answer Key)!`;
+      }
+      alert(`Imported ${parsedQuestions.length} MCQs successfully!`);
+    } else if (targetScreen === "bank") {
+      const bank = loadJSON("rbi_p1_bank", []);
+      let added = 0;
+      parsedQuestions.forEach(q => {
+        if (!bank.some(b => b.text === q.text)) {
+          bank.push({ ...q });
+          added++;
+        }
+      });
+      saveJSON("rbi_p1_bank", bank);
+      renderP1Bank();
+      alert(`Imported ${parsedQuestions.length} MCQs (${added} new added to Bank).`);
+    }
+  } catch (err) {
+    if (statusElem && targetScreen === "setup") {
+      statusElem.textContent = "Error: " + err.message;
+    }
+    alert("File read error: " + err.message);
+  } finally {
+    event.target.value = "";
+  }
+}
+
+// Render the Phase-1 setup questions list
+function renderP1SetupList() {
+  const list = $("setup-p1-question-list");
+  const countElem = $("setup-p1-count");
+  if (!list) return;
+
+  const questions = state.p1_setup.questions || [];
+  if (countElem) countElem.textContent = questions.length;
+
+  if (questions.length === 0) {
+    list.innerHTML = `<li style="display:block; text-align:center; color:var(--muted); padding:20px;">No MCQs added yet. Import Spotlight DOCX/PDF or use the form above.</li>`;
+    updateP1SetupBatchDeleteState();
+    return;
+  }
+
+  list.innerHTML = questions.map((q, idx) => {
+    const snippet = escapeHTML(q.text.length > 120 ? q.text.slice(0, 120) + "..." : q.text);
+    const optsPreview = (q.options || []).map(o =>
+      `<span class="opt-pill">${o.label.toUpperCase()}: ${escapeHTML(o.text.length > 25 ? o.text.slice(0, 25) + '...' : o.text)}</span>`
+    ).join("");
+
+    return `
+      <li>
+        <input type="checkbox" class="p1-q-select-check" data-id="${q.id}" style="margin-top:4px;">
+        <div style="flex:1;">
+          <div class="p1-q-meta-badges">
+            <span class="badge-subject">${escapeHTML(q.subject || "General Awareness")}</span>
+            ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
+            ${q.correctAnswer ? `<span class="badge-ans">Key: [${q.correctAnswer.toUpperCase()}]</span>` : ""}
+            <span style="font-size:11px; color:var(--muted);">Q${idx + 1}</span>
+          </div>
+          <div style="font-size:14px; font-weight:600; color:var(--text);">${snippet}</div>
+          <div class="p1-opts-preview">${optsPreview}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          ${idx > 0 ? `<button type="button" class="btn-p1-move-up" data-index="${idx}" style="padding:2px 6px; font-size:11px;">▲</button>` : ""}
+          ${idx < questions.length - 1 ? `<button type="button" class="btn-p1-move-down" data-index="${idx}" style="padding:2px 6px; font-size:11px;">▼</button>` : ""}
+          <button type="button" class="danger btn-p1-delete-q" data-id="${q.id}" style="padding:2px 6px; font-size:11px;">✕</button>
+        </div>
+      </li>
+    `;
+  }).join("");
+
+  updateP1SetupBatchDeleteState();
+}
+
+// Update the batch delete button count and visibility in Phase-1 Setup
+function updateP1SetupBatchDeleteState() {
+  const checkboxes = document.querySelectorAll("#setup-p1-question-list .p1-q-select-check");
+  const checked = document.querySelectorAll("#setup-p1-question-list .p1-q-select-check:checked");
+  const count = checked.length;
+  const countElem = $("p1-selected-count");
+  if (countElem) countElem.textContent = count;
+
+  const btnDeleteSelected = $("btn-p1-delete-selected");
+  if (btnDeleteSelected) {
+    btnDeleteSelected.style.display = count > 0 ? "inline-block" : "none";
+  }
+
+  const selectAll = $("setup-p1-select-all");
+  if (selectAll) {
+    selectAll.checked = checkboxes.length > 0 && count === checkboxes.length;
+    selectAll.indeterminate = count > 0 && count < checkboxes.length;
+  }
+}
+
+// Select/deselect all questions in Phase-1 Setup
+function handleP1SelectAllSetup(e) {
+  const checked = e.target.checked;
+  document.querySelectorAll("#setup-p1-question-list .p1-q-select-check").forEach(cb => {
+    cb.checked = checked;
+  });
+  updateP1SetupBatchDeleteState();
+}
+
+// Delete checked questions from Phase-1 Setup
+function handleP1DeleteSelectedSetup() {
+  const checked = document.querySelectorAll("#setup-p1-question-list .p1-q-select-check:checked");
+  if (checked.length === 0) return;
+
+  if (!confirm(`Delete ${checked.length} selected MCQ(s) from this test?`)) return;
+
+  const idsToDelete = new Set(Array.from(checked).map(cb => cb.dataset.id));
+  state.p1_setup.questions = state.p1_setup.questions.filter(q => !idsToDelete.has(q.id));
+  saveP1Setup();
+  renderP1SetupList();
+}
+
+// Delete all questions from Phase-1 Setup
+function handleP1DeleteAllSetup() {
+  if (state.p1_setup.questions.length === 0) return;
+  if (!confirm("Are you sure you want to remove all questions from this test?")) return;
+  state.p1_setup.questions = [];
+  saveP1Setup();
+  renderP1SetupList();
+}
+
+// Add a manual MCQ to Phase-1 Setup
+function handleP1QuestionFormSubmit(e) {
+  e.preventDefault();
+  const subject = $("p1-q-subject").value || "General Awareness";
+  const topic = ($("p1-q-topic").value || "").trim();
+  const text = $("p1-q-text").value.trim();
+  const optA = ($("p1-q-opt-a").value || "").trim();
+  const optB = ($("p1-q-opt-b").value || "").trim();
+  const optC = ($("p1-q-opt-c").value || "").trim();
+  const optD = ($("p1-q-opt-d").value || "").trim();
+  const optE = ($("p1-q-opt-e").value || "").trim();
+  const correct = ($("p1-q-correct").value || "a").toLowerCase();
+  const explanation = ($("p1-q-explanation").value || "").trim();
+  const saveToBank = $("p1-q-save-bank") ? $("p1-q-save-bank").checked : true;
+
+  if (!text) {
+    alert("Please enter the question statement.");
+    return;
+  }
+  if (!optA || !optB || !optC || !optD) {
+    alert("Please provide at least options A, B, C, and D.");
+    return;
+  }
+
+  const options = [
+    { label: "a", text: optA },
+    { label: "b", text: optB },
+    { label: "c", text: optC },
+    { label: "d", text: optD }
+  ];
+  if (optE) options.push({ label: "e", text: optE });
+
+  const pos = Number($("setup-p1-positive")?.value) || 1.0;
+  const neg = Number($("setup-p1-negative")?.value) || 0.25;
+
+  const newMCQ = {
+    id: makeId("mcq"),
+    subject,
+    topic,
+    text,
+    options,
+    correctAnswer: correct,
+    explanation,
+    marks: pos,
+    negativeMarks: neg
+  };
+
+  state.p1_setup.questions.push(newMCQ);
+  saveP1Setup();
+
+  if (saveToBank) {
+    const bank = loadJSON("rbi_p1_bank", []);
+    bank.push({ ...newMCQ });
+    saveJSON("rbi_p1_bank", bank);
+  }
+
+  $("p1-question-form").reset();
+  renderP1SetupList();
+}
+
+// Start the Phase-1 objective exam
+function startP1Exam() {
+  const errElem = $("setup-p1-error");
+  if (errElem) errElem.textContent = "";
+
+  if (!state.p1_setup.questions || state.p1_setup.questions.length === 0) {
+    if (errElem) errElem.textContent = "Please add at least one MCQ before starting the test.";
+    return;
+  }
+
+  const minutes = Number($("setup-p1-minutes")?.value) || 120;
+  const pos = Number($("setup-p1-positive")?.value) || 1.0;
+  const neg = Number($("setup-p1-negative")?.value) || 0.25;
+
+  state.p1_setup.totalMinutes = minutes;
+  state.p1_setup.positiveMarks = pos;
+  state.p1_setup.negativeMarks = neg;
+  saveP1Setup();
+
+  const questions = state.p1_setup.questions.map(q => ({
+    ...q,
+    marks: pos,
+    negativeMarks: neg
+  }));
+
+  const test = {
+    id: makeId("test_p1"),
+    date: Date.now(),
+    totalMinutes: minutes,
+    positiveMarks: pos,
+    negativeMarks: neg,
+    questions: questions,
+    answers: new Array(questions.length).fill(null),
+    statuses: new Array(questions.length).fill("not-visited"),
+    times: new Array(questions.length).fill(0),
+    timeSpent: 0
+  };
+
+  test.statuses[0] = "not-answered";
+
+  state.p1_test = test;
+  state.p1_currentIndex = 0;
+  state.p1_endTime = Date.now() + minutes * 60 * 1000;
+  state.p1_test.endTime = state.p1_endTime;
+  state.p1_questionShownAt = Date.now();
+
+  saveJSON("rbi_p1_active_test", state.p1_test);
+
+  startP1ExamTimer();
+  showP1Question(0);
+  renderP1Palette();
+  updateP1ExamSummary();
+  showScreen("exam");
+}
+
+// Start countdown timer for Phase-1
+function startP1ExamTimer() {
+  if (state.p1_timerId) clearInterval(state.p1_timerId);
+
+  state.p1_timerId = setInterval(() => {
+    if (!state.p1_test) {
+      clearInterval(state.p1_timerId);
+      return;
+    }
+
+    const now = Date.now();
+    const remainingMs = state.p1_endTime - now;
+    const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
+
+    const timerElem = $("p1-exam-timer");
+    if (timerElem) timerElem.textContent = formatTime(remainingSec);
+
+    if (now - state.p1_lastAutoSave > 5000) {
+      saveCurrentP1QuestionTime();
+      state.p1_lastAutoSave = now;
+    }
+
+    if (remainingSec <= 0) {
+      clearInterval(state.p1_timerId);
+      finishP1Test(true);
+    }
+  }, 1000);
+}
+
+// Accumulate elapsed seconds for active question
+function saveCurrentP1QuestionTime() {
+  if (!state.p1_test || state.p1_questionShownAt <= 0) return;
+  const elapsed = Math.round((Date.now() - state.p1_questionShownAt) / 1000);
+  const idx = state.p1_currentIndex;
+  if (state.p1_test.times && state.p1_test.times[idx] !== undefined) {
+    state.p1_test.times[idx] += elapsed;
+  }
+  state.p1_test.timeSpent = (state.p1_test.timeSpent || 0) + elapsed;
+  state.p1_questionShownAt = Date.now();
+  saveJSON("rbi_p1_active_test", state.p1_test);
+}
+
+// Display question on Phase-1 console
+function showP1Question(index) {
+  if (!state.p1_test || !state.p1_test.questions[index]) return;
+
+  state.p1_currentIndex = index;
+  const q = state.p1_test.questions[index];
+  const total = state.p1_test.questions.length;
+
+  if (state.p1_test.statuses[index] === "not-visited") {
+    state.p1_test.statuses[index] = "not-answered";
+  }
+
+  const secName = $("p1-exam-section-name");
+  if (secName) secName.textContent = q.subject || "General Awareness";
+
+  const qPos = $("p1-exam-qpos");
+  if (qPos) qPos.textContent = `Question No. ${index + 1} of ${total}`;
+
+  const qMarks = $("p1-exam-marks");
+  if (qMarks) qMarks.textContent = `Marks: +${(q.marks || 1.0).toFixed(2)}`;
+
+  const qNeg = $("p1-exam-neg");
+  if (qNeg) qNeg.textContent = `Negative: -${(q.negativeMarks || 0.25).toFixed(2)}`;
+
+  const qText = $("p1-exam-question-text");
+  if (qText) qText.textContent = q.text;
+
+  const currentAnswer = state.p1_test.answers[index];
+  const optsContainer = $("p1-exam-options-list");
+  if (optsContainer) {
+    optsContainer.innerHTML = (q.options || []).map(opt => {
+      const isSelected = (currentAnswer && currentAnswer.toLowerCase() === opt.label.toLowerCase());
+      return `
+        <div class="mcq-option-item ${isSelected ? 'selected' : ''}" data-label="${opt.label}">
+          <span class="opt-badge">${opt.label.toUpperCase()}</span>
+          <span class="opt-text">${escapeHTML(opt.text)}</span>
+        </div>
+      `;
+    }).join("");
+  }
+
+  const prevBtn = $("p1-btn-prev");
+  if (prevBtn) prevBtn.disabled = (index === 0);
+
+  state.p1_questionShownAt = Date.now();
+  renderP1Palette();
+  updateP1ExamSummary();
+}
+
+// Select an option for active question
+function selectP1Option(optLabel) {
+  if (!state.p1_test) return;
+  const idx = state.p1_currentIndex;
+  state.p1_test.answers[idx] = optLabel.toLowerCase();
+
+  if (state.p1_test.statuses[idx] === "review") {
+    state.p1_test.statuses[idx] = "answered-review";
+  } else {
+    state.p1_test.statuses[idx] = "answered";
+  }
+
+  document.querySelectorAll("#p1-exam-options-list .mcq-option-item").forEach(item => {
+    if (item.dataset.label.toLowerCase() === optLabel.toLowerCase()) {
+      item.classList.add("selected");
+    } else {
+      item.classList.remove("selected");
+    }
+  });
+
+  renderP1Palette();
+  updateP1ExamSummary();
+  saveJSON("rbi_p1_active_test", state.p1_test);
+}
+
+// Clear selected option
+function clearP1Option() {
+  if (!state.p1_test) return;
+  const idx = state.p1_currentIndex;
+  state.p1_test.answers[idx] = null;
+  state.p1_test.statuses[idx] = "not-answered";
+
+  document.querySelectorAll("#p1-exam-options-list .mcq-option-item").forEach(item => {
+    item.classList.remove("selected");
+  });
+
+  renderP1Palette();
+  updateP1ExamSummary();
+  saveJSON("rbi_p1_active_test", state.p1_test);
+}
+
+// Mark for Review & Next
+function markP1ForReview() {
+  if (!state.p1_test) return;
+  saveCurrentP1QuestionTime();
+  const idx = state.p1_currentIndex;
+
+  if (state.p1_test.answers[idx]) {
+    state.p1_test.statuses[idx] = "answered-review";
+  } else {
+    state.p1_test.statuses[idx] = "review";
+  }
+
+  if (idx < state.p1_test.questions.length - 1) {
+    showP1Question(idx + 1);
+  } else {
+    renderP1Palette();
+    updateP1ExamSummary();
+  }
+}
+
+// Save & Next
+function saveAndNextP1() {
+  if (!state.p1_test) return;
+  saveCurrentP1QuestionTime();
+  const idx = state.p1_currentIndex;
+
+  if (state.p1_test.answers[idx]) {
+    state.p1_test.statuses[idx] = "answered";
+  } else {
+    state.p1_test.statuses[idx] = "not-answered";
+  }
+
+  if (idx < state.p1_test.questions.length - 1) {
+    showP1Question(idx + 1);
+  } else {
+    renderP1Palette();
+    updateP1ExamSummary();
+  }
+}
+
+// Navigate to previous question
+function prevP1Question() {
+  if (!state.p1_test || state.p1_currentIndex <= 0) return;
+  saveCurrentP1QuestionTime();
+  showP1Question(state.p1_currentIndex - 1);
+}
+
+// Render TCS iON 5-color Question Palette
+function renderP1Palette() {
+  const palette = $("p1-exam-palette");
+  if (!palette || !state.p1_test) return;
+
+  const total = state.p1_test.questions.length;
+  const buttonsHtml = [];
+
+  for (let i = 0; i < total; i++) {
+    const status = state.p1_test.statuses[i] || "not-visited";
+    const isCurrent = (i === state.p1_currentIndex);
+    buttonsHtml.push(
+      `<button type="button" class="${status} ${isCurrent ? 'current' : ''}" data-index="${i}">
+        <span class="palette-qnum">${i + 1}</span>
+      </button>`
+    );
+  }
+
+  palette.innerHTML = buttonsHtml.join("");
+}
+
+// Update exam summary counters
+function updateP1ExamSummary() {
+  if (!state.p1_test) return;
+
+  let answered = 0;
+  let notAnswered = 0;
+  let marked = 0;
+  let notVisited = 0;
+
+  state.p1_test.statuses.forEach(st => {
+    if (st === "answered" || st === "answered-review") answered++;
+    else if (st === "not-answered") notAnswered++;
+    else if (st === "review") marked++;
+    else notVisited++;
+  });
+
+  const total = state.p1_test.questions.length;
+
+  if ($("p1-summary-total")) $("p1-summary-total").textContent = total;
+  if ($("p1-summary-answered")) $("p1-summary-answered").textContent = answered;
+  if ($("p1-summary-not-answered")) $("p1-summary-not-answered").textContent = notAnswered;
+  if ($("p1-summary-review")) $("p1-summary-review").textContent = marked;
+  if ($("p1-summary-not-visited")) $("p1-summary-not-visited").textContent = notVisited;
+
+  if ($("p1-modal-total")) $("p1-modal-total").textContent = total;
+  if ($("p1-modal-answered")) $("p1-modal-answered").textContent = answered;
+  if ($("p1-modal-not-answered")) $("p1-modal-not-answered").textContent = notAnswered;
+  if ($("p1-modal-marked")) $("p1-modal-marked").textContent = marked;
+}
+
+// Open submission confirmation modal
+function openP1SubmitModal() {
+  saveCurrentP1QuestionTime();
+  updateP1ExamSummary();
+  const modal = $("p1-confirm-submit");
+  if (modal) modal.hidden = false;
+}
+
+// Close submission confirmation modal
+function closeP1SubmitModal() {
+  const modal = $("p1-confirm-submit");
+  if (modal) modal.hidden = true;
+}
+
+// Calculate scores and finalize Phase-1 exam
+function finishP1Test(auto = false) {
+  if (!state.p1_test) return;
+
+  if (state.p1_timerId) {
+    clearInterval(state.p1_timerId);
+    state.p1_timerId = null;
+  }
+
+  saveCurrentP1QuestionTime();
+  closeP1SubmitModal();
+
+  const test = state.p1_test;
+  const pos = test.positiveMarks || 1.0;
+  const neg = test.negativeMarks || 0.25;
+
+  let correctCount = 0;
+  let incorrectCount = 0;
+  let unattemptedCount = 0;
+  let score = 0;
+
+  for (let i = 0; i < test.questions.length; i++) {
+    const q = test.questions[i];
+    const ans = test.answers[i];
+    const correctAns = (q.correctAnswer || "").toLowerCase().trim();
+
+    if (!ans) {
+      unattemptedCount++;
+    } else if (ans.toLowerCase().trim() === correctAns) {
+      correctCount++;
+      score += pos;
+    } else {
+      incorrectCount++;
+      score -= neg;
+    }
+  }
+
+  const attemptedCount = correctCount + incorrectCount;
+  const accuracy = attemptedCount > 0 ? ((correctCount / attemptedCount) * 100).toFixed(1) : "0.0";
+  const maxScore = (test.questions.length * pos).toFixed(2);
+  const finalScore = score.toFixed(2);
+
+  test.correctCount = correctCount;
+  test.incorrectCount = incorrectCount;
+  test.unattemptedCount = unattemptedCount;
+  test.score = Number(finalScore);
+  test.maxScore = Number(maxScore);
+  test.accuracy = Number(accuracy);
+  test.completedAt = Date.now();
+
+  const history = loadJSON("rbi_p1_history", []);
+  history.unshift(test);
+  saveJSON("rbi_p1_history", history);
+
+  localStorage.removeItem("rbi_p1_active_test");
+
+  state.p1_lastResultTest = test;
+  state.p1_test = null;
+
+  if (auto) {
+    alert("Time is up! Your objective test has been automatically submitted.");
+  }
+
+  renderP1Result(test);
+  showScreen("result");
+}
+
+// Render Phase-1 Result Scorecard and review
+function renderP1Result(test) {
+  if (!test) return;
+
+  if ($("p1-score-val")) $("p1-score-val").textContent = test.score.toFixed(2);
+  if ($("p1-score-max")) $("p1-score-max").textContent = test.maxScore.toFixed(2);
+  if ($("p1-score-pct")) $("p1-score-pct").textContent = test.accuracy + "%";
+  if ($("p1-stat-correct")) $("p1-stat-correct").textContent = test.correctCount;
+  if ($("p1-stat-incorrect")) $("p1-stat-incorrect").textContent = test.incorrectCount;
+  if ($("p1-stat-unattempted")) $("p1-stat-unattempted").textContent = test.unattemptedCount;
+  if ($("p1-stat-time")) $("p1-stat-time").textContent = formatDuration(test.timeSpent || 0);
+
+  renderP1ResultReviewList();
+}
+
+// Render list of question review cards with filters
+function renderP1ResultReviewList() {
+  const container = $("p1-result-list");
+  if (!container || !state.p1_lastResultTest) return;
+
+  const test = state.p1_lastResultTest;
+  const filter = state.p1_resultFilter || "all";
+  const cardsHtml = [];
+
+  for (let i = 0; i < test.questions.length; i++) {
+    const q = test.questions[i];
+    const userAns = test.answers[i] ? test.answers[i].toLowerCase().trim() : null;
+    const correctAns = q.correctAnswer ? q.correctAnswer.toLowerCase().trim() : "";
+
+    const isUnattempted = !userAns;
+    const isCorrect = userAns && correctAns && (userAns === correctAns);
+    const isIncorrect = userAns && (!correctAns || userAns !== correctAns);
+
+    if (filter === "correct" && !isCorrect) continue;
+    if (filter === "incorrect" && !isIncorrect) continue;
+    if (filter === "unattempted" && !isUnattempted) continue;
+
+    const cardStatusClass = isCorrect ? "correct" : isIncorrect ? "incorrect" : "unattempted";
+    const statusBadge = isCorrect
+      ? `<span style="background:#dcfce7; color:#166534; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">🟩 Correct (+${(test.positiveMarks || 1).toFixed(2)})</span>`
+      : isIncorrect
+      ? `<span style="background:#fee2e2; color:#991b1b; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">🟥 Incorrect (-${(test.negativeMarks || 0.25).toFixed(2)})</span>`
+      : `<span style="background:#f1f5f9; color:#475569; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">⬜ Unattempted (0.00)</span>`;
+
+    const optionsHtml = (q.options || []).map(opt => {
+      const optLabel = opt.label.toLowerCase().trim();
+      const isChosen = (userAns === optLabel);
+      const isActualCorrect = (correctAns === optLabel);
+
+      let optClass = "rev-opt";
+      let badge = "";
+
+      if (isChosen && isActualCorrect) {
+        optClass += " is-correct-opt";
+        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#15803d;">✓ Your Answer (Correct)</span>`;
+      } else if (isChosen && !isActualCorrect) {
+        optClass += " chosen-wrong";
+        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#b91c1c;">✗ Your Answer (Incorrect)</span>`;
+      } else if (!isChosen && isActualCorrect) {
+        optClass += " is-correct-opt";
+        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#15803d;">✓ Correct Answer</span>`;
+      }
+
+      return `
+        <div class="${optClass}">
+          <span style="font-weight:700; min-width:24px;">[${opt.label.toUpperCase()}]</span>
+          <span>${escapeHTML(opt.text)}</span>
+          ${badge}
+        </div>
+      `;
+    }).join("");
+
+    cardsHtml.push(`
+      <div class="mcq-review-card ${cardStatusClass}">
+        <div class="review-card-header">
+          <div>
+            <strong>Question ${i + 1}</strong>
+            <span style="margin-left:8px; font-size:12px; color:var(--muted);">[${escapeHTML(q.subject || "General Awareness")}]</span>
+          </div>
+          <div>${statusBadge}</div>
+        </div>
+        <div class="review-card-prompt">${escapeHTML(q.text)}</div>
+        <div class="review-options-list">${optionsHtml}</div>
+        ${q.explanation ? `<div class="rev-explanation"><strong>Explanation:</strong> ${escapeHTML(q.explanation)}</div>` : ""}
+      </div>
+    `);
+  }
+
+  if (cardsHtml.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--muted);">No questions match the "${filter}" filter.</div>`;
+  } else {
+    container.innerHTML = cardsHtml.join("");
+  }
+}
+
+// Download text file with Phase-1 exam scorecard and questions review
+function downloadP1Result(test) {
+  if (!test) return;
+
+  const lines = [
+    "============================================================",
+    "          RBI GRADE B - PHASE 1 OBJECTIVE TEST REPORT        ",
+    "============================================================",
+    `Date: ${new Date(test.date || test.completedAt).toLocaleString()}`,
+    `Total Time Spent: ${formatDuration(test.timeSpent || 0)}`,
+    `Total Questions: ${test.questions.length}`,
+    `Net Score: ${test.score.toFixed(2)} / ${test.maxScore.toFixed(2)}`,
+    `Accuracy: ${test.accuracy}%`,
+    `Correct: ${test.correctCount} | Incorrect: ${test.incorrectCount} | Unattempted: ${test.unattemptedCount}`,
+    "============================================================\n",
+    "--- DETAILED QUESTIONS REVIEW ---\n"
+  ];
+
+  test.questions.forEach((q, idx) => {
+    const userAns = test.answers[idx] ? test.answers[idx].toUpperCase() : "NONE";
+    const correctAns = q.correctAnswer ? q.correctAnswer.toUpperCase() : "N/A";
+    const status = !test.answers[idx] ? "UNATTEMPTED" : userAns === correctAns ? "CORRECT" : "INCORRECT";
+
+    lines.push(`Q${idx + 1}: ${q.text}`);
+    (q.options || []).forEach(o => {
+      lines.push(`   [${o.label.toUpperCase()}] ${o.text}`);
+    });
+    lines.push(`   Candidate Answer: ${userAns}`);
+    lines.push(`   Correct Answer:   ${correctAns}`);
+    lines.push(`   Status:           ${status}`);
+    if (q.explanation) {
+      lines.push(`   Explanation:      ${q.explanation}`);
+    }
+    lines.push("");
+  });
+
+  const filename = `RBI_Phase1_Scorecard_${getLocalDateString(test.date)}.txt`;
+  downloadText(filename, lines.join("\n"));
+}
+
+// Render Objective Question Bank
+function renderP1Bank() {
+  const container = $("p1-bank-list");
+  if (!container) return;
+
+  const bank = loadJSON("rbi_p1_bank", []);
+  const searchQuery = ($("p1-bank-search")?.value || "").toLowerCase().trim();
+  const subjectFilter = $("p1-bank-filter-subject")?.value || "All";
+
+  const filtered = bank.filter(q => {
+    if (subjectFilter !== "All" && q.subject !== subjectFilter) return false;
+    if (searchQuery) {
+      const textMatch = (q.text || "").toLowerCase().includes(searchQuery);
+      const topicMatch = (q.topic || "").toLowerCase().includes(searchQuery);
+      const optsMatch = (q.options || []).some(o => (o.text || "").toLowerCase().includes(searchQuery));
+      return textMatch || topicMatch || optsMatch;
+    }
+    return true;
+  });
+
+  const totalInfo = $("p1-bank-total-info");
+  if (totalInfo) {
+    totalInfo.textContent = `Showing ${filtered.length} of ${bank.length} MCQs`;
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--muted);">No MCQs found matching your criteria.</div>`;
+    updateP1BankBatchState();
+    return;
+  }
+
+  container.innerHTML = filtered.map(q => {
+    const optsPreview = (q.options || []).map(o =>
+      `<span class="opt-pill">${o.label.toUpperCase()}: ${escapeHTML(o.text.length > 30 ? o.text.slice(0, 30) + '...' : o.text)}</span>`
+    ).join("");
+
+    return `
+      <div class="mcq-bank-card">
+        <input type="checkbox" class="p1-bank-select-check" data-id="${q.id}" style="margin-top:4px;">
+        <div class="mcq-bank-body">
+          <div class="p1-q-meta-badges">
+            <span class="badge-subject">${escapeHTML(q.subject || "General Awareness")}</span>
+            ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
+            ${q.correctAnswer ? `<span class="badge-ans">Key: [${q.correctAnswer.toUpperCase()}]</span>` : ""}
+          </div>
+          <div class="mcq-bank-prompt">${escapeHTML(q.text)}</div>
+          <div class="p1-opts-preview">${optsPreview}</div>
+          <div class="mcq-bank-actions">
+            <button type="button" class="btn-p1-bank-add" data-id="${q.id}" style="background:#059669; color:white;">+ Add to Test</button>
+            <button type="button" class="danger btn-p1-bank-delete" data-id="${q.id}">Delete</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  updateP1BankBatchState();
+}
+
+// Update batch selection state in Phase-1 Bank
+function updateP1BankBatchState() {
+  const checkboxes = document.querySelectorAll("#p1-bank-list .p1-bank-select-check");
+  const checked = document.querySelectorAll("#p1-bank-list .p1-bank-select-check:checked");
+  const count = checked.length;
+
+  const countDel = $("p1-bank-selected-count");
+  if (countDel) countDel.textContent = count;
+
+  const countAdd = $("p1-bank-add-selected-count");
+  if (countAdd) countAdd.textContent = count;
+
+  const btnDel = $("btn-p1-bank-delete-selected");
+  if (btnDel) btnDel.style.display = count > 0 ? "inline-block" : "none";
+
+  const btnAdd = $("btn-p1-bank-add-selected");
+  if (btnAdd) btnAdd.style.display = count > 0 ? "inline-block" : "none";
+
+  const selectAll = $("p1-bank-select-all");
+  if (selectAll) {
+    selectAll.checked = checkboxes.length > 0 && count === checkboxes.length;
+    selectAll.indeterminate = count > 0 && count < checkboxes.length;
+  }
+}
+
+// Select/deselect all questions in Phase-1 Bank
+function handleP1BankSelectAll(e) {
+  const checked = e.target.checked;
+  document.querySelectorAll("#p1-bank-list .p1-bank-select-check").forEach(cb => cb.checked = checked);
+  updateP1BankBatchState();
+}
+
+// Delete selected questions from Phase-1 Bank
+function handleP1BankDeleteSelected() {
+  const checked = document.querySelectorAll("#p1-bank-list .p1-bank-select-check:checked");
+  if (checked.length === 0) return;
+  if (!confirm(`Delete ${checked.length} selected MCQ(s) from the Bank?`)) return;
+
+  const ids = new Set(Array.from(checked).map(cb => cb.dataset.id));
+  let bank = loadJSON("rbi_p1_bank", []);
+  bank = bank.filter(q => !ids.has(q.id));
+  saveJSON("rbi_p1_bank", bank);
+  renderP1Bank();
+}
+
+// Add selected questions from Bank to Today's Test
+function handleP1BankAddSelected() {
+  const checked = document.querySelectorAll("#p1-bank-list .p1-bank-select-check:checked");
+  if (checked.length === 0) return;
+
+  const ids = new Set(Array.from(checked).map(cb => cb.dataset.id));
+  const bank = loadJSON("rbi_p1_bank", []);
+  const selectedQuestions = bank.filter(q => ids.has(q.id));
+
+  let added = 0;
+  selectedQuestions.forEach(q => {
+    if (!state.p1_setup.questions.some(sq => sq.id === q.id || sq.text === q.text)) {
+      state.p1_setup.questions.push({ ...q });
+      added++;
+    }
+  });
+
+  saveP1Setup();
+  alert(`Added ${added} MCQ(s) to today's test!`);
+}
+
+// Add random questions from Bank
+function addP1RandomQuestions(count) {
+  const bank = loadJSON("rbi_p1_bank", []);
+  if (bank.length === 0) {
+    alert("Question bank is empty. Import MCQs first.");
+    return;
+  }
+
+  const shuffled = [...bank].sort(() => 0.5 - Math.random());
+  const picked = shuffled.slice(0, count);
+
+  let added = 0;
+  picked.forEach(q => {
+    if (!state.p1_setup.questions.some(sq => sq.id === q.id || sq.text === q.text)) {
+      state.p1_setup.questions.push({ ...q });
+      added++;
+    }
+  });
+
+  saveP1Setup();
+  renderP1SetupList();
+  alert(`Added ${added} random MCQ(s) to today's test!`);
+  showScreen("setup");
+}
+
+// Export Phase-1 Bank to JSON
+function exportP1Bank() {
+  const bank = loadJSON("rbi_p1_bank", []);
+  if (bank.length === 0) {
+    alert("Question bank is empty.");
+    return;
+  }
+  const jsonStr = JSON.stringify(bank, null, 2);
+  downloadText("RBI_Phase1_MCQs_Bank.json", jsonStr);
+}
+
+// Import Phase-1 Bank from JSON
+function importP1Bank(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      const data = JSON.parse(evt.target.result);
+      if (!Array.isArray(data)) throw new Error("JSON must be an array of questions.");
+
+      const bank = loadJSON("rbi_p1_bank", []);
+      let imported = 0;
+      data.forEach(item => {
+        if (!bank.some(b => b.text === item.text)) {
+          bank.push({
+            id: item.id || makeId("mcq"),
+            subject: item.subject || "General Awareness",
+            topic: item.topic || "",
+            text: item.text,
+            options: item.options || [],
+            correctAnswer: item.correctAnswer || "",
+            explanation: item.explanation || "",
+            marks: item.marks || 1.0,
+            negativeMarks: item.negativeMarks || 0.25
+          });
+          imported++;
+        }
+      });
+
+      saveJSON("rbi_p1_bank", bank);
+      renderP1Bank();
+      alert(`Imported ${imported} new MCQs into bank.`);
+    } catch (err) {
+      alert("Failed to import MCQs: " + err.message);
+    } finally {
+      e.target.value = "";
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Clear all questions in Phase-1 Bank
+function clearP1Bank() {
+  const bank = loadJSON("rbi_p1_bank", []);
+  if (bank.length === 0) return;
+  if (!confirm(`Are you sure you want to delete all ${bank.length} MCQs in the Question Bank? This cannot be undone.`)) return;
+  saveJSON("rbi_p1_bank", []);
+  renderP1Bank();
+}
+
+// Render Phase-1 History
+function renderP1History() {
+  const statsElem = $("p1-history-stats");
+  const listElem = $("p1-history-list");
+  if (!listElem) return;
+
+  const history = loadJSON("rbi_p1_history", []);
+
+  if (history.length === 0) {
+    if (statsElem) statsElem.innerHTML = `<div style="text-align:center; color:var(--muted); padding:10px;">No tests taken yet.</div>`;
+    listElem.innerHTML = `<div style="text-align:center; padding:30px; color:var(--muted);">Your completed Phase-1 tests will appear here.</div>`;
+    return;
+  }
+
+  const totalTests = history.length;
+  const avgScore = (history.reduce((acc, t) => acc + (t.score || 0), 0) / totalTests).toFixed(2);
+  const avgAccuracy = (history.reduce((acc, t) => acc + (t.accuracy || 0), 0) / totalTests).toFixed(1);
+  const totalSolved = history.reduce((acc, t) => acc + ((t.correctCount || 0) + (t.incorrectCount || 0)), 0);
+
+  if (statsElem) {
+    statsElem.innerHTML = `
+      <div class="stat-pill"><span>Total Tests:</span> <strong>${totalTests}</strong></div>
+      <div class="stat-pill"><span>Avg Score:</span> <strong>${avgScore}</strong></div>
+      <div class="stat-pill"><span>Avg Accuracy:</span> <strong>${avgAccuracy}%</strong></div>
+      <div class="stat-pill"><span>MCQs Solved:</span> <strong>${totalSolved}</strong></div>
+    `;
+  }
+
+  listElem.innerHTML = history.map(t => {
+    const dateStr = new Date(t.date || t.completedAt).toLocaleString();
+    return `
+      <div class="history-card" style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div>
+            <strong>${dateStr}</strong>
+            <span style="margin-left:8px; font-size:12px; color:var(--muted);">(${t.questions.length} Questions)</span>
+          </div>
+          <div>
+            <span style="font-size:16px; font-weight:700; color:#003366;">${t.score.toFixed(2)} / ${t.maxScore.toFixed(2)}</span>
+            <span style="margin-left:8px; font-size:13px; font-weight:600; color:#15803d;">(${t.accuracy}% Acc)</span>
+          </div>
+        </div>
+        <div style="display:flex; gap:12px; font-size:13px; color:var(--muted); margin-bottom:10px;">
+          <span>🟩 Correct: <strong>${t.correctCount}</strong></span>
+          <span>🟥 Incorrect: <strong>${t.incorrectCount}</strong></span>
+          <span>⬜ Unattempted: <strong>${t.unattemptedCount}</strong></span>
+          <span>⏱ Time: <strong>${formatDuration(t.timeSpent || 0)}</strong></span>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-p1-history-review" data-id="${t.id}" style="padding:6px 14px; font-size:13px;">Review Test &amp; Questions</button>
+          <button type="button" class="danger btn-p1-history-delete" data-id="${t.id}" style="padding:6px 12px; font-size:13px;">Delete</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// Review a test attempt from Phase-1 History
+function reviewP1HistoricalTest(id) {
+  const history = loadJSON("rbi_p1_history", []);
+  const test = history.find(t => t.id === id);
+  if (!test) return;
+  state.p1_lastResultTest = test;
+  renderP1Result(test);
+  showScreen("result");
+}
+
+// Delete an item from Phase-1 History
+function deleteP1HistoryItem(id) {
+  if (!confirm("Delete this test attempt from history?")) return;
+  let history = loadJSON("rbi_p1_history", []);
+  history = history.filter(t => t.id !== id);
+  saveJSON("rbi_p1_history", history);
+  renderP1History();
+}
+
+// Clear all Phase-1 History
+function clearP1History() {
+  const history = loadJSON("rbi_p1_history", []);
+  if (history.length === 0) return;
+  if (!confirm("Are you sure you want to delete all Phase-1 test history?")) return;
+  saveJSON("rbi_p1_history", []);
+  renderP1History();
+}
+
 // Wire all global DOM event listeners and initialize screen state
 document.addEventListener("DOMContentLoaded", () => {
   // Navigation
   const navSetup = $("nav-setup");
   if (navSetup) {
     navSetup.addEventListener("click", () => {
-      renderSetupList();
+      if (state.phase === "phase1") {
+        renderP1SetupList();
+      } else {
+        renderSetupList();
+      }
       showScreen("setup");
     });
   }
@@ -1989,7 +3313,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const navBank = $("nav-bank");
   if (navBank) {
     navBank.addEventListener("click", () => {
-      renderBank();
+      if (state.phase === "phase1") {
+        renderP1Bank();
+      } else {
+        renderBank();
+      }
       showScreen("bank");
     });
   }
@@ -1997,7 +3325,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const navHistory = $("nav-history");
   if (navHistory) {
     navHistory.addEventListener("click", () => {
-      renderHistory();
+      if (state.phase === "phase1") {
+        renderP1History();
+      } else {
+        renderHistory();
+      }
       showScreen("history");
     });
   }
@@ -2422,8 +3754,315 @@ document.addEventListener("DOMContentLoaded", () => {
     btnBankClearAll.addEventListener("click", handleClearAllBank);
   }
 
+  // ==========================================
+  // PHASE 1: EVENT LISTENERS
+  // ==========================================
+
+  // Phase switchers in header
+  const phaseBtnP1 = $("phase-btn-p1");
+  if (phaseBtnP1) {
+    phaseBtnP1.addEventListener("click", () => setPhase("phase1"));
+  }
+
+  const phaseBtnP2 = $("phase-btn-p2");
+  if (phaseBtnP2) {
+    phaseBtnP2.addEventListener("click", () => setPhase("phase2"));
+  }
+
+  // Phase-1 Setup Events
+  const p1Form = $("p1-question-form");
+  if (p1Form) {
+    p1Form.addEventListener("submit", handleP1QuestionFormSubmit);
+  }
+
+  const btnLoadSpotlight = $("btn-load-spotlight-sample");
+  if (btnLoadSpotlight) {
+    btnLoadSpotlight.addEventListener("click", loadSpotlightSample);
+  }
+
+  const p1DocImport = $("setup-p1-doc-import");
+  if (p1DocImport) {
+    p1DocImport.addEventListener("change", (e) => handleP1DocImport(e, "setup"));
+  }
+
+  const p1SelectAll = $("setup-p1-select-all");
+  if (p1SelectAll) {
+    p1SelectAll.addEventListener("change", handleP1SelectAllSetup);
+  }
+
+  const btnP1DeleteSelected = $("btn-p1-delete-selected");
+  if (btnP1DeleteSelected) {
+    btnP1DeleteSelected.addEventListener("click", handleP1DeleteSelectedSetup);
+  }
+
+  const btnP1DeleteAllSetup = $("btn-p1-delete-all-setup");
+  if (btnP1DeleteAllSetup) {
+    btnP1DeleteAllSetup.addEventListener("click", handleP1DeleteAllSetup);
+  }
+
+  const setupP1QList = $("setup-p1-question-list");
+  if (setupP1QList) {
+    setupP1QList.addEventListener("change", (e) => {
+      if (e.target && e.target.classList.contains("p1-q-select-check")) {
+        updateP1SetupBatchDeleteState();
+      }
+    });
+
+    setupP1QList.addEventListener("click", (e) => {
+      const delBtn = e.target.closest(".btn-p1-delete-q");
+      if (delBtn) {
+        const id = delBtn.dataset.id;
+        state.p1_setup.questions = state.p1_setup.questions.filter(q => q.id !== id);
+        saveP1Setup();
+        renderP1SetupList();
+        return;
+      }
+
+      const upBtn = e.target.closest(".btn-p1-move-up");
+      if (upBtn) {
+        const idx = Number(upBtn.dataset.index);
+        if (idx > 0) {
+          const temp = state.p1_setup.questions[idx];
+          state.p1_setup.questions[idx] = state.p1_setup.questions[idx - 1];
+          state.p1_setup.questions[idx - 1] = temp;
+          saveP1Setup();
+          renderP1SetupList();
+        }
+        return;
+      }
+
+      const downBtn = e.target.closest(".btn-p1-move-down");
+      if (downBtn) {
+        const idx = Number(downBtn.dataset.index);
+        if (idx < state.p1_setup.questions.length - 1) {
+          const temp = state.p1_setup.questions[idx];
+          state.p1_setup.questions[idx] = state.p1_setup.questions[idx + 1];
+          state.p1_setup.questions[idx + 1] = temp;
+          saveP1Setup();
+          renderP1SetupList();
+        }
+        return;
+      }
+    });
+  }
+
+  const btnStartP1Test = $("btn-start-p1-test");
+  if (btnStartP1Test) {
+    btnStartP1Test.addEventListener("click", startP1Exam);
+  }
+
+  // Phase-1 Exam Screen Events
+  const p1OptionsList = $("p1-exam-options-list");
+  if (p1OptionsList) {
+    p1OptionsList.addEventListener("click", (e) => {
+      const item = e.target.closest(".mcq-option-item");
+      if (item && item.dataset.label) {
+        selectP1Option(item.dataset.label);
+      }
+    });
+  }
+
+  const p1BtnClear = $("p1-btn-clear");
+  if (p1BtnClear) {
+    p1BtnClear.addEventListener("click", clearP1Option);
+  }
+
+  const p1BtnReview = $("p1-btn-review");
+  if (p1BtnReview) {
+    p1BtnReview.addEventListener("click", markP1ForReview);
+  }
+
+  const p1BtnNext = $("p1-btn-next");
+  if (p1BtnNext) {
+    p1BtnNext.addEventListener("click", saveAndNextP1);
+  }
+
+  const p1BtnPrev = $("p1-btn-prev");
+  if (p1BtnPrev) {
+    p1BtnPrev.addEventListener("click", prevP1Question);
+  }
+
+  const p1Palette = $("p1-exam-palette");
+  if (p1Palette) {
+    p1Palette.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-index]");
+      if (btn) {
+        saveCurrentP1QuestionTime();
+        showP1Question(Number(btn.dataset.index));
+      }
+    });
+  }
+
+  const p1BtnSubmit = $("p1-btn-submit");
+  if (p1BtnSubmit) {
+    p1BtnSubmit.addEventListener("click", openP1SubmitModal);
+  }
+
+  const p1BtnConfirmYes = $("p1-btn-confirm-yes");
+  if (p1BtnConfirmYes) {
+    p1BtnConfirmYes.addEventListener("click", () => finishP1Test(false));
+  }
+
+  const p1BtnConfirmNo = $("p1-btn-confirm-no");
+  if (p1BtnConfirmNo) {
+    p1BtnConfirmNo.addEventListener("click", closeP1SubmitModal);
+  }
+
+  // Phase-1 Result Screen Events
+  document.querySelectorAll(".p1-filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".p1-filter-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.p1_resultFilter = btn.dataset.filter || "all";
+      renderP1ResultReviewList();
+    });
+  });
+
+  const p1BtnDownload = $("p1-btn-download-results");
+  if (p1BtnDownload) {
+    p1BtnDownload.addEventListener("click", () => downloadP1Result(state.p1_lastResultTest));
+  }
+
+  const p1BtnRetake = $("p1-btn-retake");
+  if (p1BtnRetake) {
+    p1BtnRetake.addEventListener("click", () => {
+      if (state.p1_lastResultTest && state.p1_lastResultTest.questions) {
+        state.p1_setup.questions = state.p1_lastResultTest.questions.map(q => ({ ...q }));
+        saveP1Setup();
+        renderP1SetupList();
+      }
+      showScreen("setup");
+    });
+  }
+
+  const p1BtnGoHistory = $("p1-btn-go-history");
+  if (p1BtnGoHistory) {
+    p1BtnGoHistory.addEventListener("click", () => {
+      renderP1History();
+      showScreen("history");
+    });
+  }
+
+  // Phase-1 Bank Events
+  const btnP1Random20 = $("btn-p1-bank-random-20");
+  if (btnP1Random20) {
+    btnP1Random20.addEventListener("click", () => addP1RandomQuestions(20));
+  }
+
+  const btnP1Random50 = $("btn-p1-bank-random-50");
+  if (btnP1Random50) {
+    btnP1Random50.addEventListener("click", () => addP1RandomQuestions(50));
+  }
+
+  const p1BankSearch = $("p1-bank-search");
+  if (p1BankSearch) {
+    p1BankSearch.addEventListener("input", renderP1Bank);
+  }
+
+  const p1BankFilter = $("p1-bank-filter-subject");
+  if (p1BankFilter) {
+    p1BankFilter.addEventListener("change", renderP1Bank);
+  }
+
+  const p1BankSelectAll = $("p1-bank-select-all");
+  if (p1BankSelectAll) {
+    p1BankSelectAll.addEventListener("change", handleP1BankSelectAll);
+  }
+
+  const btnP1BankDeleteSelected = $("btn-p1-bank-delete-selected");
+  if (btnP1BankDeleteSelected) {
+    btnP1BankDeleteSelected.addEventListener("click", handleP1BankDeleteSelected);
+  }
+
+  const btnP1BankAddSelected = $("btn-p1-bank-add-selected");
+  if (btnP1BankAddSelected) {
+    btnP1BankAddSelected.addEventListener("click", handleP1BankAddSelected);
+  }
+
+  const p1BankList = $("p1-bank-list");
+  if (p1BankList) {
+    p1BankList.addEventListener("change", (e) => {
+      if (e.target && e.target.classList.contains("p1-bank-select-check")) {
+        updateP1BankBatchState();
+      }
+    });
+
+    p1BankList.addEventListener("click", (e) => {
+      const addBtn = e.target.closest(".btn-p1-bank-add");
+      if (addBtn) {
+        const id = addBtn.dataset.id;
+        const bank = loadJSON("rbi_p1_bank", []);
+        const q = bank.find(x => x.id === id);
+        if (q) {
+          if (!state.p1_setup.questions.some(sq => sq.id === q.id || sq.text === q.text)) {
+            state.p1_setup.questions.push({ ...q });
+            saveP1Setup();
+            renderP1SetupList();
+            addBtn.textContent = "Added ✓";
+            setTimeout(() => { addBtn.textContent = "+ Add to Test"; }, 1500);
+          } else {
+            alert("This MCQ is already in today's test!");
+          }
+        }
+        return;
+      }
+
+      const delBtn = e.target.closest(".btn-p1-bank-delete");
+      if (delBtn) {
+        const id = delBtn.dataset.id;
+        let bank = loadJSON("rbi_p1_bank", []);
+        bank = bank.filter(x => x.id !== id);
+        saveJSON("rbi_p1_bank", bank);
+        renderP1Bank();
+        return;
+      }
+    });
+  }
+
+  const btnP1BankExport = $("btn-p1-bank-export");
+  if (btnP1BankExport) {
+    btnP1BankExport.addEventListener("click", exportP1Bank);
+  }
+
+  const p1BankImport = $("p1-bank-import");
+  if (p1BankImport) {
+    p1BankImport.addEventListener("change", importP1Bank);
+  }
+
+  const p1BankDocImport = $("p1-bank-doc-import");
+  if (p1BankDocImport) {
+    p1BankDocImport.addEventListener("change", (e) => handleP1DocImport(e, "bank"));
+  }
+
+  const btnP1BankClearAll = $("btn-p1-bank-clear-all");
+  if (btnP1BankClearAll) {
+    btnP1BankClearAll.addEventListener("click", clearP1Bank);
+  }
+
+  // Phase-1 History Events
+  const p1HistoryList = $("p1-history-list");
+  if (p1HistoryList) {
+    p1HistoryList.addEventListener("click", (e) => {
+      const revBtn = e.target.closest(".btn-p1-history-review");
+      if (revBtn) {
+        reviewP1HistoricalTest(revBtn.dataset.id);
+        return;
+      }
+
+      const delBtn = e.target.closest(".btn-p1-history-delete");
+      if (delBtn) {
+        deleteP1HistoryItem(delBtn.dataset.id);
+        return;
+      }
+    });
+  }
+
+  const btnClearP1History = $("btn-clear-p1-history");
+  if (btnClearP1History) {
+    btnClearP1History.addEventListener("click", clearP1History);
+  }
+
   // Initial load
-  renderSetupList();
-  showScreen("setup");
+  setPhase(state.phase);
   checkResumeActiveTest();
 });
