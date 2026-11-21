@@ -11,14 +11,14 @@
     <div class="header-main-bar">
       <h1>RBI Grade B Practice Console</h1>
       <div class="phase-switcher-container">
-        <button type="button" id="phase-btn-p1" class="phase-toggle-btn active">🎯 Phase-1 (Objective / MCQs)</button>
-        <button type="button" id="phase-btn-p2" class="phase-toggle-btn">✍️ Phase-2 (Descriptive)</button>
+        <button type="button" id="phase-btn-p1" class="phase-toggle-btn active" title="MCQ tests: Phase-1 and Phase-2 objective papers">🎯 Objective (MCQ)</button>
+        <button type="button" id="phase-btn-p2" class="phase-toggle-btn" title="Phase-2 descriptive (subjective) answer writing">✍️ Subjective (Phase-2)</button>
       </div>
     </div>
     <nav>
       <button type="button" id="nav-setup">New Test</button>
       <button type="button" id="nav-bank">Question Bank</button>
-      <button type="button" id="nav-calendar">📅 Calendar</button>
+      <button type="button" id="nav-calendar">📅 Calendar &amp; TODO</button>
       <button type="button" id="nav-history">History</button>
     </nav>
   </header>
@@ -28,8 +28,8 @@
     <section id="screen-setup-p1" class="screen">
       <div class="setup-header">
         <div class="setup-title-group">
-          <h2>Phase-1: Objective MCQ Practice</h2>
-          <p class="setup-subtitle">Simulate authentic TCS iON examination console with automated instant scoring.</p>
+          <h2>Objective (MCQ) Test</h2>
+          <p class="setup-subtitle">For your daily Phase-1 objective exam and Phase-2 objective exam (ESI / Finance &amp; Management MCQs). TCS iON-style console with instant scoring.</p>
         </div>
       </div>
 
@@ -61,16 +61,22 @@
       <details id="p1-manual-accordion" class="minimal-accordion">
         <summary class="accordion-summary">
           <span class="accordion-title">✏️ Add an MCQ manually</span>
-          <span class="accordion-hint">Click to expand</span>
+          <span class="accordion-hint" aria-hidden="true"></span>
         </summary>
         <form id="p1-question-form" class="minimal-form-card">
           <div class="form-row-2col">
             <label>Subject / Section
               <select id="p1-q-subject">
-                <option value="General Awareness">General Awareness (Spotlight)</option>
-                <option value="Reasoning Ability">Reasoning Ability</option>
-                <option value="Quantitative Aptitude">Quantitative Aptitude</option>
-                <option value="English Language">English Language</option>
+                <optgroup label="Phase-1">
+                  <option value="General Awareness">General Awareness (Spotlight)</option>
+                  <option value="Reasoning Ability">Reasoning Ability</option>
+                  <option value="Quantitative Aptitude">Quantitative Aptitude</option>
+                  <option value="English Language">English Language</option>
+                </optgroup>
+                <optgroup label="Phase-2 objective">
+                  <option value="ESI (Phase-2)">ESI (Phase-2)</option>
+                  <option value="Finance & Management (Phase-2)">Finance &amp; Management (Phase-2)</option>
+                </optgroup>
                 <option value="Other">Other</option>
               </select>
             </label>
@@ -88,7 +94,7 @@
             <label>Option [B] <input id="p1-q-opt-b" type="text" required placeholder="Option B text"></label>
             <label>Option [C] <input id="p1-q-opt-c" type="text" required placeholder="Option C text"></label>
             <label>Option [D] <input id="p1-q-opt-d" type="text" required placeholder="Option D text"></label>
-            <label>Option [E] <input id="p1-q-opt-e" type="text" required placeholder="Option E text"></label>
+            <label>Option [E] <input id="p1-q-opt-e" type="text" placeholder="Option E text (optional)"></label>
           </div>
 
           <div class="form-row-2col" style="align-items: start;">
@@ -137,7 +143,7 @@
         </div>
       </div>
 
-      <button type="button" id="btn-start-p1-test" class="btn-start-primary">Start Phase-1 Objective Test</button>
+      <button type="button" id="btn-start-p1-test" class="btn-start-primary">Start Objective Test</button>
       <p id="setup-p1-error" class="error"></p>
     </section>
 
@@ -148,7 +154,7 @@
           <div class="rbi-emblem">🏛️</div>
           <div>
             <h3>RESERVE BANK OF INDIA</h3>
-            <p>Phase-I Online Examination - Objective MCQ Console</p>
+            <p>Online Examination - Objective (MCQ) Console</p>
           </div>
         </div>
         <div class="rbi-candidate-box">
@@ -279,7 +285,7 @@
     <!-- Screen: Phase-1 Result (Objective Scorecard & Review) -->
     <section id="screen-result-p1" class="screen" hidden>
       <div class="result-scorecard">
-        <h2>Phase-1 Test Result &amp; Analysis</h2>
+        <h2>Objective Test Result &amp; Analysis</h2>
         <div class="score-main-grid">
           <div class="score-big-box">
             <span class="score-title">Final Score</span>
@@ -316,8 +322,8 @@
 
     <!-- Screen: Phase-1 Question Bank -->
     <section id="screen-bank-p1" class="screen" hidden>
-      <h2>Phase-1 Objective Question Bank</h2>
-      <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+      <h2>Objective (MCQ) Question Bank</h2>
+      <div class="bank-top-actions">
         <button type="button" id="btn-p1-bank-random-20">Add 20 Random MCQs to Today's Test</button>
         <button type="button" id="btn-p1-bank-random-50" class="secondary">Add 50 Random MCQs</button>
       </div>
@@ -329,12 +335,14 @@
           <option value="Reasoning Ability">Reasoning Ability</option>
           <option value="Quantitative Aptitude">Quantitative Aptitude</option>
           <option value="English Language">English Language</option>
+          <option value="ESI (Phase-2)">ESI (Phase-2)</option>
+          <option value="Finance & Management (Phase-2)">Finance &amp; Management (Phase-2)</option>
           <option value="Other">Other</option>
         </select>
       </div>
 
       <div class="bank-list-header">
-        <div id="p1-bank-batch-actions">
+        <div id="p1-bank-batch-actions" class="batch-actions-group">
           <label class="select-all-label">
             <input type="checkbox" id="p1-bank-select-all"> Select All
           </label>
@@ -356,18 +364,18 @@
 
     <!-- Screen: Phase-1 History -->
     <section id="screen-history-p1" class="screen" hidden>
-      <h2>Phase-1 Objective Practice History</h2>
+      <h2>Objective (MCQ) Test History</h2>
       <div id="p1-history-stats" class="history-stats-bar"></div>
       <div id="p1-history-list"></div>
-      <button type="button" id="btn-clear-p1-history" class="danger">Delete all Phase-1 history</button>
+      <button type="button" id="btn-clear-p1-history" class="danger">Delete all objective test history</button>
     </section>
 
     <!-- Screen: Phase-2 Setup (Descriptive) -->
     <section id="screen-setup" class="screen" hidden>
       <div class="setup-header">
         <div class="setup-title-group">
-          <h2>Phase-2: Descriptive Practice</h2>
-          <p class="setup-subtitle">Prepare for ESI, Finance, and Management with timed answer writing and word count limits.</p>
+          <h2>Phase-2 Subjective (Descriptive) Test</h2>
+          <p class="setup-subtitle">Timed answer writing for ESI, Finance, Management and English with word limits, like the real exam. After the test, copy the evaluation file into Gemini / Claude for a score.</p>
         </div>
       </div>
 
@@ -399,7 +407,7 @@
       <details id="p2-manual-accordion" class="minimal-accordion">
         <summary class="accordion-summary">
           <span class="accordion-title">✏️ Add a descriptive question manually</span>
-          <span class="accordion-hint">Click to expand</span>
+          <span class="accordion-hint" aria-hidden="true"></span>
         </summary>
         <form id="question-form" class="minimal-form-card">
           <div class="form-row-2col">
@@ -439,7 +447,10 @@
 
           <label class="checkbox-label"><input id="q-save-bank" type="checkbox" checked> Also save to Question Bank</label>
 
-          <button type="submit" id="btn-add-question" class="btn-minimal-secondary">Add question</button>
+          <div class="form-actions">
+            <button type="submit" id="btn-add-question" class="btn-minimal-secondary">Add question</button>
+            <button type="button" id="btn-cancel-edit" class="secondary" hidden>Cancel edit</button>
+          </div>
           <input type="hidden" id="q-edit-id" value="">
         </form>
       </details>
@@ -473,7 +484,7 @@
         </div>
       </div>
 
-      <button type="button" id="btn-start-test" class="btn-start-primary">Start Descriptive Test</button>
+      <button type="button" id="btn-start-test" class="btn-start-primary">Start Subjective Test</button>
       <p id="setup-error" class="error"></p>
     </section>
 
@@ -485,7 +496,7 @@
           <div class="rbi-emblem">🏛️</div>
           <div>
             <h3>RESERVE BANK OF INDIA</h3>
-            <p>Phase-II Online Examination - Descriptive Test Console</p>
+            <p>Phase-II Online Examination - Descriptive (Subjective) Console</p>
           </div>
         </div>
         <div class="rbi-candidate-box">
@@ -626,7 +637,7 @@
 
     <!-- Screen: Result -->
     <section id="screen-result" class="screen" hidden>
-      <h2>Test finished</h2>
+      <h2>Subjective Test Finished</h2>
       <p id="result-summary"></p>
 
       <div id="result-howto" class="info">
@@ -634,8 +645,10 @@
         open Gemini or Claude, paste everything, and send. The AI will grade it with comprehensive feedback.
       </div>
 
-      <button type="button" id="btn-download-all">Download All (one .txt file)</button>
-      <button type="button" id="btn-copy-all">Copy All</button>
+      <div class="result-toolbar">
+        <button type="button" id="btn-download-all">Download All (one .txt file)</button>
+        <button type="button" id="btn-copy-all" class="secondary">Copy All</button>
+      </div>
 
       <div id="result-list"></div>   <!-- one card per question, built by JS -->
 
@@ -644,7 +657,7 @@
 
     <!-- Screen: History -->
     <section id="screen-history" class="screen" hidden>
-      <h2>Practice History</h2>
+      <h2>Subjective (Descriptive) Test History</h2>
       <div id="history-stats"></div>
       <div id="history-list"></div>
       <button type="button" id="btn-clear-history" class="danger">Delete all history</button>
@@ -652,9 +665,9 @@
 
     <!-- Screen: Question Bank -->
     <section id="screen-bank" class="screen" hidden>
-      <h2>Question Bank</h2>
-      <div style="margin-bottom: 12px;">
-        <button type="button" id="btn-bank-random">Add 3 random questions</button>
+      <h2>Subjective (Descriptive) Question Bank</h2>
+      <div class="bank-top-actions">
+        <button type="button" id="btn-bank-random">Add 3 random questions to today's test</button>
       </div>
       <div class="bank-search-row">
         <input id="bank-search" type="text" placeholder="Search question or topic...">
@@ -669,7 +682,7 @@
       </div>
 
       <div class="bank-list-header">
-        <div id="bank-batch-actions">
+        <div id="bank-batch-actions" class="batch-actions-group">
           <label class="select-all-label">
             <input type="checkbox" id="bank-select-all"> Select All
           </label>
@@ -689,393 +702,32 @@
       </div>
     </section>
 
-    <!-- Screen: Phase-1 Study Plan & Exam Marks Calendar -->
-    <section id="screen-calendar-p1" class="screen" hidden>
-      <div class="setup-header">
-        <div class="setup-title-group">
-          <h2>📅 Phase-1: Objective Exam &amp; Study Schedule</h2>
-          <p class="setup-subtitle">Daily Objective drill schedule (Quant, Reasoning, English, General Awareness &amp; Spotlight) with integrated exam marks tracking.</p>
-        </div>
-      </div>
+    <!-- Screen: Calendar & TODO for the whole daily routine (content is built by calendar.js) -->
+    <section id="screen-calendar" class="screen calendar-screen" hidden></section>
 
-      <!-- Schedule Import Card for Phase-1 (Collapsible for Clean Minimalism) -->
-      <details class="minimal-upload-card calendar-upload-card">
-        <summary class="accordion-summary" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 4px 2px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 16px;">📂</span>
-            <strong style="color: #003366; font-size: 13.5px;">Spreadsheet Timetable &amp; Schedule Config (.xlsx, .csv)</strong>
-          </div>
-          <span style="font-size: 12px; color: var(--muted);">Click to import / export timetable or load official 415-day plan ▼</span>
-        </summary>
-        <div class="upload-drop-zone" style="margin-top: 14px;">
-          <div class="upload-icon-circle">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-          </div>
-          <div class="upload-text-group">
-            <strong>Import Study Schedule from Excel (.xlsx, .csv)</strong>
-            <span>Upload any timetable spreadsheet. Select starting date and how many days from the beginning you have already finished.</span>
-          </div>
-
-          <div class="upload-config-inputs">
-            <label class="upload-field-label">
-              <span>📅 Plan Start Date:</span>
-              <input type="date" id="p1-cal-upload-start-date" value="2026-11-01" class="upload-date-input">
-            </label>
-            <label class="upload-field-label">
-              <span>✅ Days Finished from Start:</span>
-              <input type="number" id="p1-cal-upload-days-finished" min="0" max="415" value="0" placeholder="0" class="upload-num-input">
-            </label>
-          </div>
-
-          <label class="btn-minimal-primary upload-excel-btn">
-            Upload Excel (.xlsx)
-            <input id="p1-calendar-excel-import" type="file" accept=".xlsx,.xls,.csv" hidden>
-          </label>
-        </div>
-
-        <div class="quick-actions-row">
-          <span class="quick-actions-label">Quick Actions:</span>
-          <div class="quick-actions-group">
-            <button type="button" id="btn-p1-load-official-schedule" class="quick-action-pill primary-pill" style="font-weight:700; color:#003366; border-color:#93c5fd; background:#eff6ff;">⚡ Load Official 415-Day Plan</button>
-            <button type="button" id="btn-p1-apply-config" class="quick-action-pill" style="font-weight:600; color:#059669; border-color:#a7f3d0; background:#f0fdf4;">✓ Apply Start Date &amp; Finished Days</button>
-            <button type="button" id="btn-p1-download-template" class="quick-action-pill">⬇️ Download Template (.csv)</button>
-            <button type="button" id="btn-p1-export-csv" class="quick-action-pill">📤 Export Schedule (.csv)</button>
-            <button type="button" id="btn-p1-clear-schedule" class="quick-action-pill danger-pill">🗑️ Clear Schedule</button>
-          </div>
-        </div>
-        <span id="p1-calendar-import-status" class="upload-status-badge"></span>
-      </details>
-
-      <!-- Phase-1 Schedule & Exam Stats Bar -->
-      <div id="p1-calendar-progress-bar" class="schedule-summary-bar"></div>
-
-      <!-- Main LeetCode Style Layout: Quests Left, Minimal Calendar Right -->
-      <div class="calendar-main-layout leetcode-layout">
-        <!-- LEFT COLUMN: Daily Quests Workspace -->
-        <div class="calendar-quests-container">
-          <!-- Daily Quest Hero Card -->
-          <div class="daily-quest-hero-card">
-            <div class="quest-hero-header">
-              <div class="quest-date-info">
-                <span id="p1-quest-daynum-badge" class="quest-pill-daynum">Day 1</span>
-                <h3 id="p1-cal-selected-date-heading">Selected Day</h3>
-                <span id="p1-quest-daytype-badge" class="popover-type-badge normal-day">📘 Normal Class</span>
-              </div>
-              <div class="quest-progress-box">
-                <div class="quest-progress-header">
-                  <span>Daily Quests</span>
-                  <strong id="p1-quest-progress-text">0 / 0 Completed (0%)</strong>
-                </div>
-                <div class="quest-progress-bar-track">
-                  <div id="p1-quest-progress-bar-fill" class="quest-progress-bar-fill" style="width: 0%;"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Chapter Banner for Today -->
-            <div id="p1-quest-chapter-banner" class="quest-chapter-banner"></div>
-          </div>
-
-          <!-- Quick Add Dynamic Quest / TODO Form -->
-          <div class="daily-add-quest-box">
-            <form id="p1-form-quick-add-quest" class="quick-add-quest-form">
-              <input type="text" id="p1-input-quick-quest-title" placeholder="⚡ Add new quest / TODO (e.g. Read Speed Math Notes, Solve 30 MCQs)..." required class="quick-quest-input">
-              <select id="p1-select-quick-quest-type" class="quick-quest-type-select">
-                <option value="Objective Exam">🎯 Objective Exam</option>
-                <option value="Current Affairs">📰 Current Affairs</option>
-                <option value="Study / Reading">📖 Study / Reading</option>
-                <option value="Revision">🔄 Revision</option>
-                <option value="General">📌 General TODO</option>
-              </select>
-              <button type="submit" class="btn-minimal-primary btn-add-quest">+ Add Quest</button>
-            </form>
-          </div>
-
-          <!-- Daily Quests List Section -->
-          <div class="daily-quests-section">
-            <div class="daily-quests-section-header">
-              <h4>Today's Quests &amp; Tasks</h4>
-              <span id="p1-cal-selected-date-sub" class="selected-date-sub">0 tasks</span>
-            </div>
-            <div id="p1-cal-selected-day-tasks" class="day-tasks-list"></div>
-          </div>
-        </div>
-
-        <!-- RIGHT COLUMN: LeetCode Style Minimal Calendar Widget -->
-        <div class="calendar-leetcode-sidebar">
-          <!-- LeetCode Streak Hero Card -->
-          <div class="leetcode-streak-card">
-            <div class="streak-flame-icon">🔥</div>
-            <div class="streak-info">
-              <div class="streak-title"><strong id="p1-streak-days-count">0</strong> Day Streak</div>
-              <div class="streak-sub">
-                <span>Best: <strong id="p1-streak-max-count">0</strong> d</span> ·
-                <span>Active: <strong id="p1-streak-total-active">0</strong> d</span>
-              </div>
-            </div>
-            <div id="p1-streak-status-pill" class="streak-status-pill">Active</div>
-          </div>
-
-          <!-- LeetCode Minimal Calendar Card -->
-          <div class="leetcode-calendar-card">
-            <div class="leetcode-cal-header">
-              <div id="p1-cal-month-year-display" class="leetcode-month-title">November 2026</div>
-              <div class="leetcode-cal-nav">
-                <button type="button" id="p1-cal-btn-prev-month" class="lc-nav-btn" title="Previous Month">‹</button>
-                <button type="button" id="p1-cal-btn-today" class="lc-today-btn" title="Go to Today">Today</button>
-                <button type="button" id="p1-cal-btn-next-month" class="lc-nav-btn" title="Next Month">›</button>
-              </div>
-            </div>
-
-            <!-- Minimal Day-of-week header: S M T W T F S -->
-            <div class="leetcode-weekdays-row">
-              <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-            </div>
-
-            <!-- LeetCode Days Grid with checkmarks -->
-            <div id="p1-calendar-days-grid" class="leetcode-days-grid"></div>
-
-            <!-- Minimal Footer Legend -->
-            <div class="leetcode-cal-footer">
-              <div class="lc-legend-items">
-                <span class="lc-legend-item"><span class="lc-legend-tick">✓</span> Finished</span>
-                <span class="lc-legend-item"><span class="lc-legend-dot ch-test"></span> Ch Test</span>
-                <span class="lc-legend-item"><span class="lc-legend-dot mix-test"></span> Mix Test</span>
-                <span class="lc-legend-item"><span class="lc-legend-dot buffer"></span> Buffer</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Monthly Completion Stats -->
-          <div id="p1-leetcode-monthly-stats" class="leetcode-monthly-stats-card"></div>
-        </div>
-      </div>
-
-      <!-- Floating Hover Popover for Phase-1 Calendar Days -->
-      <div id="p1-calendar-hover-popover" class="cal-hover-popover" style="display: none;" role="tooltip"></div>
-    </section>
-
-    <!-- Screen: Phase-2 Study Plan & Exam Marks Calendar -->
-    <section id="screen-calendar-p2" class="screen" hidden>
-      <div class="setup-header">
-        <div class="setup-title-group">
-          <h2>📅 Phase-2: Descriptive Writing &amp; Exam Schedule</h2>
-          <p class="setup-subtitle">Daily Descriptive writing schedule (Economics, Finance, Management &amp; English) with marks &amp; written answer review.</p>
-        </div>
-      </div>
-
-      <!-- Schedule Import Card for Phase-2 (Collapsible for Clean Minimalism) -->
-      <details class="minimal-upload-card calendar-upload-card">
-        <summary class="accordion-summary" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 4px 2px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 16px;">📂</span>
-            <strong style="color: #003366; font-size: 13.5px;">Spreadsheet Timetable &amp; Schedule Config (.xlsx, .csv)</strong>
-          </div>
-          <span style="font-size: 12px; color: var(--muted);">Click to import / export timetable or load official 415-day plan ▼</span>
-        </summary>
-        <div class="upload-drop-zone" style="margin-top: 14px;">
-          <div class="upload-icon-circle">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-          </div>
-          <div class="upload-text-group">
-            <strong>Import Study Schedule from Excel (.xlsx, .csv)</strong>
-            <span>Upload any timetable spreadsheet. Select starting date and how many days from the beginning you have already finished.</span>
-          </div>
-
-          <div class="upload-config-inputs">
-            <label class="upload-field-label">
-              <span>📅 Plan Start Date:</span>
-              <input type="date" id="p2-cal-upload-start-date" value="2026-11-01" class="upload-date-input">
-            </label>
-            <label class="upload-field-label">
-              <span>✅ Days Finished from Start:</span>
-              <input type="number" id="p2-cal-upload-days-finished" min="0" max="415" value="0" placeholder="0" class="upload-num-input">
-            </label>
-          </div>
-
-          <label class="btn-minimal-primary upload-excel-btn">
-            Upload Excel (.xlsx)
-            <input id="p2-calendar-excel-import" type="file" accept=".xlsx,.xls,.csv" hidden>
-          </label>
-        </div>
-
-        <div class="quick-actions-row">
-          <span class="quick-actions-label">Quick Actions:</span>
-          <div class="quick-actions-group">
-            <button type="button" id="btn-p2-load-official-schedule" class="quick-action-pill primary-pill" style="font-weight:700; color:#003366; border-color:#93c5fd; background:#eff6ff;">⚡ Load Official 415-Day Plan</button>
-            <button type="button" id="btn-p2-apply-config" class="quick-action-pill" style="font-weight:600; color:#059669; border-color:#a7f3d0; background:#f0fdf4;">✓ Apply Start Date &amp; Finished Days</button>
-            <button type="button" id="btn-p2-download-template" class="quick-action-pill">⬇️ Download Template (.csv)</button>
-            <button type="button" id="btn-p2-export-csv" class="quick-action-pill">📤 Export Schedule (.csv)</button>
-            <button type="button" id="btn-p2-clear-schedule" class="quick-action-pill danger-pill">🗑️ Clear Schedule</button>
-          </div>
-        </div>
-        <span id="p2-calendar-import-status" class="upload-status-badge"></span>
-      </details>
-
-      <!-- Phase-2 Schedule & Writing Stats Bar -->
-      <div id="p2-calendar-progress-bar" class="schedule-summary-bar"></div>
-
-      <!-- Main LeetCode Style Layout: Quests Left, Minimal Calendar Right -->
-      <div class="calendar-main-layout leetcode-layout">
-        <!-- LEFT COLUMN: Daily Quests Workspace -->
-        <div class="calendar-quests-container">
-          <!-- Daily Quest Hero Card -->
-          <div class="daily-quest-hero-card">
-            <div class="quest-hero-header">
-              <div class="quest-date-info">
-                <span id="p2-quest-daynum-badge" class="quest-pill-daynum">Day 1</span>
-                <h3 id="p2-cal-selected-date-heading">Selected Day</h3>
-                <span id="p2-quest-daytype-badge" class="popover-type-badge normal-day">📘 Normal Class</span>
-              </div>
-              <div class="quest-progress-box">
-                <div class="quest-progress-header">
-                  <span>Daily Quests</span>
-                  <strong id="p2-quest-progress-text">0 / 0 Completed (0%)</strong>
-                </div>
-                <div class="quest-progress-bar-track">
-                  <div id="p2-quest-progress-bar-fill" class="quest-progress-bar-fill" style="width: 0%;"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Chapter Banner for Today -->
-            <div id="p2-quest-chapter-banner" class="quest-chapter-banner"></div>
-          </div>
-
-          <!-- Quick Add Dynamic Quest / TODO Form -->
-          <div class="daily-add-quest-box">
-            <form id="p2-form-quick-add-quest" class="quick-add-quest-form">
-              <input type="text" id="p2-input-quick-quest-title" placeholder="⚡ Add new quest / TODO (e.g. Chapter 2 Part 2 Notes, Phase-2 Objective Quiz)..." required class="quick-quest-input">
-              <select id="p2-select-quick-quest-type" class="quick-quest-type-select">
-                <option value="Objective Exam">🎯 Phase-2 Objective Exam</option>
-                <option value="Subjective Exam">✍️ Phase-2 Subjective Writing</option>
-                <option value="Study / Reading">📖 Study / Reading</option>
-                <option value="Revision">🔄 Revision</option>
-                <option value="General">📌 General TODO</option>
-              </select>
-              <button type="submit" class="btn-minimal-primary btn-add-quest">+ Add Quest</button>
-            </form>
-          </div>
-
-          <!-- Daily Quests List Section -->
-          <div class="daily-quests-section">
-            <div class="daily-quests-section-header">
-              <h4>Today's Quests &amp; Tasks</h4>
-              <span id="p2-cal-selected-date-sub" class="selected-date-sub">0 tasks</span>
-            </div>
-            <div id="p2-cal-selected-day-tasks" class="day-tasks-list"></div>
-          </div>
-        </div>
-
-        <!-- RIGHT COLUMN: LeetCode Style Minimal Calendar Widget -->
-        <div class="calendar-leetcode-sidebar">
-          <!-- LeetCode Streak Hero Card -->
-          <div class="leetcode-streak-card">
-            <div class="streak-flame-icon">🔥</div>
-            <div class="streak-info">
-              <div class="streak-title"><strong id="p2-streak-days-count">0</strong> Day Streak</div>
-              <div class="streak-sub">
-                <span>Best: <strong id="p2-streak-max-count">0</strong> d</span> ·
-                <span>Active: <strong id="p2-streak-total-active">0</strong> d</span>
-              </div>
-            </div>
-            <div id="p2-streak-status-pill" class="streak-status-pill">Active</div>
-          </div>
-
-          <!-- LeetCode Minimal Calendar Card -->
-          <div class="leetcode-calendar-card">
-            <div class="leetcode-cal-header">
-              <div id="p2-cal-month-year-display" class="leetcode-month-title">November 2026</div>
-              <div class="leetcode-cal-nav">
-                <button type="button" id="p2-cal-btn-prev-month" class="lc-nav-btn" title="Previous Month">‹</button>
-                <button type="button" id="p2-cal-btn-today" class="lc-today-btn" title="Go to Today">Today</button>
-                <button type="button" id="p2-cal-btn-next-month" class="lc-nav-btn" title="Next Month">›</button>
-              </div>
-            </div>
-
-            <!-- Minimal Day-of-week header: S M T W T F S -->
-            <div class="leetcode-weekdays-row">
-              <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-            </div>
-
-            <!-- LeetCode Days Grid with checkmarks -->
-            <div id="p2-calendar-days-grid" class="leetcode-days-grid"></div>
-
-            <!-- Minimal Footer Legend -->
-            <div class="leetcode-cal-footer">
-              <div class="lc-legend-items">
-                <span class="lc-legend-item"><span class="lc-legend-tick">✓</span> Finished</span>
-                <span class="lc-legend-item"><span class="lc-legend-dot ch-test"></span> Ch Test</span>
-                <span class="lc-legend-item"><span class="lc-legend-dot mix-test"></span> Mix Test</span>
-                <span class="lc-legend-item"><span class="lc-legend-dot buffer"></span> Buffer</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Monthly Completion Stats -->
-          <div id="p2-leetcode-monthly-stats" class="leetcode-monthly-stats-card"></div>
-        </div>
-      </div>
-
-      <!-- Floating Hover Popover for Phase-2 Calendar Days -->
-      <div id="p2-calendar-hover-popover" class="cal-hover-popover" style="display: none;" role="tooltip"></div>
-    </section>
-
-    <!-- Shared Add / Edit Task Modal -->
-    <div id="modal-task" class="rbi-modal-backdrop" style="display: none;">
-      <div class="rbi-modal-content" style="max-width: 480px;">
-        <div class="rbi-modal-header">
-          <h3 id="modal-task-title">Add Scheduled Task</h3>
-          <button type="button" id="btn-close-task-modal" class="rbi-modal-close">×</button>
-        </div>
-        <form id="form-task-modal" style="padding: 16px;">
-          <label>Date
-            <input type="date" id="task-input-date" required>
+    <!-- Edit TODO dialog (shared by both calendars) -->
+    <div id="todo-modal" class="modal" hidden>
+      <div class="modal-content todo-modal-card" role="dialog" aria-modal="true" aria-labelledby="todo-modal-title">
+        <h3 id="todo-modal-title">Edit TODO</h3>
+        <form id="todo-modal-form" autocomplete="off">
+          <label>Title
+            <input type="text" name="title" maxlength="300" required>
           </label>
           <div class="form-row-2col">
-            <label>Phase
-              <select id="task-input-phase">
-                <option value="Phase-1">Phase-1 (Objective / MCQs)</option>
-                <option value="Phase-2">Phase-2 (Descriptive Writing)</option>
-                <option value="General">General / Both</option>
-              </select>
+            <label>Type
+              <select name="type"></select>
             </label>
-            <label>Task Type
-              <select id="task-input-type">
-                <option value="MCQ Practice">MCQ Practice</option>
-                <option value="Descriptive Writing">Descriptive Writing</option>
-                <option value="Mock Test">Full Mock Test</option>
-                <option value="Revision">Revision</option>
-                <option value="Reading / Notes">Reading / Notes</option>
-                <option value="Other">Other</option>
-              </select>
+            <label>Date
+              <input type="date" name="date" required>
             </label>
           </div>
-          <div class="form-row-2col">
-            <label>Subject / Paper
-              <input type="text" id="task-input-subject" placeholder="e.g. General Awareness, ESI, Finance" required>
-            </label>
-            <label>Time / Duration (optional)
-              <input type="text" id="task-input-time" placeholder="e.g. 10:00 AM or 2 hrs">
-            </label>
-          </div>
-          <label>Topic / Description
-            <textarea id="task-input-topic" rows="2" placeholder="e.g. Spotlight GA Nov 1-6 MCQs or ESI Ch-1 National Income" required></textarea>
+          <label>Note (optional)
+            <textarea name="note" rows="2" placeholder="Topic, page numbers, links..."></textarea>
           </label>
-          <input type="hidden" id="task-input-edit-id" value="">
-          <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;">
-            <button type="button" id="btn-cancel-task" class="rbi-btn secondary">Cancel</button>
-            <button type="submit" id="btn-save-task" class="rbi-btn primary">Save Task</button>
+          <p id="todo-modal-hint" class="todo-modal-hint"></p>
+          <div class="todo-modal-actions">
+            <button type="button" class="secondary" data-action="cancel">Cancel</button>
+            <button type="submit">Save TODO</button>
           </div>
         </form>
       </div>
@@ -1085,5 +737,6 @@
   <script src="prompt.js"></script>
   <script src="schedule_data.js"></script>
   <script src="app.js"></script>
+  <script src="calendar.js"></script>
 </body>
 </html>

@@ -90,8 +90,8 @@ function getCombinedFilename(test) {
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.hidden = true);
   let targetId = "screen-" + name;
-  if (name === "setup" || name === "exam" || name === "result" || name === "bank" || name === "history" || name === "calendar") {
-    targetId = state.phase === "phase1" ? `screen-${name}-p1` : (name === "calendar" ? "screen-calendar-p2" : `screen-${name}`);
+  if (name === "setup" || name === "exam" || name === "result" || name === "bank" || name === "history") {
+    targetId = state.phase === "phase1" ? `screen-${name}-p1` : `screen-${name}`;
   }
   const target = $(targetId) || $(name) || $("screen-" + name);
   if (target) target.hidden = false;
@@ -107,12 +107,8 @@ function showScreen(name) {
   const activeNavBtn = $("nav-" + name);
   if (activeNavBtn) activeNavBtn.classList.add("active");
 
-  if (name === "calendar" || name === "calendar-p1" || name === "calendar-p2") {
-    if (state.phase === "phase1") {
-      renderP1Calendar();
-    } else {
-      renderP2Calendar();
-    }
+  if (name === "calendar") {
+    renderCalendar();
   }
 
   window.scrollTo(0, 0);
@@ -150,6 +146,28 @@ async function copyText(text, button) {
   }
 }
 
+// Read a number input; empty / invalid / negative -> fallback (0 is a valid value)
+function readNumberInput(id, fallback, min = 0) {
+  const el = $(id);
+  if (!el || String(el.value).trim() === "") return fallback;
+  const n = Number(el.value);
+  return Number.isFinite(n) && n >= min ? n : fallback;
+}
+
+// Make sure a <select> offers the given value (e.g. 12 marks from an imported file), then select it
+function selectValueEnsuringOption(selectId, value, labelSuffix = "") {
+  const sel = $(selectId);
+  if (!sel || value === undefined || value === null || value === "") return;
+  const v = String(value);
+  if (!Array.from(sel.options).some(o => o.value === v)) {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v + labelSuffix;
+    sel.appendChild(opt);
+  }
+  sel.value = v;
+}
+
 // Default word limit for given marks
 function defaultWordLimit(marks) {
   return Number(marks) === 15 ? 600 : 400;
@@ -185,34 +203,7 @@ const state = {
   p1_lastResultTest: null,
   p1_resultFilter: "all",
   p1_setup_page: 1,    // current page for Phase 1 setup questions list
-  p1_bank_page: 1,     // current page for Phase 1 question bank list
-
-  // Calendar & Study Schedule State
-  calendar: loadJSON("rbi_study_schedule", null),
-  calendar_planStartDate: loadJSON("rbi_calendar_start_date", "2026-11-01"),
-  calendar_currentDate: new Date(),
-  calendar_selectedDate: getLocalDateString(new Date()),
-  calendar_filterPhase: "all",
-  calendar_filterStatus: "all",
-  calendar_filterDayType: "all",
-  calendar_view: "month",
-  calendar_day_metadata: {},
-
-  // Phase-1 Dedicated Calendar State
-  p1_calendar_currentDate: new Date(),
-  p1_calendar_selectedDate: getLocalDateString(new Date()),
-  p1_calendar_view: "month",
-  p1_calendar_filterDayType: "all",
-  p1_calendar_filterStatus: "all",
-  p1_calendar_daysFinished: loadJSON("rbi_p1_days_finished", 0),
-
-  // Phase-2 Dedicated Calendar State
-  p2_calendar_currentDate: new Date(),
-  p2_calendar_selectedDate: getLocalDateString(new Date()),
-  p2_calendar_view: "month",
-  p2_calendar_filterDayType: "all",
-  p2_calendar_filterStatus: "all",
-  p2_calendar_daysFinished: loadJSON("rbi_p2_days_finished", 0)
+  p1_bank_page: 1      // current page for Phase 1 question bank list
 };
 
 // Render reusable pagination controls (50 items per page; hidden if totalPages <= 1)
@@ -286,11 +277,6 @@ function setPhase(phase) {
     }
   }
 
-  const navCalendar = $("nav-calendar");
-  if (navCalendar) {
-    navCalendar.textContent = (state.phase === "phase1") ? "📅 Phase-1 Calendar" : "📅 Phase-2 Calendar";
-  }
-
   // Detect current active screen to stay on the same screen context
   const curScreen = document.querySelector(".screen:not([hidden])");
   let activeScreenType = "setup";
@@ -302,13 +288,11 @@ function setPhase(phase) {
   }
 
   if (state.phase === "phase1") {
-    if (activeScreenType === "calendar") renderP1Calendar();
-    else if (activeScreenType === "history") renderP1History();
+    if (activeScreenType === "history") renderP1History();
     else if (activeScreenType === "bank") renderP1Bank();
     else renderP1SetupList();
   } else {
-    if (activeScreenType === "calendar") renderP2Calendar();
-    else if (activeScreenType === "history") renderHistory();
+    if (activeScreenType === "history") renderHistory();
     else if (activeScreenType === "bank") renderBank();
     else renderSetupList();
   }
@@ -327,8 +311,11 @@ function resetQuestionForm() {
   $("question-form").reset();
   $("q-wordlimit").value = 400;
   $("q-edit-id").value = "";
+  delete $("q-edit-id").dataset.origin;
   $("btn-add-question").textContent = "Add question";
   $("setup-error").textContent = "";
+  const cancel = $("btn-cancel-edit");
+  if (cancel) cancel.hidden = true;
 }
 
 // Update the visibility and count of the batch delete button based on checkbox selection
@@ -422,9 +409,11 @@ function renderSetupList() {
   }
 
   const minutesInput = $("setup-minutes");
-  if (minutesInput) {
+  if (minutesInput && document.activeElement !== minutesInput) {
     minutesInput.value = state.setup.totalMinutes || 30;
   }
+  const pasteBox = $("setup-block-paste");
+  if (pasteBox) pasteBox.checked = state.setup.blockPaste !== false;
 
   if (questions.length === 0) {
     list.innerHTML = `<li class="empty-list-placeholder">No questions added yet. Upload a document (DOCX/PDF) or add questions manually to begin.</li>`;
@@ -465,15 +454,15 @@ function renderSetupList() {
             <span class="badge-topic">${escapeHTML(q.marks)} marks · ${escapeHTML(q.wordLimit)} words</span>
             ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
             ${modelWarn}
-            <span style="font-size:11px; color:var(--muted); margin-left:auto;">Q${globalIdx + 1}</span>
+            <span class="q-num">Q${globalIdx + 1}</span>
           </div>
           <div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.5; font-weight: 500;">${escapeHTML(q.text)}</div>
         </div>
         <div class="q-actions">
-          ${globalIdx > 0 ? `<button type="button" class="btn-move-up" data-action="move-up" data-id="${escapeHTML(q.id)}">▲</button>` : ""}
-          ${globalIdx < questions.length - 1 ? `<button type="button" class="btn-move-down" data-action="move-down" data-id="${escapeHTML(q.id)}">▼</button>` : ""}
-          <button type="button" class="btn-edit" data-action="edit" data-id="${escapeHTML(q.id)}">Edit</button>
-          <button type="button" class="btn-delete danger" data-action="delete" data-id="${escapeHTML(q.id)}">✕</button>
+          <button type="button" class="q-act" data-action="move-up" data-id="${escapeHTML(q.id)}" title="Move up" aria-label="Move up" ${globalIdx === 0 ? "disabled" : ""}>▲</button>
+          <button type="button" class="q-act" data-action="move-down" data-id="${escapeHTML(q.id)}" title="Move down" aria-label="Move down" ${globalIdx === questions.length - 1 ? "disabled" : ""}>▼</button>
+          <button type="button" class="q-act" data-action="edit" data-id="${escapeHTML(q.id)}" title="Edit question">✎ Edit</button>
+          <button type="button" class="q-act q-act-danger" data-action="delete" data-id="${escapeHTML(q.id)}" title="Remove from this test" aria-label="Remove from this test">✕</button>
         </div>
       </div>
     `;
@@ -499,17 +488,25 @@ function renderSetupList() {
 function editSetupQuestion(id) {
   const q = state.setup.questions.find(item => item.id === id);
   if (!q) return;
+  fillQuestionForm(q, "setup");
+}
+
+// Load a descriptive question into the manual form for editing (origin: "setup" or "bank")
+function fillQuestionForm(q, origin) {
   const acc = $("p2-manual-accordion");
   if (acc) acc.open = true;
-  $("q-paper").value = q.paper || "ESI";
+  selectValueEnsuringOption("q-paper", q.paper || "ESI");
   $("q-topic").value = q.topic || "";
   $("q-text").value = q.text || "";
-  $("q-marks").value = q.marks || 10;
+  selectValueEnsuringOption("q-marks", q.marks || 10, " marks");
   $("q-wordlimit").value = q.wordLimit || defaultWordLimit(q.marks || 10);
   $("q-model").value = q.modelAnswer || "";
   $("q-edit-id").value = q.id;
-  $("btn-add-question").textContent = "Update question";
-  $("question-form").scrollIntoView({ behavior: "smooth" });
+  $("q-edit-id").dataset.origin = origin;
+  $("btn-add-question").textContent = origin === "bank" ? "Update question in bank" : "Update question";
+  const cancel = $("btn-cancel-edit");
+  if (cancel) cancel.hidden = false;
+  $("question-form").scrollIntoView({ behavior: "smooth", block: "start" });
   $("q-text").focus();
 }
 
@@ -556,7 +553,7 @@ function handleQuestionFormSubmit(event) {
   const topic = $("q-topic").value.trim();
   const text = $("q-text").value.trim();
   const marks = Number($("q-marks").value) || 10;
-  const wordLimit = Number($("q-wordlimit").value) || defaultWordLimit(marks);
+  const wordLimit = Math.max(50, Number($("q-wordlimit").value) || defaultWordLimit(marks));
   const modelAnswer = $("q-model").value.trim();
   const editId = $("q-edit-id").value;
   const saveToBank = $("q-save-bank").checked;
@@ -575,6 +572,19 @@ function handleQuestionFormSubmit(event) {
     wordLimit,
     modelAnswer
   };
+
+  const editOrigin = $("q-edit-id").dataset.origin || "";
+  if (editId && editOrigin === "bank" && !state.setup.questions.some(q => q.id === editId)) {
+    const bank = loadJSON("rbi_question_bank", []);
+    const bankIndex = bank.findIndex(item => item.id === editId);
+    if (bankIndex >= 0) bank[bankIndex] = JSON.parse(JSON.stringify(questionObj));
+    else bank.push(JSON.parse(JSON.stringify(questionObj)));
+    saveJSON("rbi_question_bank", bank);
+    resetQuestionForm();
+    renderBank();
+    showScreen("bank");
+    return;
+  }
 
   if (editId) {
     const idx = state.setup.questions.findIndex(q => q.id === editId);
@@ -651,6 +661,8 @@ function startTest() {
 
   const blockPasteCheckbox = $("setup-block-paste");
   const blockPaste = blockPasteCheckbox ? blockPasteCheckbox.checked : true;
+  state.setup.blockPaste = blockPaste;
+  saveSetup();
 
   const test = {
     id: makeId("t"),
@@ -732,7 +744,7 @@ function showQuestion(index) {
   const totalQ = state.test.questions.length;
 
   $("exam-qpos").textContent = `Question No. ${index + 1}`;
-  $("exam-marks").textContent = `Marks: ${q.marks}.00 · Word Limit: ${q.wordLimit}`;
+  $("exam-marks").textContent = `Marks: ${Number(q.marks || 0).toFixed(2)} · Word Limit: ${q.wordLimit}`;
   $("exam-question-text").textContent = q.text;
 
   const secName = $("exam-section-name");
@@ -953,10 +965,10 @@ function updateExamSummary() {
   const sumRev = $("summary-review"); if (sumRev) sumRev.textContent = markedReview;
   const sumNotVis = $("summary-not-visited"); if (sumNotVis) sumNotVis.textContent = notVisited;
 
-  const legAns = document.querySelector(".legend-badge.answered"); if (legAns) legAns.textContent = answered;
-  const legNotAns = document.querySelector(".legend-badge.not-answered"); if (legNotAns) legNotAns.textContent = notAnswered;
-  const legNotVis = document.querySelector(".legend-badge.not-visited"); if (legNotVis) legNotVis.textContent = notVisited;
-  const legRev = document.querySelector(".legend-badge.review"); if (legRev) legRev.textContent = markedReview;
+  const legAns = document.querySelector("#screen-exam .legend-badge.answered"); if (legAns) legAns.textContent = answered;
+  const legNotAns = document.querySelector("#screen-exam .legend-badge.not-answered"); if (legNotAns) legNotAns.textContent = notAnswered;
+  const legNotVis = document.querySelector("#screen-exam .legend-badge.not-visited"); if (legNotVis) legNotVis.textContent = notVisited;
+  const legRev = document.querySelector("#screen-exam .legend-badge.review"); if (legRev) legRev.textContent = markedReview;
 
   const modTotal = $("modal-sum-total"); if (modTotal) modTotal.textContent = total;
   const modAns = $("modal-sum-answered"); if (modAns) modAns.textContent = answered;
@@ -985,8 +997,10 @@ function finishTest(auto) {
     state.timerId = null;
   }
 
-  storeCurrentAnswer();
   if (!state.test) return;
+  // Only read the textarea when the exam screen is actually live (not when finishing a
+  // test restored from storage after a reload, where the textarea is still empty).
+  if (state.questionShownAt > 0) storeCurrentAnswer();
 
   const test = state.test;
   test.autoSubmitted = !!auto;
@@ -999,11 +1013,8 @@ function finishTest(auto) {
   history.unshift(test);
   saveJSON("rbi_history", history);
 
-  if (typeof autoCompleteDailyQuestOnExam === "function") {
-    autoCompleteDailyQuestOnExam("phase2", test);
-  }
-  if (typeof renderP2Calendar === "function") {
-    renderP2Calendar();
+  if (typeof autoCompleteTodoOnExam === "function") {
+    autoCompleteTodoOnExam("write", test);
   }
 
   localStorage.removeItem("rbi_active_test");
@@ -1025,13 +1036,11 @@ function finishTest(auto) {
     alert("Time is up! Your test has been submitted.");
   }
 
-    renderResult(test);
+  renderResult(test);
   showScreen("result");
+}
 
-  if (typeof renderP2Calendar === "function") {
-    renderP2Calendar();
-  }
-}// Check for and resume an interrupted test on page load
+// Check for and resume an interrupted test on page load
 function checkResumeActiveTest() {
   const p1Active = loadJSON("rbi_p1_active_test", null);
   const p2Active = loadJSON("rbi_active_test", null);
@@ -1040,8 +1049,9 @@ function checkResumeActiveTest() {
   if (p1Active && p1Active.endTime) {
     state.p1_test = p1Active;
     state.p1_endTime = p1Active.endTime;
+    state.p1_questionShownAt = 0;
     if (p1Active.endTime > now) {
-      if (confirm("You have a Phase-1 objective test in progress. Resume it?")) {
+      if (confirm("You have an objective (MCQ) test in progress. Resume it?\n\nOK = resume, Cancel = submit it now with the answers saved so far.")) {
         setPhase("phase1");
         startP1ExamTimer();
         showP1Question(state.p1_test.currentIndex || 0);
@@ -1049,23 +1059,21 @@ function checkResumeActiveTest() {
         updateP1ExamSummary();
         showScreen("exam");
         return;
-      } else {
-        localStorage.removeItem("rbi_p1_active_test");
-        state.p1_test = null;
       }
+      setPhase("phase1");
+      finishP1Test(false);
     } else {
-      alert("Your previous Phase-1 test session has expired.");
       setPhase("phase1");
       finishP1Test(true);
-      return;
     }
+    if (!(p2Active && p2Active.endTime)) return;
   }
 
   if (p2Active && p2Active.endTime) {
     state.test = p2Active;
     state.endTime = p2Active.endTime;
     if (p2Active.endTime > now) {
-      if (confirm("You have a Phase-2 descriptive test in progress. Resume it?")) {
+      if (confirm("You have a descriptive (subjective) test in progress. Resume it?\n\nOK = resume, Cancel = submit it now with the answers saved so far.")) {
         setPhase("phase2");
         resumeExam();
         return;
@@ -1302,7 +1310,7 @@ function renderHistoryStats(history) {
       <div class="stat-value">${totalQuestionsAnswered}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Daily Streak</div>
+      <div class="stat-label">Test-day streak</div>
       <div class="stat-value">${streak} ${streak === 1 ? "day" : "days"}</div>
     </div>
     <div class="stat-card">
@@ -1324,8 +1332,11 @@ function renderHistory() {
 
   renderHistoryStats(history);
 
+  const clearBtn = $("btn-clear-history");
+  if (clearBtn) clearBtn.hidden = history.length === 0;
+
   if (history.length === 0) {
-    listElem.innerHTML = "<p>No tests yet. Start your first practice!</p>";
+    listElem.innerHTML = `<div class="empty-state">No descriptive tests yet. Finish a test from <strong>New Test</strong> and it will appear here.</div>`;
     return;
   }
 
@@ -1408,9 +1419,7 @@ function renderHistory() {
       `;
     });
 
-    const scoreBadge = hasAnyScore
-      ? `<span class="popover-type-badge normal-day" style="font-size:12px; font-weight:700; margin-left:6px;">🏆 Score: ${totalScore.toFixed(1)} / ${totalMax} Marks</span>`
-      : `<span style="font-size:11.5px; color:var(--muted); margin-left:6px;">(${totalWords} words written · Pending score)</span>`;
+    const scoreBadge = `<span class="history-score-slot">${historyScoreBadgeHTML(t)}</span>`;
 
     card.innerHTML = `
       <div class="history-card-header">
@@ -1425,6 +1434,7 @@ function renderHistory() {
           <button type="button" class="btn-delete-test danger" data-test-id="${escapeHTML(t.id)}">Delete</button>
         </div>
       </div>
+      <div class="table-scroll">
       <table class="history-table">
         <thead>
           <tr>
@@ -1440,6 +1450,7 @@ function renderHistory() {
           ${rowsHTML}
         </tbody>
       </table>
+      </div>
       <div class="test-answers-review-container" id="review-container-${escapeHTML(t.id)}" style="display: none;">
         <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #003366; display: flex; align-items: center; justify-content: space-between;">
           <span>📝 Candidate Written Answers &amp; Evaluation</span>
@@ -1453,6 +1464,27 @@ function renderHistory() {
   });
 }
 
+// Score summary badge of one descriptive test in History
+function historyScoreBadgeHTML(t) {
+  let total = 0;
+  let max = 0;
+  let any = false;
+  let words = 0;
+  (t.questions || []).forEach(q => {
+    max += Number(q.marks) || 10;
+    const sc = t.scores ? t.scores[q.id] : null;
+    if (sc !== null && sc !== undefined && sc !== "" && !isNaN(sc)) {
+      total += Number(sc);
+      any = true;
+    }
+    const a = t.answers && t.answers[q.id];
+    if (a && a.wordCount) words += a.wordCount;
+  });
+  return any
+    ? `<span class="score-badge">🏆 Score: ${Number(total.toFixed(2))} / ${max} marks</span>`
+    : `<span class="score-pending">${words} words written · score not entered yet</span>`;
+}
+
 // Update and persist a candidate score assigned to a specific historical question
 function handleScoreChange(testId, qid, newScoreVal) {
   const history = loadJSON("rbi_history", []);
@@ -1460,10 +1492,12 @@ function handleScoreChange(testId, qid, newScoreVal) {
   if (!test) return;
 
   if (!test.scores) test.scores = {};
+  const question = (test.questions || []).find(q => q.id === qid);
+  const maxMarks = question ? Number(question.marks) || Infinity : Infinity;
   if (newScoreVal === "" || newScoreVal === null || isNaN(newScoreVal)) {
     test.scores[qid] = null;
   } else {
-    test.scores[qid] = Math.max(0, Number(newScoreVal));
+    test.scores[qid] = Math.min(maxMarks, Math.max(0, Number(newScoreVal)));
   }
 
   test.totalScore = Object.values(test.scores).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -1474,11 +1508,9 @@ function handleScoreChange(testId, qid, newScoreVal) {
   document.querySelectorAll(`.score-input[data-test-id="${testId}"][data-qid="${qid}"]`).forEach(inp => {
     inp.value = (test.scores[qid] !== null && test.scores[qid] !== undefined) ? test.scores[qid] : "";
   });
+  const badge = document.querySelector(`#history-card-${CSS.escape(testId)} .history-score-slot`);
+  if (badge) badge.innerHTML = historyScoreBadgeHTML(test);
 
-  // Re-render Phase-2 calendar to reflect updated marks badge immediately!
-  if (state.phase === "phase2") {
-    renderP2Calendar();
-  }
 }
 
 // Load questions from an old test into the setup screen for re-practice
@@ -1501,7 +1533,6 @@ function deleteTest(testId) {
     history = history.filter(t => t.id !== testId);
     saveJSON("rbi_history", history);
     renderHistory();
-    if (typeof renderP2Calendar === "function") renderP2Calendar();
   }
 }
 
@@ -1512,9 +1543,24 @@ function clearAllHistory() {
     if (confirmation === "DELETE") {
       localStorage.removeItem("rbi_history");
       renderHistory();
-      if (typeof renderP2Calendar === "function") renderP2Calendar();
     }
   }
+}
+
+// Add filter options for any paper / subject values found in a bank (e.g. from imported files)
+function syncFilterOptions(selectId, values) {
+  const sel = $(selectId);
+  if (!sel) return;
+  const known = new Set(Array.from(sel.options).map(o => o.value));
+  values.forEach(v => {
+    if (v && !known.has(v)) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = v;
+      sel.appendChild(o);
+      known.add(v);
+    }
+  });
 }
 
 // Update the visibility and count of the bank batch delete and add buttons based on checkbox selection
@@ -1600,6 +1646,7 @@ function renderBank() {
   const bank = loadJSON("rbi_question_bank", []);
   const listElem = $("bank-list");
   if (!listElem) return;
+  syncFilterOptions("bank-filter-paper", bank.map(q => q.paper));
 
   const paperFilter = $("bank-filter-paper") ? $("bank-filter-paper").value : "";
   const searchText = $("bank-search") ? $("bank-search").value.trim().toLowerCase() : "";
@@ -1629,7 +1676,7 @@ function renderBank() {
   listElem.innerHTML = "";
 
   if (filtered.length === 0) {
-    listElem.innerHTML = "<p>No questions found matching your filter.</p>";
+    listElem.innerHTML = `<div class="empty-state">${bank.length === 0 ? "Your question bank is empty. Questions you add with “Also save to Question Bank” appear here." : "No questions match your search."}</div>`;
     renderPaginationControls({
       containerId: "bank-pagination",
       currentPage: 1,
@@ -1658,15 +1705,16 @@ function renderBank() {
     const modelNote = (q.modelAnswer && q.modelAnswer.trim())
       ? "<span style='color:var(--ok);font-weight:500;'>Has model answer</span>"
       : "<span class='no-model-warn'>No model answer</span>";
-    const topicText = q.topic ? ` · Topic: ${escapeHTML(q.topic)}` : "";
-
     card.innerHTML = `
       <div style="display: flex; align-items: flex-start; gap: 10px;">
         <input type="checkbox" class="bank-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select question" style="margin-top: 4px; transform: scale(1.15); cursor: pointer;">
         <div style="flex: 1; min-width: 0;">
           <div class="bank-card-header">
-            <strong>[${escapeHTML(q.paper)}]</strong> ${escapeHTML(q.marks)} marks (${escapeHTML(q.wordLimit)} words)${topicText} · ${modelNote}
-            <span style="font-size:11px; color:var(--muted); margin-left:6px;">Q${globalIdx + 1}</span>
+            <span class="badge-subject">${escapeHTML(q.paper)}</span>
+            <span>${escapeHTML(q.marks)} marks · ${escapeHTML(q.wordLimit)} words</span>
+            ${q.topic ? `<span>Topic: ${escapeHTML(q.topic)}</span>` : ""}
+            ${modelNote}
+            <span class="bank-card-num">Q${globalIdx + 1}</span>
           </div>
           <div class="bank-card-text" style="white-space: pre-wrap; line-height: 1.5; margin: 6px 0 10px 0;">${escapeHTML(q.text)}</div>
           <div class="bank-card-actions">
@@ -1722,22 +1770,9 @@ function editBankQuestion(id) {
   const q = bank.find(item => item.id === id);
   if (!q) return;
 
-  const acc = $("p2-manual-accordion");
-  if (acc) acc.open = true;
-
-  $("q-paper").value = q.paper || "ESI";
-  $("q-topic").value = q.topic || "";
-  $("q-text").value = q.text || "";
-  $("q-marks").value = q.marks || 10;
-  $("q-wordlimit").value = q.wordLimit || defaultWordLimit(q.marks || 10);
-  $("q-model").value = q.modelAnswer || "";
-  $("q-edit-id").value = q.id;
-  $("btn-add-question").textContent = "Update question";
-
   renderSetupList();
   showScreen("setup");
-  $("question-form").scrollIntoView({ behavior: "smooth" });
-  $("q-text").focus();
+  fillQuestionForm(q, state.setup.questions.some(sq => sq.id === q.id) ? "setup" : "bank");
 }
 
 // Remove a question from the question bank permanently
@@ -1777,7 +1812,11 @@ function handleAddRandomQuestions() {
     return;
   }
 
-  const shuffled = available.slice().sort(() => Math.random() - 0.5);
+  const shuffled = available.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   const picked = shuffled.slice(0, 3);
 
   picked.forEach(q => {
@@ -2441,6 +2480,16 @@ async function handleDocImport(event, targetScreen) {
       throw new Error("No readable text found in the document.");
     }
 
+    // An MCQ file (options [a]-[e]) must not be imported as descriptive questions
+    const mcqLike = parseMCQDocument(rawText, inferMCQSubject(rawText)).filter(q => (q.options || []).length >= 4);
+    if (mcqLike.length >= 5) {
+      if (statusElem && targetScreen === "setup") statusElem.textContent = "";
+      if (confirm(`"${file.name}" is an objective (MCQ) file with ${mcqLike.length} MCQs, not descriptive questions.\n\nOK = add them to the Objective (MCQ) ${targetScreen === "bank" ? "question bank" : "test"} instead\nCancel = do not import`)) {
+        addImportedMCQs(mcqLike, targetScreen, file.name);
+      }
+      return;
+    }
+
     const parsedQuestions = parseQuestionsAndAnswers(rawText);
     if (!parsedQuestions || parsedQuestions.length === 0) {
       throw new Error("Could not detect any questions in the file.");
@@ -2467,30 +2516,19 @@ async function handleDocImport(event, targetScreen) {
       saveSetup();
       renderSetupList();
 
-      if (parsedQuestions.length === 1) {
-        const first = parsedQuestions[0];
-        $("q-paper").value = first.paper || "ESI";
-        $("q-topic").value = first.topic || "";
-        $("q-text").value = first.text || "";
-        $("q-marks").value = first.marks || 10;
-        $("q-wordlimit").value = first.wordLimit || defaultWordLimit(first.marks || 10);
-        $("q-model").value = first.modelAnswer || "";
-        $("q-edit-id").value = first.id;
-        $("btn-add-question").textContent = "Update question";
-      }
-
       if (statusElem) {
-        statusElem.textContent = `✓ Fetched ${parsedQuestions.length} question(s) from ${file.name}`;
-        setTimeout(() => { statusElem.textContent = ""; }, 4000);
+        statusElem.textContent = `✓ Added ${parsedQuestions.length} question(s) from ${file.name}${saveToBank ? " (also saved to the Question Bank)" : ""}.`;
+        setTimeout(() => { statusElem.textContent = ""; }, 6000);
       }
-      alert(`Successfully fetched and added ${parsedQuestions.length} question(s) from "${file.name}"!`);
     } else if (targetScreen === "bank") {
       renderBank();
       alert(`Successfully imported ${parsedQuestions.length} question(s) from "${file.name}" into Question Bank!`);
     }
   } catch (err) {
     if (statusElem && targetScreen === "setup") {
-      statusElem.textContent = "Error: " + err.message;
+      statusElem.textContent = "Could not import: " + err.message;
+      statusElem.classList.add("is-error");
+      setTimeout(() => { statusElem.classList.remove("is-error"); }, 6000);
     }
     alert("File read error: " + err.message);
   } finally {
@@ -2745,42 +2783,19 @@ async function handleP1DocImport(event, targetScreen = "setup") {
       throw new Error("No readable text found in the document.");
     }
 
-    const parsedQuestions = parseMCQDocument(rawText, "General Awareness");
+    const parsedQuestions = parseMCQDocument(rawText, inferMCQSubject(rawText));
+    if (parsedQuestions.length < 3) {
+      const descriptive = parseQuestionsAndAnswers(rawText).filter(q => (q.modelAnswer || "").length > 200);
+      if (descriptive.length >= 2) {
+        if (statusElem && targetScreen === "setup") statusElem.textContent = "";
+        alert(`"${file.name}" contains descriptive (subjective) questions with model answers, not MCQs.\n\nSwitch to "✍️ Subjective (Phase-2)" and upload it on that New Test screen.`);
+        return;
+      }
+    }
     if (!parsedQuestions || parsedQuestions.length === 0) {
       throw new Error("Could not detect any MCQs with options in the file.");
     }
-
-    if (targetScreen === "setup") {
-      state.p1_setup.questions = state.p1_setup.questions.concat(parsedQuestions);
-      saveP1Setup();
-      renderP1SetupList();
-
-      const bank = loadJSON("rbi_p1_bank", []);
-      parsedQuestions.forEach(q => {
-        if (!bank.some(b => b.text === q.text)) {
-          bank.push({ ...q });
-        }
-      });
-      saveJSON("rbi_p1_bank", bank);
-
-      const withAns = parsedQuestions.filter(q => q.correctAnswer).length;
-      if (statusElem) {
-        statusElem.textContent = `Imported ${parsedQuestions.length} MCQs (${withAns} with Answer Key)!`;
-      }
-      alert(`Imported ${parsedQuestions.length} MCQs successfully!`);
-    } else if (targetScreen === "bank") {
-      const bank = loadJSON("rbi_p1_bank", []);
-      let added = 0;
-      parsedQuestions.forEach(q => {
-        if (!bank.some(b => b.text === q.text)) {
-          bank.push({ ...q });
-          added++;
-        }
-      });
-      saveJSON("rbi_p1_bank", bank);
-      renderP1Bank();
-      alert(`Imported ${parsedQuestions.length} MCQs (${added} new added to Bank).`);
-    }
+    addImportedMCQs(parsedQuestions, targetScreen, file.name);
   } catch (err) {
     if (statusElem && targetScreen === "setup") {
       statusElem.textContent = "Error: " + err.message;
@@ -2788,6 +2803,53 @@ async function handleP1DocImport(event, targetScreen = "setup") {
     alert("File read error: " + err.message);
   } finally {
     event.target.value = "";
+  }
+}
+
+// Guess the MCQ subject from the document heading (e.g. "Ch-2: Antonyms & Synonyms" -> English)
+function inferMCQSubject(rawText) {
+  // Only the title lines: question / option text must not influence the subject
+  const head = String(rawText || "").split("\n").map(l => l.trim()).filter(Boolean).slice(0, 2).join(" ").toLowerCase();
+  const has = (re) => re.test(head);
+  if (has(/\b(spotlight|current affairs|general awareness|pib|monthly|weekly|news)\b/)) return "General Awareness";
+  if (has(/\b(antonyms?|synonyms?|grammar|error detection|cloze|para ?jumble|reading comprehension|idioms?|vocabulary|english|fillers|sentence)\b/)) return "English Language";
+  if (has(/\b(puzzles?|seating|syllogism|coding|blood relations?|inequalit(y|ies)|directions?|reasoning|alphanumeric|ranking)\b/)) return "Reasoning Ability";
+  if (has(/\b(data interpretation|percentage|ratio|profit|interest|time and work|quant|quantitative|simplification|approximation|number series|mensuration|average|mixture)\b/)) return "Quantitative Aptitude";
+  if (has(/\b(esi|economic|economics|inflation|monetary|national income|gdp|fiscal)\b/)) return "ESI (Phase-2)";
+  if (has(/\b(finance|management|leadership|motivation|organisational|organizational)\b/)) return "Finance & Management (Phase-2)";
+  return "General Awareness";
+}
+
+// Add imported MCQs to today's objective test (and the MCQ bank) or only to the bank
+function addImportedMCQs(parsedQuestions, targetScreen, fileName) {
+  const bank = loadJSON("rbi_p1_bank", []);
+  let addedToBank = 0;
+  parsedQuestions.forEach(q => {
+    if (!bank.some(b => b.text === q.text)) {
+      bank.push({ ...q });
+      addedToBank++;
+    }
+  });
+  saveJSON("rbi_p1_bank", bank);
+  const withAns = parsedQuestions.filter(q => q.correctAnswer).length;
+  const subject = parsedQuestions[0] ? parsedQuestions[0].subject : "";
+
+  if (targetScreen === "setup") {
+    state.p1_setup.questions = state.p1_setup.questions.concat(parsedQuestions.filter(q => !state.p1_setup.questions.some(sq => sq.text === q.text)));
+    saveP1Setup();
+    if (state.phase !== "phase1") setPhase("phase1");
+    renderP1SetupList();
+    showScreen("setup");
+    const statusElem = $("setup-p1-doc-status");
+    if (statusElem) {
+      statusElem.classList.remove("is-error");
+      statusElem.textContent = `✓ Imported ${parsedQuestions.length} MCQs (${subject}) from ${fileName}: ${withAns} with answer key, ${addedToBank} new in the MCQ bank.`;
+    }
+  } else {
+    if (state.phase !== "phase1") setPhase("phase1");
+    renderP1Bank();
+    showScreen("bank");
+    alert(`Imported ${parsedQuestions.length} MCQs (${subject}) from "${fileName}". ${addedToBank} new MCQ(s) added to the bank.`);
   }
 }
 
@@ -2799,6 +2861,17 @@ function renderP1SetupList() {
 
   const questions = state.p1_setup.questions || [];
   if (countElem) countElem.textContent = questions.length;
+
+  // Show the saved test settings (they used to reset to 120 / 1.00 / 0.25 on every load)
+  const minEl = $("setup-p1-minutes");
+  const posEl = $("setup-p1-positive");
+  const negEl = $("setup-p1-negative");
+  if (minEl && document.activeElement !== minEl) minEl.value = state.p1_setup.totalMinutes || 120;
+  if (posEl && document.activeElement !== posEl) posEl.value = Number(state.p1_setup.positiveMarks ?? 1).toFixed(2);
+  if (negEl && document.activeElement !== negEl) negEl.value = Number(state.p1_setup.negativeMarks ?? 0.25).toFixed(2);
+
+  const p1Batch = $("setup-p1-batch-actions");
+  if (p1Batch) p1Batch.style.display = questions.length > 0 ? "flex" : "none";
 
   if (questions.length === 0) {
     list.innerHTML = `<li class="empty-list-placeholder">No MCQs added yet. Upload a document (DOCX/PDF) or add MCQs manually to begin.</li>`;
@@ -2826,26 +2899,26 @@ function renderP1SetupList() {
     const globalIdx = startIndex + localIdx;
     const optsPreview = (q.options || []).map(o => {
       const isKey = q.correctAnswer && q.correctAnswer.toLowerCase() === o.label.toLowerCase();
-      return `<span class="opt-pill ${isKey ? 'is-correct' : ''}"><strong>[${o.label.toUpperCase()}]</strong> ${escapeHTML(o.text || "")}</span>`;
+      return `<span class="opt-pill ${isKey ? 'is-correct' : ''}"><strong>[${escapeHTML(String(o.label).toUpperCase())}]</strong> ${escapeHTML(o.text || "")}</span>`;
     }).join("");
 
     return `
       <li>
-        <input type="checkbox" class="p1-q-select-check" data-id="${q.id}" style="margin-top:4px;">
-        <div style="flex:1;">
+        <input type="checkbox" class="p1-q-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select MCQ ${globalIdx + 1}" style="margin-top:4px;">
+        <div style="flex:1; min-width:0;">
           <div class="p1-q-meta-badges">
             <span class="badge-subject">${escapeHTML(q.subject || "General Awareness")}</span>
             ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
-            ${q.correctAnswer ? `<span class="badge-ans">Key: [${q.correctAnswer.toUpperCase()}]</span>` : ""}
-            <span style="font-size:11px; color:var(--muted);">Q${globalIdx + 1}</span>
+            ${q.correctAnswer ? `<span class="badge-ans">Key: [${escapeHTML(String(q.correctAnswer).toUpperCase())}]</span>` : ""}
+            <span class="q-num">Q${globalIdx + 1}</span>
           </div>
           <div class="p1-question-full-text">${escapeHTML(q.text || "")}</div>
           <div class="p1-opts-preview">${optsPreview}</div>
         </div>
-        <div style="display:flex; flex-direction:column; gap:4px;">
-          ${globalIdx > 0 ? `<button type="button" class="btn-p1-move-up" data-index="${globalIdx}" style="padding:2px 6px; font-size:11px;">▲</button>` : `<span style="display:inline-block; width:20px; height:18px;"></span>`}
-          ${globalIdx < questions.length - 1 ? `<button type="button" class="btn-p1-move-down" data-index="${globalIdx}" style="padding:2px 6px; font-size:11px;">▼</button>` : `<span style="display:inline-block; width:20px; height:18px;"></span>`}
-          <button type="button" class="danger btn-p1-delete-q" data-id="${q.id}" style="padding:2px 6px; font-size:11px;">✕</button>
+        <div class="q-actions">
+          <button type="button" class="q-act btn-p1-move-up" data-index="${globalIdx}" title="Move up" aria-label="Move up" ${globalIdx === 0 ? "disabled" : ""}>▲</button>
+          <button type="button" class="q-act btn-p1-move-down" data-index="${globalIdx}" title="Move down" aria-label="Move down" ${globalIdx === questions.length - 1 ? "disabled" : ""}>▼</button>
+          <button type="button" class="q-act q-act-danger btn-p1-delete-q" data-id="${escapeHTML(q.id)}" title="Remove from this test" aria-label="Remove from this test">✕</button>
         </div>
       </li>
     `;
@@ -2940,6 +3013,10 @@ function handleP1QuestionFormSubmit(e) {
     alert("Please provide at least options A, B, C, and D.");
     return;
   }
+  if (correct === "e" && !optE) {
+    alert("The correct answer is [E], but option E is empty. Fill option E or choose another answer.");
+    return;
+  }
 
   const options = [
     { label: "a", text: optA },
@@ -2949,8 +3026,8 @@ function handleP1QuestionFormSubmit(e) {
   ];
   if (optE) options.push({ label: "e", text: optE });
 
-  const pos = Number($("setup-p1-positive")?.value) || 1.0;
-  const neg = Number($("setup-p1-negative")?.value) || 0.25;
+  const pos = readNumberInput("setup-p1-positive", 1.0, 0);
+  const neg = readNumberInput("setup-p1-negative", 0.25, 0);
 
   const newMCQ = {
     id: makeId("mcq"),
@@ -2975,6 +3052,14 @@ function handleP1QuestionFormSubmit(e) {
 
   $("p1-question-form").reset();
   renderP1SetupList();
+  const p1Err = $("setup-p1-error");
+  if (p1Err) p1Err.textContent = "";
+  const addBtn = $("btn-add-p1-question");
+  if (addBtn) {
+    addBtn.textContent = "Added ✓";
+    setTimeout(() => { addBtn.textContent = "Add MCQ to Test"; }, 1500);
+  }
+  $("p1-q-text")?.focus();
 }
 
 // Start the Phase-1 objective exam
@@ -2987,9 +3072,21 @@ function startP1Exam() {
     return;
   }
 
-  const minutes = Number($("setup-p1-minutes")?.value) || 120;
-  const pos = Number($("setup-p1-positive")?.value) || 1.0;
-  const neg = Number($("setup-p1-negative")?.value) || 0.25;
+  const minutes = readNumberInput("setup-p1-minutes", 0, 0);
+  const pos = readNumberInput("setup-p1-positive", 1.0, 0);
+  const neg = readNumberInput("setup-p1-negative", 0.25, 0);
+  if (!minutes || minutes < 1) {
+    if (errElem) errElem.textContent = "Total time must be at least 1 minute.";
+    return;
+  }
+  if (pos <= 0) {
+    if (errElem) errElem.textContent = "Marks for a correct answer must be more than 0.";
+    return;
+  }
+  const noKey = state.p1_setup.questions.filter(q => !q.correctAnswer).length;
+  if (noKey > 0 && !confirm(`${noKey} MCQ(s) have no answer key, so they cannot be scored. Start anyway?`)) {
+    return;
+  }
 
   state.p1_setup.totalMinutes = minutes;
   state.p1_setup.positiveMarks = pos;
@@ -3036,6 +3133,12 @@ function startP1Exam() {
 function startP1ExamTimer() {
   if (state.p1_timerId) clearInterval(state.p1_timerId);
 
+  window.onbeforeunload = () => "Test in progress";
+  const tickNow = () => {
+    const el = $("p1-exam-timer");
+    if (el && state.p1_test) el.textContent = formatTime(Math.max(0, Math.floor((state.p1_endTime - Date.now()) / 1000)));
+  };
+  tickNow();
   state.p1_timerId = setInterval(() => {
     if (!state.p1_test) {
       clearInterval(state.p1_timerId);
@@ -3047,7 +3150,11 @@ function startP1ExamTimer() {
     const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
 
     const timerElem = $("p1-exam-timer");
-    if (timerElem) timerElem.textContent = formatTime(remainingSec);
+    if (timerElem) {
+      timerElem.textContent = formatTime(remainingSec);
+      timerElem.classList.toggle("timer-danger", remainingSec <= 60);
+      timerElem.classList.toggle("timer-warning", remainingSec > 60 && remainingSec <= 300);
+    }
 
     if (now - state.p1_lastAutoSave > 5000) {
       saveCurrentP1QuestionTime();
@@ -3064,7 +3171,8 @@ function startP1ExamTimer() {
 // Accumulate elapsed seconds for active question
 function saveCurrentP1QuestionTime() {
   if (!state.p1_test || state.p1_questionShownAt <= 0) return;
-  const elapsed = Math.round((Date.now() - state.p1_questionShownAt) / 1000);
+  // Keep fractions of a second; rounding every save to whole seconds lost most of the time
+  const elapsed = (Date.now() - state.p1_questionShownAt) / 1000;
   const idx = state.p1_currentIndex;
   if (state.p1_test.times && state.p1_test.times[idx] !== undefined) {
     state.p1_test.times[idx] += elapsed;
@@ -3079,6 +3187,7 @@ function showP1Question(index) {
   if (!state.p1_test || !state.p1_test.questions[index]) return;
 
   state.p1_currentIndex = index;
+  state.p1_test.currentIndex = index;
   const q = state.p1_test.questions[index];
   const total = state.p1_test.questions.length;
 
@@ -3107,8 +3216,8 @@ function showP1Question(index) {
     optsContainer.innerHTML = (q.options || []).map(opt => {
       const isSelected = (currentAnswer && currentAnswer.toLowerCase() === opt.label.toLowerCase());
       return `
-        <div class="mcq-option-item ${isSelected ? 'selected' : ''}" data-label="${opt.label}">
-          <span class="opt-badge">${opt.label.toUpperCase()}</span>
+        <div class="mcq-option-item ${isSelected ? 'selected' : ''}" data-label="${escapeHTML(opt.label)}" role="button" tabindex="0" aria-pressed="${isSelected}">
+          <span class="opt-badge">${escapeHTML(String(opt.label).toUpperCase())}</span>
           <span class="opt-text">${escapeHTML(opt.text)}</span>
         </div>
       `;
@@ -3121,6 +3230,10 @@ function showP1Question(index) {
   state.p1_questionShownAt = Date.now();
   renderP1Palette();
   updateP1ExamSummary();
+  if (window.innerWidth < 900) {
+    const qBox = $("p1-exam-qpos");
+    if (qBox && qBox.getBoundingClientRect().top < 0) qBox.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 // Select an option for active question
@@ -3136,11 +3249,9 @@ function selectP1Option(optLabel) {
   }
 
   document.querySelectorAll("#p1-exam-options-list .mcq-option-item").forEach(item => {
-    if (item.dataset.label.toLowerCase() === optLabel.toLowerCase()) {
-      item.classList.add("selected");
-    } else {
-      item.classList.remove("selected");
-    }
+    const isSel = item.dataset.label.toLowerCase() === optLabel.toLowerCase();
+    item.classList.toggle("selected", isSel);
+    item.setAttribute("aria-pressed", String(isSel));
   });
 
   renderP1Palette();
@@ -3157,6 +3268,7 @@ function clearP1Option() {
 
   document.querySelectorAll("#p1-exam-options-list .mcq-option-item").forEach(item => {
     item.classList.remove("selected");
+    item.setAttribute("aria-pressed", "false");
   });
 
   renderP1Palette();
@@ -3242,13 +3354,19 @@ function updateP1ExamSummary() {
   let notVisited = 0;
 
   state.p1_test.statuses.forEach(st => {
-    if (st === "answered" || st === "answered-review") answered++;
+    if (st === "answered") answered++;
+    else if (st === "answered-review") { answered++; marked++; }
     else if (st === "not-answered") notAnswered++;
-    else if (st === "review") marked++;
+    else if (st === "review") { notAnswered++; marked++; }
     else notVisited++;
   });
 
   const total = state.p1_test.questions.length;
+  const setLeg = (cls, v) => { const el = document.querySelector(`#screen-exam-p1 .legend-badge.${cls}`); if (el) el.textContent = v; };
+  setLeg("answered", answered);
+  setLeg("not-answered", notAnswered);
+  setLeg("not-visited", notVisited);
+  setLeg("review", marked);
 
   if ($("p1-summary-total")) $("p1-summary-total").textContent = total;
   if ($("p1-summary-answered")) $("p1-summary-answered").textContent = answered;
@@ -3326,19 +3444,18 @@ function finishP1Test(auto = false) {
   test.accuracy = Number(accuracy);
   test.completedAt = Date.now();
   const totalSec = (test.totalMinutes || 25) * 60;
-  test.timeSpent = test.timeSpent || Math.max(0, totalSec - (test.remainingSeconds || 0));
+  // Real time used = from start until submit (capped at the time limit)
+  const started = Number(test.date) || test.completedAt;
+  test.timeSpent = Math.max(0, Math.min(totalSec, Math.round((test.completedAt - started) / 1000)));
   test.durationSeconds = test.timeSpent;
+  test.times = (test.times || []).map(t => Math.round(t));
 
   const history = loadJSON("rbi_p1_history", []);
   history.unshift(test);
   saveJSON("rbi_p1_history", history);
 
-  if (typeof autoCompleteDailyQuestOnExam === "function") {
-    autoCompleteDailyQuestOnExam("phase1", test);
-  }
-
-  if (typeof renderP1Calendar === "function") {
-    renderP1Calendar();
+  if (typeof autoCompleteTodoOnExam === "function") {
+    autoCompleteTodoOnExam("mcq", test);
   }
 
   if (state.p1_timerId) {
@@ -3347,6 +3464,7 @@ function finishP1Test(auto = false) {
   }
 
   localStorage.removeItem("rbi_p1_active_test");
+  window.onbeforeunload = null;
 
   state.p1_lastResultTest = test;
   state.p1_test = null;
@@ -3370,6 +3488,17 @@ function renderP1Result(test) {
   if ($("p1-stat-incorrect")) $("p1-stat-incorrect").textContent = test.incorrectCount;
   if ($("p1-stat-unattempted")) $("p1-stat-unattempted").textContent = test.unattemptedCount;
   if ($("p1-stat-time")) $("p1-stat-time").textContent = formatDuration(test.timeSpent || 0);
+
+  // Filter counts + always start on "All questions"
+  const total = (test.questions || []).length;
+  if ($("rf-count-all")) $("rf-count-all").textContent = total;
+  if ($("rf-count-correct")) $("rf-count-correct").textContent = test.correctCount || 0;
+  if ($("rf-count-incorrect")) $("rf-count-incorrect").textContent = test.incorrectCount || 0;
+  if ($("rf-count-unattempted")) $("rf-count-unattempted").textContent = test.unattemptedCount || 0;
+  state.p1_resultFilter = "all";
+  document.querySelectorAll("#screen-result-p1 .rf-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.filter === "all");
+  });
 
   renderP1ResultReviewList();
 }
@@ -3424,7 +3553,7 @@ function renderP1ResultReviewList() {
 
       return `
         <div class="${optClass}">
-          <span style="font-weight:700; min-width:24px;">[${opt.label.toUpperCase()}]</span>
+          <span style="font-weight:700; min-width:24px;">[${escapeHTML(String(opt.label).toUpperCase())}]</span>
           <span>${escapeHTML(opt.text)}</span>
           ${badge}
         </div>
@@ -3500,6 +3629,7 @@ function renderP1Bank() {
   if (!container) return;
 
   const bank = loadJSON("rbi_p1_bank", []);
+  syncFilterOptions("p1-bank-filter-subject", bank.map(q => q.subject));
   const searchQuery = ($("p1-bank-search")?.value || "").toLowerCase().trim();
   const subjectFilter = $("p1-bank-filter-subject")?.value || "All";
 
@@ -3518,9 +3648,11 @@ function renderP1Bank() {
   if (totalInfo) {
     totalInfo.textContent = `Showing ${filtered.length} of ${bank.length} MCQs`;
   }
+  const p1Batch = $("p1-bank-batch-actions");
+  if (p1Batch) p1Batch.style.display = filtered.length > 0 ? "flex" : "none";
 
   if (filtered.length === 0) {
-    container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--muted);">No MCQs found matching your criteria.</div>`;
+    container.innerHTML = `<div class="empty-state">${bank.length === 0 ? "Your MCQ bank is empty. Import a DOCX / PDF / JSON file below, or upload one on the New Test screen." : "No MCQs match your search."}</div>`;
     renderPaginationControls({
       containerId: "p1-bank-pagination",
       currentPage: 1,
@@ -3545,24 +3677,24 @@ function renderP1Bank() {
     const globalIdx = startIndex + localIdx;
     const optsPreview = (q.options || []).map(o => {
       const isKey = q.correctAnswer && q.correctAnswer.toLowerCase() === o.label.toLowerCase();
-      return `<span class="opt-pill ${isKey ? 'is-correct' : ''}"><strong>[${o.label.toUpperCase()}]</strong> ${escapeHTML(o.text || "")}</span>`;
+      return `<span class="opt-pill ${isKey ? 'is-correct' : ''}"><strong>[${escapeHTML(String(o.label).toUpperCase())}]</strong> ${escapeHTML(o.text || "")}</span>`;
     }).join("");
 
     return `
       <div class="mcq-bank-card">
-        <input type="checkbox" class="p1-bank-select-check" data-id="${q.id}" style="margin-top:4px;">
+        <input type="checkbox" class="p1-bank-select-check" data-id="${escapeHTML(q.id)}" style="margin-top:4px;">
         <div class="mcq-bank-body">
           <div class="p1-q-meta-badges">
             <span class="badge-subject">${escapeHTML(q.subject || "General Awareness")}</span>
             ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
-            ${q.correctAnswer ? `<span class="badge-ans">Key: [${q.correctAnswer.toUpperCase()}]</span>` : ""}
+            ${q.correctAnswer ? `<span class="badge-ans">Key: [${escapeHTML(String(q.correctAnswer).toUpperCase())}]</span>` : ""}
             <span style="font-size:11px; color:var(--muted);">Q${globalIdx + 1}</span>
           </div>
           <div class="mcq-bank-prompt" style="font-size:14px; font-weight:600; color:var(--text); line-height:1.5; white-space:pre-wrap; margin:6px 0 10px 0;">${escapeHTML(q.text)}</div>
           <div class="p1-opts-preview">${optsPreview}</div>
           <div class="mcq-bank-actions">
-            <button type="button" class="btn-p1-bank-add" data-id="${q.id}" style="background:#059669; color:white;">+ Add to Test</button>
-            <button type="button" class="danger btn-p1-bank-delete" data-id="${q.id}">Delete</button>
+            <button type="button" class="btn-p1-bank-add" data-id="${escapeHTML(q.id)}" style="background:#059669; color:white;">+ Add to Test</button>
+            <button type="button" class="danger btn-p1-bank-delete" data-id="${escapeHTML(q.id)}">Delete</button>
           </div>
         </div>
       </div>
@@ -3647,7 +3779,8 @@ function handleP1BankAddSelected() {
   });
 
   saveP1Setup();
-  alert(`Added ${added} MCQ(s) to today's test!`);
+  renderP1SetupList();
+  alert(added > 0 ? `Added ${added} MCQ(s) to today's test.` : "All selected MCQs are already in today's test.");
 }
 
 // Add random questions from Bank
@@ -3658,20 +3791,25 @@ function addP1RandomQuestions(count) {
     return;
   }
 
-  const shuffled = [...bank].sort(() => 0.5 - Math.random());
-  const picked = shuffled.slice(0, count);
-
-  let added = 0;
-  picked.forEach(q => {
-    if (!state.p1_setup.questions.some(sq => sq.id === q.id || sq.text === q.text)) {
-      state.p1_setup.questions.push({ ...q });
-      added++;
-    }
-  });
+  const subjectFilter = $("p1-bank-filter-subject")?.value || "";
+  const available = bank.filter(q =>
+    (!subjectFilter || q.subject === subjectFilter) &&
+    !state.p1_setup.questions.some(sq => sq.id === q.id || sq.text === q.text));
+  if (available.length === 0) {
+    alert("All matching MCQs are already in today's test.");
+    return;
+  }
+  // Fisher-Yates shuffle (sort with Math.random is biased)
+  for (let i = available.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [available[i], available[j]] = [available[j], available[i]];
+  }
+  const picked = available.slice(0, count);
+  picked.forEach(q => state.p1_setup.questions.push({ ...q }));
 
   saveP1Setup();
   renderP1SetupList();
-  alert(`Added ${added} random MCQ(s) to today's test!`);
+  alert(`Added ${picked.length} random MCQ(s)${subjectFilter ? ` from ${subjectFilter}` : ""} to today's test.`);
   showScreen("setup");
 }
 
@@ -3699,10 +3837,17 @@ function importP1Bank(e) {
 
       const bank = loadJSON("rbi_p1_bank", []);
       let imported = 0;
+      let skipped = 0;
       data.forEach(item => {
+        const validOptions = item && Array.isArray(item.options) &&
+          item.options.filter(o => o && typeof o.label === "string" && String(o.text || "").trim()).length >= 2;
+        if (!item || typeof item.text !== "string" || !item.text.trim() || !validOptions) {
+          skipped++;
+          return;
+        }
         if (!bank.some(b => b.text === item.text)) {
           bank.push({
-            id: item.id || makeId("mcq"),
+            id: (item.id && !bank.some(b => b.id === item.id)) ? item.id : makeId("mcq"),
             subject: item.subject || "General Awareness",
             topic: item.topic || "",
             text: item.text,
@@ -3718,7 +3863,7 @@ function importP1Bank(e) {
 
       saveJSON("rbi_p1_bank", bank);
       renderP1Bank();
-      alert(`Imported ${imported} new MCQs into bank.`);
+      alert(`Imported ${imported} new MCQ(s) into the bank.${skipped ? ` Skipped ${skipped} invalid item(s) (need text and at least 2 options).` : ""}`);
     } catch (err) {
       alert("Failed to import MCQs: " + err.message);
     } finally {
@@ -3745,9 +3890,12 @@ function renderP1History() {
 
   const history = loadJSON("rbi_p1_history", []);
 
+  const clearBtn = $("btn-clear-p1-history");
+  if (clearBtn) clearBtn.hidden = history.length === 0;
+
   if (history.length === 0) {
-    if (statsElem) statsElem.innerHTML = `<div style="text-align:center; color:var(--muted); padding:10px;">No tests taken yet.</div>`;
-    listElem.innerHTML = `<div style="text-align:center; padding:30px; color:var(--muted);">Your completed Phase-1 tests will appear here.</div>`;
+    if (statsElem) statsElem.innerHTML = "";
+    listElem.innerHTML = `<div class="empty-state">No objective tests yet. Finish a test from <strong>New Test</strong> and it will appear here.</div>`;
     return;
   }
 
@@ -3769,7 +3917,7 @@ function renderP1History() {
     const dateStr = new Date(t.date || t.completedAt).toLocaleString();
     return `
       <div class="history-card" style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
           <div>
             <strong>${dateStr}</strong>
             <span style="margin-left:8px; font-size:12px; color:var(--muted);">(${t.questions.length} Questions)</span>
@@ -3779,7 +3927,7 @@ function renderP1History() {
             <span style="margin-left:8px; font-size:13px; font-weight:600; color:#15803d;">(${t.accuracy}% Acc)</span>
           </div>
         </div>
-        <div style="display:flex; gap:12px; font-size:13px; color:var(--muted); margin-bottom:10px;">
+        <div style="display:flex; flex-wrap:wrap; gap:6px 12px; font-size:13px; color:var(--muted); margin-bottom:10px;">
           <span>🟩 Correct: <strong>${t.correctCount}</strong></span>
           <span>🟥 Incorrect: <strong>${t.incorrectCount}</strong></span>
           <span>⬜ Unattempted: <strong>${t.unattemptedCount}</strong></span>
@@ -3811,7 +3959,6 @@ function deleteP1HistoryItem(id) {
   history = history.filter(t => t.id !== id);
   saveJSON("rbi_p1_history", history);
   renderP1History();
-  if (typeof renderP1Calendar === "function") renderP1Calendar();
 }
 
 // Clear all Phase-1 History
@@ -3821,7 +3968,6 @@ function clearP1History() {
   if (!confirm("Are you sure you want to delete all Phase-1 test history?")) return;
   saveJSON("rbi_p1_history", []);
   renderP1History();
-  if (typeof renderP1Calendar === "function") renderP1Calendar();
 }
 
 // ============================================================
@@ -4068,2022 +4214,6 @@ function parseScheduleDate(raw) {
   return getLocalDateString(new Date());
 }
 
-// Classifies a day into: "chapter-test", "mix-test", "buffer-day", or "normal-day"
-function classifyDayType(p2Topic = "", p1Topic = "", ca = "") {
-  const combined = `${p2Topic || ""} ${p1Topic || ""} ${ca || ""}`.toLowerCase();
-  if (combined.includes("mix test")) return "mix-test";
-  if (combined.includes("chapter test")) return "chapter-test";
-  if (combined.includes("buffer day") || combined.includes("buffer")) return "buffer-day";
-  return "normal-day";
-}
-
-// Get metadata for a specific date (dayNum, dayType, p2 details, p1 details, ca)
-function getDayMetadata(dateStr) {
-  if (!state.calendar_day_metadata) {
-    state.calendar_day_metadata = {};
-  }
-  if (state.calendar_day_metadata[dateStr]) {
-    return state.calendar_day_metadata[dateStr];
-  }
-
-  // Look in existing calendar tasks for this date
-  const tasks = (state.calendar || []).filter(t => t.date === dateStr);
-  if (tasks.length > 0) {
-    const firstWithMeta = tasks.find(t => t.p2_topic || t.p1_topic || t.dayType || t.dayNum);
-    const p2Task = tasks.find(t => t.phase === "Phase-2");
-    const p1Task = tasks.find(t => t.phase === "Phase-1");
-    const caTask = tasks.find(t => (t.subject && t.subject.includes("Current Affairs")) || t.phase === "General");
-
-    const p2Sub = p2Task ? p2Task.subject : (firstWithMeta ? firstWithMeta.p2_subject : "");
-    const p2Top = p2Task ? p2Task.topic : (firstWithMeta ? firstWithMeta.p2_topic : "");
-    const p1Sub = p1Task ? p1Task.subject : (firstWithMeta ? firstWithMeta.p1_subject : "");
-    const p1Top = p1Task ? p1Task.topic : (firstWithMeta ? firstWithMeta.p1_topic : "");
-    const caTop = caTask ? caTask.topic : (firstWithMeta ? firstWithMeta.ca : "");
-
-    const dayType = (firstWithMeta && firstWithMeta.dayType) || classifyDayType(p2Top, p1Top, caTop);
-    const dayNum = (firstWithMeta && firstWithMeta.dayNum) || null;
-
-    const meta = {
-      dayNum,
-      dayType,
-      p2_subject: sanitizeDashes(p2Sub || ""),
-      p2_topic: sanitizeDashes(p2Top || ""),
-      p1_subject: sanitizeDashes(p1Sub || ""),
-      p1_topic: sanitizeDashes(p1Top || ""),
-      ca: sanitizeDashes(caTop || "")
-    };
-    state.calendar_day_metadata[dateStr] = meta;
-    return meta;
-  }
-
-  return null;
-}
-
-// Rebuild day metadata from official schedule data or calendar tasks
-function rebuildCalendarMetadata() {
-  state.calendar_day_metadata = {};
-  const startStr = state.calendar_planStartDate || "2026-11-01";
-  const [sYear, sMonth, sDay] = startStr.split("-").map(Number);
-
-  // Base: official schedule data
-  if (typeof RBI_OFFICIAL_SCHEDULE_DATA !== "undefined" && Array.isArray(RBI_OFFICIAL_SCHEDULE_DATA)) {
-    for (const item of RBI_OFFICIAL_SCHEDULE_DATA) {
-      const targetDate = new Date(sYear, sMonth - 1, sDay + (item.day - 1));
-      const dateStr = getLocalDateString(targetDate);
-      state.calendar_day_metadata[dateStr] = {
-        dayNum: item.day,
-        dayType: item.dayType || classifyDayType(item.p2_topic, item.p1_topic, item.ca),
-        p2_subject: sanitizeDashes(item.p2_subject || ""),
-        p2_topic: sanitizeDashes(item.p2_topic || ""),
-        p1_subject: sanitizeDashes(item.p1_subject || ""),
-        p1_topic: sanitizeDashes(item.p1_topic || ""),
-        ca: sanitizeDashes(item.ca || "")
-      };
-    }
-  }
-
-  // Overlay tasks from state.calendar so custom spreadsheet imports take full precedence
-  for (const t of (state.calendar || [])) {
-    if (!state.calendar_day_metadata[t.date]) {
-      state.calendar_day_metadata[t.date] = {
-        dayNum: t.dayNum || null,
-        dayType: t.dayType || "normal-day",
-        p2_subject: t.phase === "Phase-2" ? sanitizeDashes(t.subject) : (t.p2_subject || ""),
-        p2_topic: t.phase === "Phase-2" ? sanitizeDashes(t.topic) : (t.p2_topic || ""),
-        p1_subject: t.phase === "Phase-1" ? sanitizeDashes(t.subject) : (t.p1_subject || ""),
-        p1_topic: t.phase === "Phase-1" ? sanitizeDashes(t.topic) : (t.p1_topic || ""),
-        ca: t.phase === "General" ? sanitizeDashes(t.topic) : (t.ca || "")
-      };
-    } else {
-      const m = state.calendar_day_metadata[t.date];
-      if (t.dayType) m.dayType = t.dayType;
-      if (t.dayNum) m.dayNum = t.dayNum;
-      if (t.phase === "Phase-2") {
-        m.p2_subject = sanitizeDashes(t.subject || m.p2_subject);
-        m.p2_topic = sanitizeDashes(t.topic || m.p2_topic);
-      } else if (t.phase === "Phase-1") {
-        m.p1_subject = sanitizeDashes(t.subject || m.p1_subject);
-        m.p1_topic = sanitizeDashes(t.topic || m.p1_topic);
-      } else if (t.phase === "General") {
-        m.ca = sanitizeDashes(t.topic || m.ca);
-      }
-    }
-  }
-}
-
-// Convert 2D spreadsheet rows into structured task objects
-function mapScheduleRowsToTasks(rows, startStr = null, daysFinished = 0) {
-  if (!rows || rows.length < 2) return [];
-
-  const headers = rows[0].map(h => String(h || "").trim().toLowerCase());
-  const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
-
-  const planStart = startStr || state.calendar_planStartDate || "2026-11-01";
-  state.calendar_planStartDate = planStart;
-  saveJSON("rbi_calendar_start_date", planStart);
-  const [sYear, sMonth, sDay] = planStart.split("-").map(Number);
-  const numFinished = parseInt(daysFinished, 10) || 0;
-
-  // Check if this is the multi-phase RBI Study Schedule format
-  const isMultiPhase = headers.some(h => h.includes("phase-2") || h.includes("phase 2") || h.includes("phase-1") || h.includes("phase 1"));
-
-  if (isMultiPhase) {
-    const dayCol = findCol(["day", "day no", "date", "timeline"]);
-    const p2SubCol = findCol(["subject (phase-2)", "phase-2 subject", "subject p2", "p2 subject"]);
-    const p2TopCol = findCol(["topic (phase-2)", "phase-2 topic", "topic p2", "p2 topic"]);
-    const p1SubCol = findCol(["subject (phase-1)", "phase-1 subject", "subject p1", "p1 subject"]);
-    const p1TopCol = findCol(["topic (phase-1)", "phase-1 topic", "topic p1", "p1 topic"]);
-    const caCol = findCol(["current affairs", "ca", "general awareness", "spotlight"]);
-
-    const tasks = [];
-    state.calendar_day_metadata = state.calendar_day_metadata || {};
-
-    for (let i = 1; i < rows.length; i++) {
-      const r = rows[i];
-      if (!r || r.length === 0 || !r.some(cell => String(cell).trim().length > 0)) continue;
-
-      const rawDay = dayCol !== -1 ? String(r[dayCol] || "").trim() : String(i);
-      const dayNum = parseInt(rawDay, 10) || i;
-
-      const targetDate = new Date(sYear, sMonth - 1, sDay + (dayNum - 1));
-      const dateStr = getLocalDateString(targetDate);
-
-      const p2Subject = sanitizeDashes(p2SubCol !== -1 ? String(r[p2SubCol] || "").trim() : "");
-      const p2Topic = sanitizeDashes(p2TopCol !== -1 ? String(r[p2TopCol] || "").trim() : "");
-      const p1Subject = sanitizeDashes(p1SubCol !== -1 ? String(r[p1SubCol] || "").trim() : "");
-      const p1Topic = sanitizeDashes(p1TopCol !== -1 ? String(r[p1TopCol] || "").trim() : "");
-      const caTopic = sanitizeDashes(caCol !== -1 ? String(r[caCol] || "").trim() : "");
-
-      const dayType = classifyDayType(p2Topic, p1Topic, caTopic);
-      const isCompleted = (numFinished > 0 && dayNum <= numFinished);
-
-      // Save day metadata
-      state.calendar_day_metadata[dateStr] = {
-        dayNum,
-        dayType,
-        p2_subject: p2Subject,
-        p2_topic: p2Topic,
-        p1_subject: p1Subject,
-        p1_topic: p1Topic,
-        ca: caTopic
-      };
-
-      if (p2Topic) {
-        tasks.push({
-          id: `task-d${dayNum}-p2-${i}`,
-          date: dateStr,
-          dayNum: dayNum,
-          dayType: dayType,
-          phase: "Phase-2",
-          subject: p2Subject || "Phase-2",
-          topic: p2Topic,
-          type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "Descriptive Writing")),
-          time: "10:00 AM",
-          status: isCompleted ? "completed" : "pending",
-          p2_subject: p2Subject,
-          p2_topic: p2Topic,
-          p1_subject: p1Subject,
-          p1_topic: p1Topic,
-          ca: caTopic
-        });
-      }
-
-      if (p1Topic) {
-        tasks.push({
-          id: `task-d${dayNum}-p1-${i}`,
-          date: dateStr,
-          dayNum: dayNum,
-          dayType: dayType,
-          phase: "Phase-1",
-          subject: p1Subject || "Phase-1",
-          topic: p1Topic,
-          type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "MCQ Practice")),
-          time: "02:00 PM",
-          status: isCompleted ? "completed" : "pending",
-          p2_subject: p2Subject,
-          p2_topic: p2Topic,
-          p1_subject: p1Subject,
-          p1_topic: p1Topic,
-          ca: caTopic
-        });
-      }
-
-      if (caTopic) {
-        tasks.push({
-          id: `task-d${dayNum}-ca-${i}`,
-          date: dateStr,
-          dayNum: dayNum,
-          dayType: dayType,
-          phase: "General",
-          subject: "Current Affairs & Reports",
-          topic: caTopic,
-          type: "Current Affairs",
-          time: "06:00 PM",
-          status: isCompleted ? "completed" : "pending",
-          p2_subject: p2Subject,
-          p2_topic: p2Topic,
-          p1_subject: p1Subject,
-          p1_topic: p1Topic,
-          ca: caTopic
-        });
-      }
-    }
-
-    return tasks;
-  }
-
-  // Generic single-phase spreadsheet format
-  const dateCol = findCol(["date", "day", "when", "scheduled", "timeline"]);
-  const phaseCol = findCol(["phase", "tier", "stage", "part"]);
-  const subjectCol = findCol(["subject", "paper", "section", "module", "course"]);
-  const topicCol = findCol(["topic", "title", "task", "chapter", "unit", "description", "details", "content"]);
-  const typeCol = findCol(["type", "mode", "category", "activity", "format"]);
-  const timeCol = findCol(["time", "duration", "hours", "slot", "timing"]);
-  const statusCol = findCol(["status", "completed", "done", "state"]);
-
-  const tasks = [];
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r || r.length === 0 || !r.some(cell => String(cell).trim().length > 0)) continue;
-
-    const rawDate = dateCol !== -1 ? r[dateCol] : "";
-    const rawPhase = phaseCol !== -1 ? String(r[phaseCol] || "").trim() : "";
-    const rawSubject = sanitizeDashes(subjectCol !== -1 ? String(r[subjectCol] || "").trim() : "");
-    const rawTopic = sanitizeDashes(topicCol !== -1 ? String(r[topicCol] || "").trim() : (r[0] || "Study Session"));
-    const rawType = sanitizeDashes(typeCol !== -1 ? String(r[typeCol] || "").trim() : "");
-    const rawTime = timeCol !== -1 ? String(r[timeCol] || "").trim() : "";
-    const rawStatus = statusCol !== -1 ? String(r[statusCol] || "").trim().toLowerCase() : "";
-
-    let phase = "General";
-    const phaseLower = rawPhase.toLowerCase();
-    if (phaseLower.includes("1") || phaseLower.includes("p1") || phaseLower.includes("objective") || phaseLower.includes("mcq")) {
-      phase = "Phase-1";
-    } else if (phaseLower.includes("2") || phaseLower.includes("p2") || phaseLower.includes("descriptive") || phaseLower.includes("writing")) {
-      phase = "Phase-2";
-    }
-
-    const dayType = classifyDayType(rawTopic, rawSubject, rawType);
-
-    let taskType = "Study Task";
-    if (dayType === "mix-test") taskType = "Mix Test";
-    else if (dayType === "chapter-test") taskType = "Chapter Test";
-    else if (dayType === "buffer-day") taskType = "Revision";
-    else {
-      const typeLower = (rawType + " " + rawTopic).toLowerCase();
-      if (typeLower.includes("mcq") || typeLower.includes("objective") || typeLower.includes("spotlight")) {
-        taskType = "MCQ Practice";
-      } else if (typeLower.includes("descriptive") || typeLower.includes("writing") || typeLower.includes("essay") || typeLower.includes("precis")) {
-        taskType = "Descriptive Writing";
-      } else if (typeLower.includes("mock") || typeLower.includes("test") || typeLower.includes("full length")) {
-        taskType = "Mock Test";
-      } else if (typeLower.includes("revision") || typeLower.includes("review")) {
-        taskType = "Revision";
-      } else if (typeLower.includes("reading") || typeLower.includes("notes") || typeLower.includes("chapter")) {
-        taskType = "Reading / Notes";
-      }
-    }
-
-    const isCompleted = (numFinished > 0 && i <= numFinished) || ["completed", "done", "yes", "true", "1", "finished"].includes(rawStatus);
-    const dateStr = parseScheduleDate(rawDate);
-
-    tasks.push({
-      id: makeId("task"),
-      date: dateStr,
-      dayNum: i,
-      phase: phase,
-      subject: rawSubject || (phase === "Phase-1" ? "General Awareness" : "ESI"),
-      topic: rawTopic || "Scheduled Preparation Task",
-      type: taskType,
-      dayType: dayType,
-      time: rawTime || "",
-      status: isCompleted ? "completed" : "pending"
-    });
-  }
-
-  return tasks;
-}
-
-// Generate RBI Grade B Exam Study Plan (loads 415-Day Official Schedule if available)
-function generateDefaultSchedule(startDateStr = null, daysFinished = 0) {
-  const startStr = startDateStr || state.calendar_planStartDate || "2026-11-01";
-  state.calendar_planStartDate = startStr;
-  saveJSON("rbi_calendar_start_date", startStr);
-
-  const numFinished = parseInt(daysFinished, 10) || 0;
-  const [sYear, sMonth, sDay] = startStr.split("-").map(Number);
-
-  // If official 415-day schedule data is present
-  if (typeof RBI_OFFICIAL_SCHEDULE_DATA !== "undefined" && Array.isArray(RBI_OFFICIAL_SCHEDULE_DATA) && RBI_OFFICIAL_SCHEDULE_DATA.length > 0) {
-    const tasks = [];
-    state.calendar_day_metadata = {};
-
-    for (const item of RBI_OFFICIAL_SCHEDULE_DATA) {
-      const dayNum = item.day;
-      const targetDate = new Date(sYear, sMonth - 1, sDay + (dayNum - 1));
-      const dateStr = getLocalDateString(targetDate);
-      const dayType = item.dayType || classifyDayType(item.p2_topic, item.p1_topic, item.ca);
-
-      state.calendar_day_metadata[dateStr] = {
-        dayNum: dayNum,
-        dayType: dayType,
-        p2_subject: sanitizeDashes(item.p2_subject || ""),
-        p2_topic: sanitizeDashes(item.p2_topic || ""),
-        p1_subject: sanitizeDashes(item.p1_subject || ""),
-        p1_topic: sanitizeDashes(item.p1_topic || ""),
-        ca: sanitizeDashes(item.ca || "")
-      };
-
-      const isCompleted = (numFinished > 0 && dayNum <= numFinished);
-
-      if (item.p2_topic) {
-        tasks.push({
-          id: `task-d${dayNum}-p2`,
-          date: dateStr,
-          dayNum: dayNum,
-          dayType: dayType,
-          phase: "Phase-2",
-          subject: sanitizeDashes(item.p2_subject || "Phase-2"),
-          topic: sanitizeDashes(item.p2_topic),
-          type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "Descriptive Writing")),
-          time: "10:00 AM",
-          status: isCompleted ? "completed" : "pending",
-          p2_subject: sanitizeDashes(item.p2_subject),
-          p2_topic: sanitizeDashes(item.p2_topic),
-          p1_subject: sanitizeDashes(item.p1_subject),
-          p1_topic: sanitizeDashes(item.p1_topic),
-          ca: sanitizeDashes(item.ca)
-        });
-      }
-
-      if (item.p1_topic) {
-        tasks.push({
-          id: `task-d${dayNum}-p1`,
-          date: dateStr,
-          dayNum: dayNum,
-          dayType: dayType,
-          phase: "Phase-1",
-          subject: sanitizeDashes(item.p1_subject || "Phase-1"),
-          topic: sanitizeDashes(item.p1_topic),
-          type: dayType === "mix-test" ? "Mix Test" : (dayType === "chapter-test" ? "Chapter Test" : (dayType === "buffer-day" ? "Revision" : "MCQ Practice")),
-          time: "02:00 PM",
-          status: isCompleted ? "completed" : "pending",
-          p2_subject: sanitizeDashes(item.p2_subject),
-          p2_topic: sanitizeDashes(item.p2_topic),
-          p1_subject: sanitizeDashes(item.p1_subject),
-          p1_topic: sanitizeDashes(item.p1_topic),
-          ca: sanitizeDashes(item.ca)
-        });
-      }
-
-      if (item.ca) {
-        tasks.push({
-          id: `task-d${dayNum}-ca`,
-          date: dateStr,
-          dayNum: dayNum,
-          dayType: dayType,
-          phase: "General",
-          subject: "Current Affairs & Reports",
-          topic: sanitizeDashes(item.ca),
-          type: "Current Affairs",
-          time: "06:00 PM",
-          status: isCompleted ? "completed" : "pending",
-          p2_subject: sanitizeDashes(item.p2_subject),
-          p2_topic: sanitizeDashes(item.p2_topic),
-          p1_subject: sanitizeDashes(item.p1_subject),
-          p1_topic: sanitizeDashes(item.p1_topic),
-          ca: sanitizeDashes(item.ca)
-        });
-      }
-    }
-
-    return tasks;
-  }
-
-  // Fallback 30-Day Plan if schedule data not loaded
-  const plan = [];
-  const today = new Date();
-  const defaultTopics = [
-    { phase: "Phase-1", subject: "General Awareness", topic: "Spotlight Nov 1-6 Current Affairs (Part 1 - 50 MCQs)", type: "MCQ Practice", time: "10:00 AM" },
-    { phase: "Phase-2", subject: "ESI", topic: "Chapter 1: National Income - Concepts & Measurement", type: "Descriptive Writing", time: "11:00 AM" },
-    { phase: "Phase-1", subject: "Reasoning Ability", topic: "Puzzles & Seating Arrangement (Circular & Floor)", type: "MCQ Practice", time: "02:00 PM" },
-    { phase: "Phase-2", subject: "Finance", topic: "Financial System in India - Structure & RBI Functions", type: "Descriptive Writing", time: "10:00 AM" },
-    { phase: "Phase-1", subject: "Quantitative Aptitude", topic: "Data Interpretation (Bar & Pie) + Percentage/Ratio", type: "MCQ Practice", time: "03:00 PM" },
-    { phase: "Phase-2", subject: "Management", topic: "Leadership Theories - Transformational vs Transactional", type: "Descriptive Writing", time: "11:00 AM" },
-    { phase: "General", subject: "Weekly Revision", topic: "Spotlight GA Week 1 & 2 Rapid Revision + Formula Review", type: "Revision", time: "04:00 PM" }
-  ];
-
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
-    const item = defaultTopics[i % defaultTopics.length];
-    const dayNum = i + 1;
-    const isCompleted = (numFinished > 0 && dayNum <= numFinished);
-    plan.push({
-      id: makeId("task"),
-      date: getLocalDateString(d),
-      dayNum: dayNum,
-      dayType: i % 7 === 4 ? "chapter-test" : (i % 7 === 6 ? "buffer-day" : "normal-day"),
-      phase: item.phase,
-      subject: sanitizeDashes(item.subject),
-      topic: sanitizeDashes(item.topic),
-      type: item.type,
-      time: item.time,
-      status: isCompleted ? "completed" : "pending"
-    });
-  }
-
-  return plan;
-}
-
-// Retrieve dictionary of Phase-1 exams mapped by YYYY-MM-DD
-function getPhase1ExamsByDate() {
-  const history = loadJSON("rbi_p1_history", []);
-  const map = {};
-  for (const item of history) {
-    const raw = item.completedAt || item.date;
-    if (!raw) continue;
-    const dStr = getLocalDateString(new Date(raw));
-    if (!map[dStr]) map[dStr] = [];
-    map[dStr].push(item);
-  }
-  return map;
-}
-
-// Retrieve dictionary of Phase-2 written tests mapped by YYYY-MM-DD
-function getPhase2ExamsByDate() {
-  const history = loadJSON("rbi_history", []);
-  const map = {};
-  for (const item of history) {
-    if (!item.date) continue;
-    const dStr = getLocalDateString(new Date(item.date));
-    if (!map[dStr]) map[dStr] = [];
-    map[dStr].push(item);
-  }
-  return map;
-}
-
-// Generic routing function: routes to active phase calendar
-function renderCalendar() {
-  if (state.phase === "phase1") {
-    renderP1Calendar();
-  } else {
-    renderP2Calendar();
-  }
-}
-
-// Save calendar tasks into localStorage
-function saveCalendarSchedule() {
-  saveJSON("rbi_study_schedule", state.calendar || []);
-}
-
-// ============================================================
-// PHASE 1 CALENDAR: OBJECTIVE DRILLS & EXAM MARKS
-// ============================================================
-
-// ============================================================
-// CALENDAR & STREAK ENGINE (LEETCODE MINIMAL STYLE & DAILY QUESTS)
-// ============================================================
-
-// Check if a given date is finished (all tasks completed or exam logged)
-function isDayFinished(dateStr, phaseType) {
-  const p1ExamsMap = getPhase1ExamsByDate();
-  const p2ExamsMap = getPhase2ExamsByDate();
-  const dayExams = phaseType === "phase1" ? (p1ExamsMap[dateStr] || []) : (p2ExamsMap[dateStr] || []);
-
-  const tasks = (state.calendar || []).filter(t => {
-    if (t.date !== dateStr) return false;
-    if (phaseType === "phase1") {
-      return t.phase === "Phase-1" || t.phase === "General";
-    } else {
-      return t.phase === "Phase-2";
-    }
-  });
-
-  // A day is finished if:
-  // 1. It has tasks, and ALL of them are marked completed
-  // 2. OR it has logged exams taken on that day
-  if (tasks.length > 0) {
-    const allCompleted = tasks.every(t => t.status === "completed");
-    if (allCompleted) return true;
-  }
-  if (dayExams.length > 0) {
-    return true;
-  }
-  return false;
-}
-
-// Compute streak metrics: currentStreak, maxStreak, totalActiveDays, finishedDates, isTodayFinished
-// Rule: If one day is missed, streak is broken (0), and restarts from 1 on the next finished day.
-function getCalendarStreak(phaseType) {
-  const today = new Date();
-  const todayStr = getLocalDateString(today);
-
-  const allDatesSet = new Set();
-  (state.calendar || []).forEach(t => {
-    if (t.date) allDatesSet.add(t.date);
-  });
-  const examsMap = phaseType === "phase1" ? getPhase1ExamsByDate() : getPhase2ExamsByDate();
-  Object.keys(examsMap).forEach(d => allDatesSet.add(d));
-
-  const finishedDatesSet = new Set();
-  for (const d of allDatesSet) {
-    if (isDayFinished(d, phaseType)) {
-      finishedDatesSet.add(d);
-    }
-  }
-
-  const isTodayFinished = finishedDatesSet.has(todayStr);
-
-  // Current Streak Calculation:
-  let currentStreak = 0;
-  if (isTodayFinished) {
-    currentStreak = 1;
-    let checkDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-    while (true) {
-      const dStr = getLocalDateString(checkDate);
-      if (finishedDatesSet.has(dStr)) {
-        currentStreak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        break;
-      }
-    }
-  } else {
-    // Today not finished yet. Check yesterday:
-    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-    const yStr = getLocalDateString(yesterday);
-    if (finishedDatesSet.has(yStr)) {
-      currentStreak = 1;
-      let checkDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() - 1);
-      while (true) {
-        const dStr = getLocalDateString(checkDate);
-        if (finishedDatesSet.has(dStr)) {
-          currentStreak++;
-          checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-          break;
-        }
-      }
-    } else {
-      // Yesterday was missed! Streak is broken (0)
-      currentStreak = 0;
-    }
-  }
-
-  // Max Streak Calculation across all history
-  const sortedDates = Array.from(finishedDatesSet).sort();
-  let maxStreak = 0;
-  let tempStreak = 0;
-  let prevDate = null;
-
-  for (const dStr of sortedDates) {
-    const curDate = new Date(dStr + "T00:00:00");
-    if (prevDate) {
-      const diffDays = Math.round((curDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays === 1) {
-        tempStreak++;
-      } else {
-        tempStreak = 1;
-      }
-    } else {
-      tempStreak = 1;
-    }
-    prevDate = curDate;
-    if (tempStreak > maxStreak) {
-      maxStreak = tempStreak;
-    }
-  }
-
-  if (currentStreak > maxStreak) {
-    maxStreak = currentStreak;
-  }
-
-  return {
-    currentStreak,
-    maxStreak,
-    totalActiveDays: finishedDatesSet.size,
-    finishedDates: finishedDatesSet,
-    isTodayFinished
-  };
-}
-
-// Auto-populate 3 default quests for a date if it has no tasks yet or has legacy single task
-function ensureDailyQuestsForDate(dateStr, phaseType) {
-  if (!state.calendar) state.calendar = [];
-  const meta = getDayMetadata(dateStr);
-
-  if (phaseType === "phase2") {
-    const existing = state.calendar.filter(t => t.date === dateStr && t.phase === "Phase-2");
-    if (existing.length === 0 && meta && (meta.p2_topic || meta.p2_subject)) {
-      const ch = meta.p2_topic || meta.p2_subject || "Phase-2 Chapter Focus";
-      const sub = meta.p2_subject || "Phase-2";
-      const dNum = meta.dayNum || null;
-      const dType = meta.dayType || "normal-day";
-
-      state.calendar.push(
-        {
-          id: `quest-p2-obj-${dateStr}-${Date.now()}-1`,
-          date: dateStr,
-          dayNum: dNum,
-          dayType: dType,
-          phase: "Phase-2",
-          subject: sub,
-          topic: `Objective Exam: ${ch}`,
-          type: "Objective Exam",
-          time: "10:00 AM",
-          status: "pending",
-          autoGenerated: true
-        },
-        {
-          id: `quest-p2-sub-${dateStr}-${Date.now()}-2`,
-          date: dateStr,
-          dayNum: dNum,
-          dayType: dType,
-          phase: "Phase-2",
-          subject: sub,
-          topic: `Subjective Writing: ${ch}`,
-          type: "Subjective Exam",
-          time: "02:00 PM",
-          status: "pending",
-          autoGenerated: true
-        },
-        {
-          id: `quest-p2-std-${dateStr}-${Date.now()}-3`,
-          date: dateStr,
-          dayNum: dNum,
-          dayType: dType,
-          phase: "Phase-2",
-          subject: sub,
-          topic: `Chapter Study & Notes: ${ch}`,
-          type: "Study / Reading",
-          time: "05:00 PM",
-          status: "pending",
-          autoGenerated: true
-        }
-      );
-      saveCalendarSchedule();
-    } else if (existing.length === 1 && existing[0].id.startsWith("task-d") && existing[0].id.endsWith("-p2")) {
-      const orig = existing[0];
-      const wasDone = orig.status === "completed";
-      const ch = orig.topic;
-      const sub = orig.subject || "Phase-2";
-      const dNum = orig.dayNum;
-      const dType = orig.dayType || "normal-day";
-
-      state.calendar = state.calendar.filter(t => t.id !== orig.id);
-      state.calendar.push(
-        {
-          id: `quest-p2-obj-${dateStr}-${Date.now()}-1`,
-          date: dateStr,
-          dayNum: dNum,
-          dayType: dType,
-          phase: "Phase-2",
-          subject: sub,
-          topic: `Objective Exam: ${ch}`,
-          type: "Objective Exam",
-          time: "10:00 AM",
-          status: wasDone ? "completed" : "pending",
-          autoGenerated: true
-        },
-        {
-          id: `quest-p2-sub-${dateStr}-${Date.now()}-2`,
-          date: dateStr,
-          dayNum: dNum,
-          dayType: dType,
-          phase: "Phase-2",
-          subject: sub,
-          topic: `Subjective Writing: ${ch}`,
-          type: "Subjective Exam",
-          time: "02:00 PM",
-          status: wasDone ? "completed" : "pending",
-          autoGenerated: true
-        },
-        {
-          id: `quest-p2-std-${dateStr}-${Date.now()}-3`,
-          date: dateStr,
-          dayNum: dNum,
-          dayType: dType,
-          phase: "Phase-2",
-          subject: sub,
-          topic: `Chapter Study & Notes: ${ch}`,
-          type: "Study / Reading",
-          time: "05:00 PM",
-          status: wasDone ? "completed" : "pending",
-          autoGenerated: true
-        }
-      );
-      saveCalendarSchedule();
-    }
-  } else {
-    // Phase 1
-    const existing = state.calendar.filter(t => t.date === dateStr && (t.phase === "Phase-1" || t.phase === "General"));
-    if (existing.length === 0 && meta && (meta.p1_topic || meta.ca)) {
-      const p1Top = meta.p1_topic || "Objective Speed Drill";
-      const p1Sub = meta.p1_subject || "Phase-1";
-      const caTop = meta.ca || "Spotlight Current Affairs Drill";
-      const dNum = meta.dayNum || null;
-      const dType = meta.dayType || "normal-day";
-
-      state.calendar.push(
-        {
-          id: `quest-p1-obj-${dateStr}-${Date.now()}-1`,
-          date: dateStr,
-          dayNum: dNum,
-          dayType: dType,
-          phase: "Phase-1",
-          subject: p1Sub,
-          topic: `Objective Speed Drill: ${p1Top}`,
-          type: "Objective Exam",
-          time: "10:00 AM",
-          status: "pending",
-          autoGenerated: true
-        },
-        {
-          id: `quest-p1-ca-${dateStr}-${Date.now()}-2`,
-          date: dateStr,
-          dayNum: dNum,
-          dayType: dType,
-          phase: "General",
-          subject: "Current Affairs & Reports",
-          topic: `Daily Spotlight GA Drill: ${caTop}`,
-          type: "Current Affairs",
-          time: "02:00 PM",
-          status: "pending",
-          autoGenerated: true
-        },
-        {
-          id: `quest-p1-rev-${dateStr}-${Date.now()}-3`,
-          date: dateStr,
-          dayNum: dNum,
-          dayType: dType,
-          phase: "Phase-1",
-          subject: p1Sub,
-          topic: `Formula & Concepts Revision: ${p1Top}`,
-          type: "Study / Reading",
-          time: "06:00 PM",
-          status: "pending",
-          autoGenerated: true
-        }
-      );
-      saveCalendarSchedule();
-    }
-  }
-}
-
-// Add user-created dynamic quest / TODO item to the currently selected day
-function addQuickQuest(phaseType) {
-  const prefix = phaseType === "phase1" ? "p1" : "p2";
-  const titleInput = $(`${prefix}-input-quick-quest-title`);
-  const typeSelect = $(`${prefix}-select-quick-quest-type`);
-  if (!titleInput) return;
-  const title = (titleInput.value || "").trim();
-  if (!title) return;
-
-  const questType = typeSelect ? typeSelect.value : (phaseType === "phase1" ? "Objective Exam" : "Subjective Exam");
-  const selDateStr = phaseType === "phase1" ? state.p1_calendar_selectedDate : state.p2_calendar_selectedDate;
-  const dayMeta = getDayMetadata(selDateStr);
-  const subjectName = phaseType === "phase1" ? (dayMeta?.p1_subject || "Phase-1") : (dayMeta?.p2_subject || "Phase-2");
-
-  const newQuest = {
-    id: `quest-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-    date: selDateStr,
-    dayNum: dayMeta?.dayNum || null,
-    dayType: dayMeta?.dayType || "normal-day",
-    phase: phaseType === "phase1" ? (questType === "Current Affairs" ? "General" : "Phase-1") : "Phase-2",
-    subject: subjectName,
-    topic: sanitizeDashes(title),
-    type: questType,
-    time: "10:00 AM",
-    status: "pending",
-    createdManually: true
-  };
-
-  if (!state.calendar) state.calendar = [];
-  state.calendar.push(newQuest);
-  saveCalendarSchedule();
-
-  titleInput.value = "";
-
-  if (phaseType === "phase1") {
-    renderP1Calendar();
-  } else {
-    renderP2Calendar();
-  }
-}
-
-// Auto-complete matching daily quest when an exam finishes
-function autoCompleteDailyQuestOnExam(phaseType, test) {
-  const todayStr = getLocalDateString(new Date());
-  ensureDailyQuestsForDate(todayStr, phaseType);
-
-  const tasks = state.calendar || [];
-  let found = false;
-
-  for (const t of tasks) {
-    if (t.date === todayStr && t.status !== "completed") {
-      if (phaseType === "phase1" && (t.phase === "Phase-1" || t.phase === "General") && (t.type === "Objective Exam" || t.type === "MCQ Practice")) {
-        t.status = "completed";
-        found = true;
-        break;
-      } else if (phaseType === "phase2" && t.phase === "Phase-2" && (t.type === "Subjective Exam" || t.type === "Descriptive Writing")) {
-        t.status = "completed";
-        found = true;
-        break;
-      }
-    }
-  }
-
-  if (found) {
-    saveCalendarSchedule();
-  }
-}
-
-// Render single LeetCode calendar day cell
-function renderLeetCodeDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, isFinished, dayMeta, exams) {
-  const isToday = dateStr === todayStr;
-  const isSelected = dateStr === selectedStr;
-  const dayType = dayMeta?.dayType || "normal-day";
-
-  let dotHtml = "";
-  if (dayType === "chapter-test") {
-    dotHtml = `<span class="lc-type-dot ch-test" title="Chapter Test"></span>`;
-  } else if (dayType === "mix-test") {
-    dotHtml = `<span class="lc-type-dot mix-test" title="Mix Test"></span>`;
-  } else if (dayType === "buffer-day") {
-    dotHtml = `<span class="lc-type-dot buffer" title="Buffer Day"></span>`;
-  }
-
-  let tickHtml = "";
-  if (isFinished) {
-    tickHtml = `<span class="lc-tick-badge" title="Completed!">✓</span>`;
-  }
-
-  const classes = [
-    "lc-day-cell",
-    `day-type-${dayType}`,
-    isFinished ? "is-finished" : "",
-    isToday ? "is-today" : "",
-    isSelected ? "is-selected" : "",
-    isOtherMonth ? "is-other-month" : ""
-  ].filter(Boolean).join(" ");
-
-  return `
-    <div class="${classes}" data-date="${dateStr}" data-day-type="${dayType}">
-      <span class="lc-day-num">${dayNum}</span>
-      ${tickHtml}
-      ${dotHtml}
-    </div>
-  `;
-}
-
-// Render LeetCode monthly summary statistics below calendar
-function renderLeetCodeMonthlyStats(phaseType, streakData) {
-  const prefix = phaseType === "phase1" ? "p1" : "p2";
-  const container = $(`${prefix}-leetcode-monthly-stats`);
-  if (!container) return;
-
-  const curDate = phaseType === "phase1" ? state.p1_calendar_currentDate : state.p2_calendar_currentDate;
-  const year = curDate.getFullYear();
-  const month = curDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  let finishedInMonth = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    if (streakData.finishedDates && streakData.finishedDates.has(dStr)) {
-      finishedInMonth++;
-    }
-  }
-  const pct = Math.round((finishedInMonth / daysInMonth) * 100);
-
-  container.innerHTML = `
-    <div>
-      <span style="font-weight:700; color:#1e293b;">${finishedInMonth} / ${daysInMonth} Days</span>
-      <span style="color:#64748b; font-size:11px;"> finished (${pct}%)</span>
-    </div>
-    <div style="font-weight:600; color:#10b981;">
-      ${streakData.currentStreak > 0 ? `🔥 ${streakData.currentStreak} d streak` : `⚡ Start streak`}
-    </div>
-  `;
-}
-
-// ============================================================
-// PHASE 1 CALENDAR: OBJECTIVE DRILLS & EXAM MARKS
-// ============================================================
-
-function renderP1Calendar() {
-  if (!state.calendar || state.calendar.length < 30) {
-    state.calendar = generateDefaultSchedule();
-    saveCalendarSchedule();
-  }
-
-  rebuildCalendarMetadata();
-  renderP1CalendarSummary();
-
-  const heading = $("p1-cal-month-year-display");
-  if (heading) {
-    const monthNames = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ];
-    const year = state.p1_calendar_currentDate.getFullYear();
-    const month = state.p1_calendar_currentDate.getMonth();
-    heading.textContent = `${monthNames[month]} ${year}`;
-  }
-
-  const planStartInput = $("p1-cal-upload-start-date");
-  if (planStartInput && state.calendar_planStartDate) {
-    planStartInput.value = state.calendar_planStartDate;
-  }
-
-  // Calculate streak & finished days
-  const streakData = getCalendarStreak("phase1");
-
-  // Update streak hero card
-  const daysCount = $("p1-streak-days-count");
-  if (daysCount) daysCount.textContent = streakData.currentStreak;
-  const maxCount = $("p1-streak-max-count");
-  if (maxCount) maxCount.textContent = streakData.maxStreak;
-  const totalActive = $("p1-streak-total-active");
-  if (totalActive) totalActive.textContent = streakData.totalActiveDays;
-
-  const statusPill = $("p1-streak-status-pill");
-  if (statusPill) {
-    if (streakData.currentStreak > 0) {
-      if (streakData.isTodayFinished) {
-        statusPill.textContent = "🔥 Streak Active";
-        statusPill.className = "streak-status-pill active";
-      } else {
-        statusPill.textContent = "⏳ Due Today";
-        statusPill.className = "streak-status-pill pending";
-      }
-    } else {
-      statusPill.textContent = "⚡ Start Streak";
-      statusPill.className = "streak-status-pill";
-    }
-  }
-
-  // Render minimal LeetCode calendar grid
-  renderP1MonthGrid(streakData);
-
-  // Render monthly stats
-  renderLeetCodeMonthlyStats("phase1", streakData);
-
-  // Render selected day's quests
-  renderP1SelectedDayTasks();
-}
-
-function renderP1CalendarSummary() {
-  const container = $("p1-calendar-progress-bar");
-  if (!container) return;
-
-  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-1" || t.phase === "General");
-  const total = tasks.length;
-  const completed = tasks.filter(t => t.status === "completed").length;
-  const pending = total - completed;
-  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  const p1History = loadJSON("rbi_p1_history", []);
-  const examsCount = p1History.length;
-  const avgAcc = examsCount > 0 ? (p1History.reduce((a, b) => a + (Number(b.accuracy) || 0), 0) / examsCount).toFixed(1) : "0.0";
-
-  container.innerHTML = `
-    <div class="summary-stat-card">
-      <div class="val">${total}</div>
-      <div class="lbl">Scheduled Tasks</div>
-    </div>
-    <div class="summary-stat-card">
-      <div class="val" style="color:#10b981;">${completed} <span style="font-size:12px; font-weight:700; color:#059669;">(${pct}%)</span></div>
-      <div class="lbl">Tasks Completed</div>
-    </div>
-    <div class="summary-stat-card">
-      <div class="val" style="color:#d97706;">${pending}</div>
-      <div class="lbl">Tasks Pending</div>
-    </div>
-    <div class="summary-stat-card">
-      <div class="val" style="color:#003366;">${examsCount} <span style="font-size:12px; font-weight:700; color:#2563eb;">(${avgAcc}% Acc)</span></div>
-      <div class="lbl">Objective Exams</div>
-    </div>
-  `;
-}
-
-function renderP1MonthGrid(streakData) {
-  const grid = $("p1-calendar-days-grid");
-  if (!grid) return;
-
-  const cur = state.p1_calendar_currentDate;
-  const year = cur.getFullYear();
-  const month = cur.getMonth();
-
-  const firstDayOfWeek = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
-
-  const todayStr = getLocalDateString(new Date());
-  const selectedStr = state.p1_calendar_selectedDate;
-
-  const p1ExamsMap = getPhase1ExamsByDate();
-  const finishedDates = streakData ? streakData.finishedDates : new Set();
-
-  let html = "";
-
-  // 1. Preceding days from previous month
-  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    const dayNum = daysInPrevMonth - i;
-    const prevDate = new Date(year, month - 1, dayNum);
-    const dateStr = getLocalDateString(prevDate);
-    const isFinished = finishedDates.has(dateStr);
-    const dayMeta = getDayMetadata(dateStr);
-    const dayExams = p1ExamsMap[dateStr] || [];
-    html += renderLeetCodeDayCell(dayNum, dateStr, true, todayStr, selectedStr, isFinished, dayMeta, dayExams);
-  }
-
-  // 2. Current month days
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const isFinished = finishedDates.has(dateStr);
-    const dayMeta = getDayMetadata(dateStr);
-    const dayExams = p1ExamsMap[dateStr] || [];
-    html += renderLeetCodeDayCell(d, dateStr, false, todayStr, selectedStr, isFinished, dayMeta, dayExams);
-  }
-
-  // 3. Trailing days from next month
-  const totalCells = firstDayOfWeek + daysInMonth;
-  const remainder = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-  for (let d = 1; d <= remainder; d++) {
-    const nextDate = new Date(year, month + 1, d);
-    const dateStr = getLocalDateString(nextDate);
-    const isFinished = finishedDates.has(dateStr);
-    const dayMeta = getDayMetadata(dateStr);
-    const dayExams = p1ExamsMap[dateStr] || [];
-    html += renderLeetCodeDayCell(d, dateStr, true, todayStr, selectedStr, isFinished, dayMeta, dayExams);
-  }
-
-  grid.innerHTML = html;
-}
-
-function renderP1SelectedDayTasks() {
-  const selDateStr = state.p1_calendar_selectedDate;
-  ensureDailyQuestsForDate(selDateStr, "phase1");
-
-  const heading = $("p1-cal-selected-date-heading");
-  const dayNumBadge = $("p1-quest-daynum-badge");
-  const dayTypeBadge = $("p1-quest-daytype-badge");
-  const progressText = $("p1-quest-progress-text");
-  const progressBarFill = $("p1-quest-progress-bar-fill");
-  const chapterBanner = $("p1-quest-chapter-banner");
-  const sub = $("p1-cal-selected-date-sub");
-  const list = $("p1-cal-selected-day-tasks");
-
-  const dateObj = new Date(selDateStr + "T00:00:00");
-  const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
-  const humanDate = dateObj.toLocaleDateString(undefined, options);
-
-  const dayMeta = getDayMetadata(selDateStr);
-  const dayType = dayMeta?.dayType || "normal-day";
-
-  let typeName = "📘 Normal Class";
-  if (dayType === "chapter-test") typeName = "📝 Chapter Test";
-  if (dayType === "mix-test") typeName = "🔥 Mix Test";
-  if (dayType === "buffer-day") typeName = "⏳ Buffer Day";
-
-  if (heading) heading.textContent = humanDate;
-  if (dayNumBadge) dayNumBadge.textContent = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} of 415` : "Custom Day";
-  if (dayTypeBadge) {
-    dayTypeBadge.className = `popover-type-badge ${dayType}`;
-    dayTypeBadge.textContent = typeName;
-  }
-
-  // Chapter Banner
-  if (chapterBanner) {
-    if (dayMeta && (dayMeta.p1_topic || dayMeta.ca)) {
-      chapterBanner.innerHTML = `
-        <span class="banner-icon">🎯</span>
-        <span class="banner-text">
-          <strong>Today's Focus:</strong> ${escapeHTML(dayMeta.p1_topic || "Objective Speed Drill")}
-          ${dayMeta.ca ? ` · <em>${escapeHTML(dayMeta.ca)}</em>` : ""}
-        </span>
-      `;
-      chapterBanner.style.display = "flex";
-    } else {
-      chapterBanner.style.display = "none";
-    }
-  }
-
-  const tasks = (state.calendar || []).filter(t => t.date === selDateStr && (t.phase === "Phase-1" || t.phase === "General"));
-  const p1ExamsMap = getPhase1ExamsByDate();
-  const dayExams = p1ExamsMap[selDateStr] || [];
-
-  const total = tasks.length;
-  const completed = tasks.filter(t => t.status === "completed").length;
-  const pct = total > 0 ? Math.round((completed / total) * 100) : (dayExams.length > 0 ? 100 : 0);
-
-  if (progressText) progressText.textContent = `${completed} / ${total} Completed (${pct}%)`;
-  if (progressBarFill) progressBarFill.style.width = `${pct}%`;
-  if (sub) sub.textContent = `${total} quest(s) scheduled · ${dayExams.length} exam(s) taken`;
-
-  if (!list) return;
-
-  // Exam Score Cards
-  let examCardsHTML = "";
-  if (dayExams.length > 0) {
-    examCardsHTML = dayExams.map(ex => {
-      const scoreVal = Number(ex.score || 0).toFixed(1);
-      const maxVal = Number(ex.maxScore || ex.totalQuestions || 50).toFixed(0);
-      const pctVal = ex.percentage || Math.round((Number(ex.score || 0) / Number(maxVal)) * 100);
-      return `
-        <div class="daily-quest-card exam-score-card" style="border-left: 3.5px solid #10b981; background: #f0fdf4; margin-bottom: 10px;">
-          <div style="font-size: 20px;">🏆</div>
-          <div class="quest-card-content">
-            <div class="quest-meta-row">
-              <span class="quest-type-pill" style="background:#10b981; color:#fff;">Phase-1 Exam Taken</span>
-              <span style="font-size:11.5px; font-weight:700; color:#047857;">${ex.accuracy}% Accuracy</span>
-            </div>
-            <div class="quest-title-text" style="color:#065f46; font-size:14.5px; font-weight:700;">
-              Score: ${scoreVal} / ${maxVal} Marks (${pctVal}%)
-            </div>
-            <div style="font-size:11.5px; color:#047857; margin-top:2px;">
-              🟩 ${ex.correctCount || 0} Correct · 🟥 ${ex.incorrectCount || 0} Incorrect · ⬜ ${ex.unattemptedCount || 0} Skipped · ⏱️ ${formatDuration(ex.durationSeconds || ex.timeSpent || 0)}
-            </div>
-          </div>
-          <div class="quest-actions-row">
-            <button type="button" class="btn-minimal-primary p1-review-exam-btn" data-id="${escapeHTML(ex.id)}" style="font-size:11px; padding:4px 10px;">📊 View History</button>
-          </div>
-        </div>
-      `;
-    }).join("");
-  }
-
-  if (tasks.length === 0 && dayExams.length === 0) {
-    list.innerHTML = `
-      <div style="text-align: center; padding: 32px 16px; color: var(--muted); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px;">
-        <span style="font-size: 22px; display: block; margin-bottom: 6px;">🎯</span>
-        <strong style="color: #334155; font-size: 13.5px; display: block;">No Quests for this day</strong>
-        <p style="font-size: 12px; margin: 4px 0 0 0;">Add custom quests above to track your daily progress!</p>
-      </div>
-    `;
-    return;
-  }
-
-  const questCardsHTML = tasks.map(t => {
-    const isDone = t.status === "completed";
-    let typeIcon = "📌";
-    let typePillClass = "tag-general";
-    if (t.type === "Objective Exam") { typeIcon = "🎯"; typePillClass = "tag-obj"; }
-    else if (t.type === "Current Affairs") { typeIcon = "📰"; typePillClass = "tag-ca"; }
-    else if (t.type === "Study / Reading") { typeIcon = "📖"; typePillClass = "tag-study"; }
-    else if (t.type === "Revision") { typeIcon = "🔄"; typePillClass = "tag-rev"; }
-
-    const practiceBtn = `<button type="button" class="btn-quest-action btn-quest-practice" data-action="practice-obj" data-phase="${t.phase}" data-topic="${escapeHTML(t.topic)}">▶ Practice</button>`;
-
-    return `
-      <div class="daily-quest-card ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
-        <label class="quest-checkbox-label">
-          <input type="checkbox" class="quest-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
-          <span class="quest-custom-checkbox"></span>
-        </label>
-        <div class="quest-card-content">
-          <div class="quest-meta-row">
-            <span class="quest-type-pill ${typePillClass}">${typeIcon} ${escapeHTML(t.type || "Quest")}</span>
-            ${t.subject ? `<span class="quest-subject-pill">${escapeHTML(t.subject)}</span>` : ""}
-            ${t.time ? `<span class="quest-time-pill">⏱️ ${escapeHTML(t.time)}</span>` : ""}
-          </div>
-          <div class="quest-title-text">${escapeHTML(t.topic)}</div>
-        </div>
-        <div class="quest-actions-row">
-          ${practiceBtn}
-          <button type="button" class="btn-quest-action btn-quest-delete" data-action="delete" data-id="${t.id}" title="Delete Quest">✕</button>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  list.innerHTML = examCardsHTML + questCardsHTML;
-}
-
-function buildP1PopoverHTML(dateStr, dayMeta, exams) {
-  const dateObj = new Date(dateStr + "T00:00:00");
-  const options = { weekday: "short", month: "short", day: "numeric", year: "numeric" };
-  const formattedDate = dateObj.toLocaleDateString(undefined, options);
-
-  const dayType = dayMeta?.dayType || "normal-day";
-  let badgeLabel = "📘 Normal Class";
-  if (dayType === "chapter-test") badgeLabel = "📝 Chapter Test";
-  if (dayType === "mix-test") badgeLabel = "🔥 Mix Test";
-  if (dayType === "buffer-day") badgeLabel = "⏳ Buffer Day";
-
-  const dayTitle = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} · ${formattedDate}` : formattedDate;
-  const p1Topic = dayMeta?.p1_topic || "";
-  const p1Sub = dayMeta?.p1_subject || "";
-  const caTopic = dayMeta?.ca || "";
-
-  let examSectionHTML = "";
-  if (exams && exams.length > 0) {
-    const latest = exams[0];
-    const scoreVal = Number(latest.score || 0).toFixed(1);
-    const maxVal = Number(latest.maxScore || latest.totalQuestions || 50).toFixed(0);
-    const pctVal = latest.percentage || Math.round((Number(latest.score || 0) / Number(maxVal)) * 100);
-    examSectionHTML = `
-      <div class="popover-sec marks-sec">
-        <div class="popover-sec-label" style="color:#065f46;">
-          <span>🏆</span>
-          <span>PHASE-1 EXAM SCORE</span>
-        </div>
-        <div class="popover-marks-row">
-          <span class="marks-val">${scoreVal} / ${maxVal} Marks</span>
-          <span style="font-size:12.5px; font-weight:700; color:#047857;">(${pctVal}%)</span>
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="popover-header">
-      <span class="popover-day-title">${escapeHTML(dayTitle)}</span>
-      <span class="popover-type-badge ${dayType}">${escapeHTML(badgeLabel)}</span>
-    </div>
-    ${examSectionHTML}
-    <div class="popover-sec p1">
-      <div class="popover-sec-label">
-        <span>🎯</span>
-        <span>OBJECTIVE FOCUS</span>
-        ${p1Sub ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p1Sub)}</span>` : ""}
-      </div>
-      <div class="popover-topic-text">${escapeHTML(p1Topic || "General Speed Drills")}</div>
-    </div>
-    ${caTopic ? `
-    <div class="popover-sec ca">
-      <div class="popover-sec-label">
-        <span>📰</span>
-        <span>CURRENT AFFAIRS</span>
-      </div>
-      <div class="popover-topic-text">${escapeHTML(caTopic)}</div>
-    </div>
-    ` : ""}
-    <div class="popover-hint">Click day to view or edit daily quests</div>
-  `;
-}
-
-function showP1CalendarHoverPopover(e, cell) {
-  const popover = $("p1-calendar-hover-popover");
-  if (!popover) return;
-  const dateStr = cell.dataset.date;
-  if (!dateStr) return;
-
-  const dayMeta = getDayMetadata(dateStr);
-  const p1ExamsMap = getPhase1ExamsByDate();
-  const dayExams = p1ExamsMap[dateStr] || [];
-
-  popover.innerHTML = buildP1PopoverHTML(dateStr, dayMeta, dayExams);
-  popover.style.display = "block";
-  popover.style.opacity = "1";
-  positionCalendarPopover(e.clientX, e.clientY, popover);
-}
-
-function hideP1CalendarHoverPopover() {
-  const popover = $("p1-calendar-hover-popover");
-  if (popover) popover.style.display = "none";
-}
-
-// ============================================================
-// PHASE 2 CALENDAR: DESCRIPTIVE WRITING & EXAM MARKS
-// ============================================================
-
-function renderP2Calendar() {
-  if (!state.calendar || state.calendar.length < 30) {
-    state.calendar = generateDefaultSchedule();
-    saveCalendarSchedule();
-  }
-
-  rebuildCalendarMetadata();
-  renderP2CalendarSummary();
-
-  const heading = $("p2-cal-month-year-display");
-  if (heading) {
-    const monthNames = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ];
-    const year = state.p2_calendar_currentDate.getFullYear();
-    const month = state.p2_calendar_currentDate.getMonth();
-    heading.textContent = `${monthNames[month]} ${year}`;
-  }
-
-  const planStartInput = $("p2-cal-upload-start-date");
-  if (planStartInput && state.calendar_planStartDate) {
-    planStartInput.value = state.calendar_planStartDate;
-  }
-
-  // Calculate streak & finished days
-  const streakData = getCalendarStreak("phase2");
-
-  // Update streak hero card
-  const daysCount = $("p2-streak-days-count");
-  if (daysCount) daysCount.textContent = streakData.currentStreak;
-  const maxCount = $("p2-streak-max-count");
-  if (maxCount) maxCount.textContent = streakData.maxStreak;
-  const totalActive = $("p2-streak-total-active");
-  if (totalActive) totalActive.textContent = streakData.totalActiveDays;
-
-  const statusPill = $("p2-streak-status-pill");
-  if (statusPill) {
-    if (streakData.currentStreak > 0) {
-      if (streakData.isTodayFinished) {
-        statusPill.textContent = "🔥 Streak Active";
-        statusPill.className = "streak-status-pill active";
-      } else {
-        statusPill.textContent = "⏳ Due Today";
-        statusPill.className = "streak-status-pill pending";
-      }
-    } else {
-      statusPill.textContent = "⚡ Start Streak";
-      statusPill.className = "streak-status-pill";
-    }
-  }
-
-  // Render minimal LeetCode calendar grid
-  renderP2MonthGrid(streakData);
-
-  // Render monthly stats
-  renderLeetCodeMonthlyStats("phase2", streakData);
-
-  // Render selected day's quests
-  renderP2SelectedDayTasks();
-}
-
-function renderP2CalendarSummary() {
-  const container = $("p2-calendar-progress-bar");
-  if (!container) return;
-
-  const tasks = (state.calendar || []).filter(t => t.phase === "Phase-2");
-  const total = tasks.length;
-  const completed = tasks.filter(t => t.status === "completed").length;
-  const pending = total - completed;
-  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  const p2History = loadJSON("rbi_history", []);
-  const testsCount = p2History.length;
-  const scoredCount = p2History.filter(t => t.totalScore !== undefined && t.totalScore !== null && !isNaN(t.totalScore) && Number(t.totalScore) > 0).length;
-
-  container.innerHTML = `
-    <div class="summary-stat-card">
-      <div class="val">${total}</div>
-      <div class="lbl">Scheduled Tasks</div>
-    </div>
-    <div class="summary-stat-card">
-      <div class="val" style="color:#10b981;">${completed} <span style="font-size:12px; font-weight:700; color:#059669;">(${pct}%)</span></div>
-      <div class="lbl">Tasks Completed</div>
-    </div>
-    <div class="summary-stat-card">
-      <div class="val" style="color:#d97706;">${pending}</div>
-      <div class="lbl">Tasks Pending</div>
-    </div>
-    <div class="summary-stat-card">
-      <div class="val" style="color:#7e22ce;">${testsCount} <span style="font-size:12px; font-weight:700; color:#9333ea;">(${scoredCount} Scored)</span></div>
-      <div class="lbl">Descriptive Tests</div>
-    </div>
-  `;
-}
-
-function renderP2MonthGrid(streakData) {
-  const grid = $("p2-calendar-days-grid");
-  if (!grid) return;
-
-  const cur = state.p2_calendar_currentDate;
-  const year = cur.getFullYear();
-  const month = cur.getMonth();
-
-  const firstDayOfWeek = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
-
-  const todayStr = getLocalDateString(new Date());
-  const selectedStr = state.p2_calendar_selectedDate;
-
-  const p2ExamsMap = getPhase2ExamsByDate();
-  const finishedDates = streakData ? streakData.finishedDates : new Set();
-
-  let html = "";
-
-  // 1. Preceding days from previous month
-  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    const dayNum = daysInPrevMonth - i;
-    const prevDate = new Date(year, month - 1, dayNum);
-    const dateStr = getLocalDateString(prevDate);
-    const isFinished = finishedDates.has(dateStr);
-    const dayMeta = getDayMetadata(dateStr);
-    const dayExams = p2ExamsMap[dateStr] || [];
-    html += renderLeetCodeDayCell(dayNum, dateStr, true, todayStr, selectedStr, isFinished, dayMeta, dayExams);
-  }
-
-  // 2. Current month days
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const isFinished = finishedDates.has(dateStr);
-    const dayMeta = getDayMetadata(dateStr);
-    const dayExams = p2ExamsMap[dateStr] || [];
-    html += renderLeetCodeDayCell(d, dateStr, false, todayStr, selectedStr, isFinished, dayMeta, dayExams);
-  }
-
-  // 3. Trailing days from next month
-  const totalCells = firstDayOfWeek + daysInMonth;
-  const remainder = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-  for (let d = 1; d <= remainder; d++) {
-    const nextDate = new Date(year, month + 1, d);
-    const dateStr = getLocalDateString(nextDate);
-    const isFinished = finishedDates.has(dateStr);
-    const dayMeta = getDayMetadata(dateStr);
-    const dayExams = p2ExamsMap[dateStr] || [];
-    html += renderLeetCodeDayCell(d, dateStr, true, todayStr, selectedStr, isFinished, dayMeta, dayExams);
-  }
-
-  grid.innerHTML = html;
-}
-
-function renderP2SelectedDayTasks() {
-  const selDateStr = state.p2_calendar_selectedDate;
-  ensureDailyQuestsForDate(selDateStr, "phase2");
-
-  const heading = $("p2-cal-selected-date-heading");
-  const dayNumBadge = $("p2-quest-daynum-badge");
-  const dayTypeBadge = $("p2-quest-daytype-badge");
-  const progressText = $("p2-quest-progress-text");
-  const progressBarFill = $("p2-quest-progress-bar-fill");
-  const chapterBanner = $("p2-quest-chapter-banner");
-  const sub = $("p2-cal-selected-date-sub");
-  const list = $("p2-cal-selected-day-tasks");
-
-  const dateObj = new Date(selDateStr + "T00:00:00");
-  const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
-  const humanDate = dateObj.toLocaleDateString(undefined, options);
-
-  const dayMeta = getDayMetadata(selDateStr);
-  const dayType = dayMeta?.dayType || "normal-day";
-
-  let typeName = "📘 Normal Class";
-  if (dayType === "chapter-test") typeName = "📝 Chapter Test";
-  if (dayType === "mix-test") typeName = "🔥 Mix Test";
-  if (dayType === "buffer-day") typeName = "⏳ Buffer Day";
-
-  if (heading) heading.textContent = humanDate;
-  if (dayNumBadge) dayNumBadge.textContent = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} of 415` : "Custom Day";
-  if (dayTypeBadge) {
-    dayTypeBadge.className = `popover-type-badge ${dayType}`;
-    dayTypeBadge.textContent = typeName;
-  }
-
-  // Chapter Banner
-  if (chapterBanner) {
-    if (dayMeta && (dayMeta.p2_topic || dayMeta.p2_subject)) {
-      chapterBanner.innerHTML = `
-        <span class="banner-icon">📖</span>
-        <span class="banner-text">
-          <strong>Today's Focus:</strong> ${escapeHTML(dayMeta.p2_topic || "Phase-2 Focus")}
-          ${dayMeta.p2_subject ? ` · <em>${escapeHTML(dayMeta.p2_subject)}</em>` : ""}
-        </span>
-      `;
-      chapterBanner.style.display = "flex";
-    } else {
-      chapterBanner.style.display = "none";
-    }
-  }
-
-  const tasks = (state.calendar || []).filter(t => t.date === selDateStr && t.phase === "Phase-2");
-  const p2ExamsMap = getPhase2ExamsByDate();
-  const dayExams = p2ExamsMap[selDateStr] || [];
-
-  const total = tasks.length;
-  const completed = tasks.filter(t => t.status === "completed").length;
-  const pct = total > 0 ? Math.round((completed / total) * 100) : (dayExams.length > 0 ? 100 : 0);
-
-  if (progressText) progressText.textContent = `${completed} / ${total} Completed (${pct}%)`;
-  if (progressBarFill) progressBarFill.style.width = `${pct}%`;
-  if (sub) sub.textContent = `${total} quest(s) scheduled · ${dayExams.length} written test(s)`;
-
-  if (!list) return;
-
-  // Exam Score Cards
-  let examCardsHTML = "";
-  if (dayExams.length > 0) {
-    examCardsHTML = dayExams.map(test => {
-      const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
-      const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
-      const scoreLabel = hasScore ? `Score: ${Number(test.totalScore).toFixed(1)} / ${Number(test.maxMarks || 25).toFixed(0)} Marks` : "Score Pending Evaluation";
-
-      return `
-        <div class="daily-quest-card exam-score-card" style="border-left: 3.5px solid #9333ea; background: #faf5ff; margin-bottom: 10px;">
-          <div style="font-size: 20px;">🏆</div>
-          <div class="quest-card-content">
-            <div class="quest-meta-row">
-              <span class="quest-type-pill" style="background:#9333ea; color:#fff;">Phase-2 Submission</span>
-              <span style="font-size:11.5px; font-weight:700; color:#7e22ce;">${totalWords} Words Written</span>
-            </div>
-            <div class="quest-title-text" style="color:#581c87; font-size:14.5px; font-weight:700;">
-              ${escapeHTML(scoreLabel)}
-            </div>
-            <div style="font-size:11.5px; color:#6b21a8; margin-top:2px;">
-              ${(test.questions || []).length} Question(s) · Time used: ${formatDuration(test.usedSeconds || 0)} of ${test.totalMinutes || 30} min${test.autoSubmitted ? ' (auto-submitted)' : ''}
-            </div>
-          </div>
-          <div class="quest-actions-row">
-            <button type="button" class="btn-minimal-primary p2-review-exam-btn" data-test-id="${escapeHTML(test.id)}" style="font-size:11px; padding:4px 10px;">📖 Review Answers</button>
-          </div>
-        </div>
-      `;
-    }).join("");
-  }
-
-  if (tasks.length === 0 && dayExams.length === 0) {
-    list.innerHTML = `
-      <div style="text-align: center; padding: 32px 16px; color: var(--muted); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px;">
-        <span style="font-size: 22px; display: block; margin-bottom: 6px;">✍️</span>
-        <strong style="color: #334155; font-size: 13.5px; display: block;">No Quests for this day</strong>
-        <p style="font-size: 12px; margin: 4px 0 0 0;">Add custom quests above to track your daily progress!</p>
-      </div>
-    `;
-    return;
-  }
-
-  const questCardsHTML = tasks.map(t => {
-    const isDone = t.status === "completed";
-    let typeIcon = "📌";
-    let typePillClass = "tag-general";
-    let practiceBtn = "";
-
-    if (t.type === "Objective Exam") {
-      typeIcon = "🎯";
-      typePillClass = "tag-obj";
-      practiceBtn = `<button type="button" class="btn-quest-action btn-quest-practice" data-action="practice-obj" data-phase="Phase-2" data-topic="${escapeHTML(t.topic)}">▶ Quiz</button>`;
-    } else if (t.type === "Subjective Exam" || t.type === "Descriptive Writing") {
-      typeIcon = "✍️";
-      typePillClass = "tag-sub";
-      practiceBtn = `<button type="button" class="btn-quest-action btn-quest-practice" data-action="practice-p2-sub" data-topic="${escapeHTML(t.topic)}" data-subject="${escapeHTML(t.subject || '')}">▶ Write Answer</button>`;
-    } else if (t.type === "Study / Reading") {
-      typeIcon = "📖";
-      typePillClass = "tag-study";
-    } else if (t.type === "Revision") {
-      typeIcon = "🔄";
-      typePillClass = "tag-rev";
-    }
-
-    return `
-      <div class="daily-quest-card ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
-        <label class="quest-checkbox-label">
-          <input type="checkbox" class="quest-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
-          <span class="quest-custom-checkbox"></span>
-        </label>
-        <div class="quest-card-content">
-          <div class="quest-meta-row">
-            <span class="quest-type-pill ${typePillClass}">${typeIcon} ${escapeHTML(t.type || "Quest")}</span>
-            ${t.subject ? `<span class="quest-subject-pill">${escapeHTML(t.subject)}</span>` : ""}
-            ${t.time ? `<span class="quest-time-pill">⏱️ ${escapeHTML(t.time)}</span>` : ""}
-          </div>
-          <div class="quest-title-text">${escapeHTML(t.topic)}</div>
-        </div>
-        <div class="quest-actions-row">
-          ${practiceBtn}
-          <button type="button" class="btn-quest-action btn-quest-delete" data-action="delete" data-id="${t.id}" title="Delete Quest">✕</button>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  list.innerHTML = examCardsHTML + questCardsHTML;
-}
-
-function buildP2PopoverHTML(dateStr, dayMeta, exams) {
-  const dateObj = new Date(dateStr + "T00:00:00");
-  const options = { weekday: "short", month: "short", day: "numeric", year: "numeric" };
-  const formattedDate = dateObj.toLocaleDateString(undefined, options);
-
-  const dayType = dayMeta?.dayType || "normal-day";
-  let badgeLabel = "📘 Normal Class";
-  if (dayType === "chapter-test") badgeLabel = "📝 Chapter Test";
-  if (dayType === "mix-test") badgeLabel = "🔥 Mix Test";
-  if (dayType === "buffer-day") badgeLabel = "⏳ Buffer Day";
-
-  const dayTitle = dayMeta?.dayNum ? `Day ${dayMeta.dayNum} · ${formattedDate}` : formattedDate;
-  const p2Topic = dayMeta?.p2_topic || "";
-  const p2Sub = dayMeta?.p2_subject || "";
-
-  let examSectionHTML = "";
-  if (exams && exams.length > 0) {
-    const test = exams[0];
-    const hasScore = test.totalScore !== undefined && test.totalScore !== null && !isNaN(test.totalScore) && Number(test.totalScore) > 0;
-    const totalWords = Object.values(test.answers || {}).reduce((acc, a) => acc + (a.wordCount || 0), 0);
-    const scoreVal = hasScore ? `${Number(test.totalScore).toFixed(1)} / ${Number(test.maxMarks || 25).toFixed(0)} Marks` : "Written (Score Pending)";
-
-    examSectionHTML = `
-      <div class="popover-sec marks-sec p2">
-        <div class="popover-sec-label" style="color:#6b21a8;">
-          <span>🏆</span>
-          <span>PHASE-2 WRITING LOG</span>
-        </div>
-        <div class="popover-marks-row">
-          <span class="marks-val">${scoreVal}</span>
-          <span style="font-size:12px; color:#6b21a8;">· ${totalWords} words</span>
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="popover-header">
-      <span class="popover-day-title">${escapeHTML(dayTitle)}</span>
-      <span class="popover-type-badge ${dayType}">${escapeHTML(badgeLabel)}</span>
-    </div>
-    ${examSectionHTML}
-    <div class="popover-sec p2">
-      <div class="popover-sec-label">
-        <span>📖</span>
-        <span>DESCRIPTIVE FOCUS</span>
-        ${p2Sub ? `<span style="font-weight:normal; opacity:0.85;">· ${escapeHTML(p2Sub)}</span>` : ""}
-      </div>
-      <div class="popover-topic-text">${escapeHTML(p2Topic || "Phase-2 Descriptive Writing")}</div>
-    </div>
-    <div class="popover-hint">Click day to view or edit daily quests</div>
-  `;
-}
-
-function showP2CalendarHoverPopover(e, cell) {
-  const popover = $("p2-calendar-hover-popover");
-  if (!popover) return;
-  const dateStr = cell.dataset.date;
-  if (!dateStr) return;
-
-  const dayMeta = getDayMetadata(dateStr);
-  const p2ExamsMap = getPhase2ExamsByDate();
-  const dayExams = p2ExamsMap[dateStr] || [];
-
-  popover.innerHTML = buildP2PopoverHTML(dateStr, dayMeta, dayExams);
-  popover.style.display = "block";
-  popover.style.opacity = "1";
-  positionCalendarPopover(e.clientX, e.clientY, popover);
-}
-
-function hideP2CalendarHoverPopover() {
-  const popover = $("p2-calendar-hover-popover");
-  if (popover) popover.style.display = "none";
-}
-
-
-// Dynamically position hover popover keeping it inside viewport
-function positionCalendarPopover(mouseX, mouseY, popover) {
-  const pad = 14;
-  const popRect = popover.getBoundingClientRect();
-  const popW = popRect.width || 350;
-  const popH = popRect.height || 220;
-
-  let left = mouseX + pad;
-  let top = mouseY + pad;
-
-  if (left + popW > window.innerWidth - 12) {
-    left = mouseX - popW - pad;
-  }
-  if (left < 10) left = 10;
-
-  if (top + popH > window.innerHeight - 12) {
-    top = mouseY - popH - pad;
-  }
-  if (top < 10) top = 10;
-
-  popover.style.left = `${left}px`;
-  popover.style.top = `${top}px`;
-}
-
-// ============================================================
-// CALENDAR ACTIONS: UPLOAD, APPLY CONFIG, EXPORT, TEMPLATE
-// ============================================================
-
-// Dynamic Excel / CSV Import with start date and days finished config
-async function handleCalendarExcelImport(event, phaseType = null) {
-  const pType = phaseType || (state.phase === "phase1" ? "phase1" : "phase2");
-  const prefix = pType === "phase1" ? "p1" : "p2";
-  const statusElem = $(`${prefix}-calendar-import-status`);
-  const file = event.target && event.target.files && event.target.files[0];
-  if (!file) return;
-
-  if (statusElem) {
-    statusElem.textContent = `Reading ${file.name}...`;
-    statusElem.style.color = "var(--primary)";
-  }
-
-  try {
-    let rows = [];
-    const isXLSX = /\.xlsx$/i.test(file.name) || /\.xls$/i.test(file.name);
-
-    if (isXLSX) {
-      const buffer = await file.arrayBuffer();
-      try {
-        rows = await parseXLSX(buffer);
-      } catch (xlsxErr) {
-        const text = await file.text();
-        rows = parseCSV(text);
-      }
-    } else {
-      const text = await file.text();
-      rows = parseCSV(text);
-    }
-
-    if (!rows || rows.length < 2) {
-      throw new Error("Spreadsheet contains no data rows or could not be parsed.");
-    }
-
-    const startDateInput = $(`${prefix}-cal-upload-start-date`);
-    const daysFinishedInput = $(`${prefix}-cal-upload-days-finished`);
-    const startStr = (startDateInput && startDateInput.value) || state.calendar_planStartDate || "2026-11-01";
-    const daysFinished = (daysFinishedInput && parseInt(daysFinishedInput.value, 10)) || 0;
-
-    const importedTasks = mapScheduleRowsToTasks(rows, startStr, daysFinished);
-    if (importedTasks.length === 0) {
-      throw new Error("No tasks could be mapped. Please ensure columns include Day/Date, Topic, and Subject.");
-    }
-
-    // Merge or replace
-    const existing = state.calendar || [];
-    let merged = [];
-    if (existing.length > 0 && confirm(`Imported ${importedTasks.length} task(s) from "${file.name}". Do you want to REPLACE your existing schedule? (Click Cancel to MERGE with current schedule)`)) {
-      merged = importedTasks;
-    } else {
-      merged = existing.concat(importedTasks);
-    }
-
-    state.calendar = merged;
-    saveCalendarSchedule();
-
-    if (statusElem) {
-      statusElem.textContent = `✓ Successfully imported ${importedTasks.length} task(s) starting ${startStr} (first ${daysFinished} days marked completed)!`;
-      setTimeout(() => { statusElem.textContent = ""; }, 5000);
-    }
-
-    event.target.value = "";
-
-    if (pType === "phase1") {
-      renderP1Calendar();
-    } else {
-      renderP2Calendar();
-    }
-  } catch (err) {
-    console.error("Calendar import error:", err);
-    if (statusElem) {
-      statusElem.textContent = `Import error: ${err.message}`;
-      statusElem.style.color = "var(--danger)";
-    }
-  }
-}
-
-// Apply Starting Date and Finished Days configuration to schedule
-function applyCalendarConfig(phaseType = null) {
-  const pType = phaseType || (state.phase === "phase1" ? "phase1" : "phase2");
-  const prefix = pType === "phase1" ? "p1" : "p2";
-
-  const startDateInput = $(`${prefix}-cal-upload-start-date`);
-  const daysFinishedInput = $(`${prefix}-cal-upload-days-finished`);
-  const startStr = (startDateInput && startDateInput.value) || state.calendar_planStartDate || "2026-11-01";
-  const daysFinished = (daysFinishedInput && parseInt(daysFinishedInput.value, 10)) || 0;
-
-  state.calendar_planStartDate = startStr;
-  saveJSON("rbi_calendar_start_date", startStr);
-  if (pType === "phase1") {
-    state.p1_calendar_daysFinished = daysFinished;
-    saveJSON("rbi_p1_days_finished", daysFinished);
-  } else {
-    state.p2_calendar_daysFinished = daysFinished;
-    saveJSON("rbi_p2_days_finished", daysFinished);
-  }
-
-  // Reschedule official or existing schedule from new starting date
-  state.calendar = generateDefaultSchedule(startStr, daysFinished);
-  saveCalendarSchedule();
-
-  const statusElem = $(`${prefix}-calendar-import-status`);
-  if (statusElem) {
-    statusElem.textContent = `✓ Plan rescheduled starting from ${startStr} (Days 1-${daysFinished} marked completed)!`;
-    statusElem.style.color = "#059669";
-    setTimeout(() => { statusElem.textContent = ""; }, 5000);
-  }
-
-  // Sync inputs on both screens
-  const p1Start = $("p1-cal-upload-start-date");
-  const p2Start = $("p2-cal-upload-start-date");
-  if (p1Start) p1Start.value = startStr;
-  if (p2Start) p2Start.value = startStr;
-
-  if (pType === "phase1") {
-    renderP1Calendar();
-  } else {
-    renderP2Calendar();
-  }
-}
-
-// Load official 415-Day Schedule
-function loadOfficialSchedule(phaseType = null) {
-  const pType = phaseType || (state.phase === "phase1" ? "phase1" : "phase2");
-  const prefix = pType === "phase1" ? "p1" : "p2";
-
-  if (state.calendar && state.calendar.length > 0) {
-    if (!confirm("Load the official 415-Day RBI Grade B Preparation Schedule? This will update your calendar schedule.")) return;
-  }
-
-  const startDateInput = $(`${prefix}-cal-upload-start-date`);
-  const daysFinishedInput = $(`${prefix}-cal-upload-days-finished`);
-  const startStr = (startDateInput && startDateInput.value) || state.calendar_planStartDate || "2026-11-01";
-  const daysFinished = (daysFinishedInput && parseInt(daysFinishedInput.value, 10)) || 0;
-
-  state.calendar_planStartDate = startStr;
-  saveJSON("rbi_calendar_start_date", startStr);
-  state.calendar = generateDefaultSchedule(startStr, daysFinished);
-  saveCalendarSchedule();
-
-  if (pType === "phase1") {
-    renderP1Calendar();
-  } else {
-    renderP2Calendar();
-  }
-
-  const statusElem = $(`${prefix}-calendar-import-status`);
-  if (statusElem) {
-    statusElem.textContent = `✓ Loaded Official 415-Day RBI Schedule starting ${startStr} (88 Chapter Tests, 30 Mix Tests, 23 Buffer Days)!`;
-    setTimeout(() => { statusElem.textContent = ""; }, 5000);
-  }
-}
-
-// Download ready-to-use spreadsheet CSV template
-function downloadScheduleTemplate() {
-  const csvContent =
-`Day,Subject (Phase-2),Topic (Phase-2),Status,Subject (Phase-1),Topic (Phase-1),Status,Current Affairs,Status
-1,Economics,National Income - Class 1,completed,English Objective,Basics of Grammar - Class 1,completed,,
-2,Economics,National Income - Class 2,completed,English Objective,Basics of Grammar - Class 2,completed,,
-3,Economics,National Income - Class 3,pending,English Objective,Basics of Grammar - Class 3,pending,Spotlight Nov 1-6 Current Affairs (50 MCQs),pending
-4,Economics,National Income - Class 4,pending,English Objective,Subject Verb Agreement - Class 1,pending,,
-5,Economics,National Income Chapter Test 1,pending,English Objective,Subject Verb Agreement - Class 2,pending,,
-6,Economics,National Income Chapter Test 2,pending,Reasoning Ability,Puzzles & Circular Seating,pending,Spotlight Nov 7-12 Current Affairs,pending
-7,Buffer Day,Buffer Day (Economics & English Revision),pending,Buffer Day,Buffer Day (GA Drills & Vocabulary),pending,,
-8,Finance,Financial System in India - Structure & RBI Functions,pending,Quantitative Aptitude,Percentage & Ratio Proportion,pending,,
-9,Finance,Financial System in India - Banking Structure,pending,Quantitative Aptitude,Data Interpretation Basics,pending,,
-10,Phase-2 Mix,Economics & Finance Mix Test 1,pending,Phase-1 Mix,Reasoning & Quant Mix Speed Test 1,pending,Spotlight Nov 13-18 Current Affairs,pending`;
-
-  downloadText("RBI_Grade_B_Schedule_Template.csv", csvContent);
-}
-
-// Export current schedule as CSV
-function exportScheduleCSV() {
-  const tasks = state.calendar || [];
-  if (tasks.length === 0) {
-    alert("No tasks currently scheduled to export.");
-    return;
-  }
-
-  let csv = "Date,DayNum,Phase,Subject,Topic,Type,Time,Status\n";
-  for (const t of tasks) {
-    const escapeCsv = (str) => `"${String(str || "").replace(/"/g, '""')}"`;
-    csv += `${escapeCsv(t.date)},${t.dayNum || ""},${escapeCsv(t.phase)},${escapeCsv(t.subject)},${escapeCsv(t.topic)},${escapeCsv(t.type)},${escapeCsv(t.time)},${escapeCsv(t.status)}\n`;
-  }
-
-  downloadText(`RBI_Study_Schedule_${getLocalDateString(new Date())}.csv`, csv);
-}
-
-// Clear all scheduled tasks
-function clearSchedule(phaseType = null) {
-  if (!confirm("Are you sure you want to clear your study schedule?")) return;
-  state.calendar = [];
-  saveCalendarSchedule();
-
-  if (phaseType === "phase1" || state.phase === "phase1") {
-    renderP1Calendar();
-  } else {
-    renderP2Calendar();
-  }
-}
-
-// Toggle completion state of a task
-function toggleTaskComplete(id, phaseType = null) {
-  const tasks = state.calendar || [];
-  const task = tasks.find(t => t.id === id);
-  if (!task) return;
-  task.status = task.status === "completed" ? "pending" : "completed";
-  saveCalendarSchedule();
-
-  if (phaseType === "phase1" || state.phase === "phase1") {
-    renderP1Calendar();
-  } else {
-    renderP2Calendar();
-  }
-}
-
-// Delete a single task
-function deleteTask(id, phaseType = null) {
-  if (!confirm("Delete this scheduled task?")) return;
-  state.calendar = (state.calendar || []).filter(t => t.id !== id);
-  saveCalendarSchedule();
-
-  if (phaseType === "phase1" || state.phase === "phase1") {
-    renderP1Calendar();
-  } else {
-    renderP2Calendar();
-  }
-}
-
-// Open modal to add or edit task
-function openTaskModal(taskToEdit = null, phaseType = null) {
-  const modal = $("modal-task");
-  if (!modal) return;
-
-  const dateInput = $("task-input-date");
-  const phaseInput = $("task-input-phase");
-  const typeInput = $("task-input-type");
-  const subjectInput = $("task-input-subject");
-  const timeInput = $("task-input-time");
-  const topicInput = $("task-input-topic");
-  const editIdInput = $("task-input-edit-id");
-  const title = $("modal-task-title");
-
-  const defaultPhase = phaseType || (state.phase === "phase1" ? "Phase-1" : "Phase-2");
-
-  if (taskToEdit) {
-    title.textContent = "Edit Scheduled Task";
-    dateInput.value = taskToEdit.date || (defaultPhase === "Phase-1" ? state.p1_calendar_selectedDate : state.p2_calendar_selectedDate);
-    phaseInput.value = taskToEdit.phase || defaultPhase;
-    typeInput.value = taskToEdit.type || (defaultPhase === "Phase-1" ? "MCQ Practice" : "Descriptive Writing");
-    subjectInput.value = taskToEdit.subject || "";
-    timeInput.value = taskToEdit.time || "";
-    topicInput.value = taskToEdit.topic || "";
-    editIdInput.value = taskToEdit.id;
-  } else {
-    title.textContent = "Add Scheduled Task";
-    dateInput.value = (defaultPhase === "Phase-1" ? state.p1_calendar_selectedDate : state.p2_calendar_selectedDate) || getLocalDateString(new Date());
-    phaseInput.value = defaultPhase;
-    typeInput.value = defaultPhase === "Phase-1" ? "MCQ Practice" : "Descriptive Writing";
-    subjectInput.value = defaultPhase === "Phase-1" ? "General Awareness" : "ESI";
-    timeInput.value = defaultPhase === "Phase-1" ? "02:00 PM" : "10:00 AM";
-    topicInput.value = "";
-    editIdInput.value = "";
-  }
-
-  modal.style.display = "flex";
-}
-
-// Close task modal
-function closeTaskModal() {
-  const modal = $("modal-task");
-  if (modal) modal.style.display = "none";
-}
-
-// Save task from modal form
-function handleTaskFormSubmit(e) {
-  e.preventDefault();
-  const date = $("task-input-date").value;
-  const phase = $("task-input-phase").value;
-  const type = $("task-input-type").value;
-  const subject = sanitizeDashes($("task-input-subject").value.trim());
-  const time = $("task-input-time").value.trim();
-  const topic = sanitizeDashes($("task-input-topic").value.trim());
-  const editId = $("task-input-edit-id").value;
-
-  if (!date || !topic || !subject) {
-    alert("Please fill in Date, Subject, and Topic.");
-    return;
-  }
-
-  const tasks = state.calendar || [];
-  if (editId) {
-    const idx = tasks.findIndex(t => t.id === editId);
-    if (idx !== -1) {
-      tasks[idx].date = date;
-      tasks[idx].phase = phase;
-      tasks[idx].type = type;
-      tasks[idx].subject = subject;
-      tasks[idx].time = time;
-      tasks[idx].topic = topic;
-    }
-  } else {
-    tasks.push({
-      id: makeId("task"),
-      date: date,
-      phase: phase,
-      type: type,
-      subject: subject,
-      time: time,
-      topic: topic,
-      status: "pending"
-    });
-    if (phase === "Phase-1") {
-      state.p1_calendar_selectedDate = date;
-    } else {
-      state.p2_calendar_selectedDate = date;
-    }
-  }
-
-  state.calendar = tasks;
-  saveCalendarSchedule();
-  closeTaskModal();
-
-  if (phase === "Phase-1" || state.phase === "phase1") {
-    renderP1Calendar();
-  } else {
-    renderP2Calendar();
-  }
-}
-
 // Wire all global DOM event listeners and initialize screen state
 document.addEventListener("DOMContentLoaded", () => {
   // Navigation
@@ -6135,6 +4265,33 @@ document.addEventListener("DOMContentLoaded", () => {
   if (qForm) {
     qForm.addEventListener("submit", handleQuestionFormSubmit);
   }
+
+  const btnCancelEdit = $("btn-cancel-edit");
+  if (btnCancelEdit) {
+    btnCancelEdit.addEventListener("click", () => {
+      const wasBank = $("q-edit-id").dataset.origin === "bank";
+      resetQuestionForm();
+      if (wasBank) {
+        renderBank();
+        showScreen("bank");
+      }
+    });
+  }
+
+  // Phase-1 test settings are saved as soon as they change
+  [["setup-p1-minutes", "totalMinutes", 1], ["setup-p1-positive", "positiveMarks", 0], ["setup-p1-negative", "negativeMarks", 0]].forEach(([id, key, min]) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("change", () => {
+      const v = readNumberInput(id, null, min);
+      if (v === null) {
+        renderP1SetupList();
+        return;
+      }
+      state.p1_setup[key] = v;
+      saveP1Setup();
+    });
+  });
 
   const qMarks = $("q-marks");
   if (qMarks) {
@@ -6743,6 +4900,15 @@ document.addEventListener("DOMContentLoaded", () => {
         selectP1Option(item.dataset.label);
       }
     });
+    p1OptionsList.addEventListener("keydown", (e) => {
+      const item = e.target.closest(".mcq-option-item");
+      if (item && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        selectP1Option(item.dataset.label);
+        const again = p1OptionsList.querySelector(`.mcq-option-item[data-label="${CSS.escape(item.dataset.label)}"]`);
+        if (again) again.focus();
+      }
+    });
   }
 
   const p1BtnClear = $("p1-btn-clear");
@@ -6792,9 +4958,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Phase-1 Result Screen Events
-  document.querySelectorAll(".p1-filter-btn").forEach(btn => {
+  document.querySelectorAll("#screen-result-p1 .rf-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".p1-filter-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll("#screen-result-p1 .rf-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       state.p1_resultFilter = btn.dataset.filter || "all";
       renderP1ResultReviewList();
@@ -6951,353 +5117,10 @@ document.addEventListener("DOMContentLoaded", () => {
     btnClearP1History.addEventListener("click", clearP1History);
   }
 
-  // ==========================================
-// ==========================================
-  // PHASE-1 CALENDAR EVENTS
-  // ==========================================
-  const p1CalExcelImport = $("p1-calendar-excel-import");
-  if (p1CalExcelImport) {
-    p1CalExcelImport.addEventListener("change", (e) => handleCalendarExcelImport(e, "phase1"));
-  }
+  // Calendar & TODO screens (see calendar.js)
+  initCalendar();
 
-  const btnP1LoadOfficial = $("btn-p1-load-official-schedule");
-  if (btnP1LoadOfficial) {
-    btnP1LoadOfficial.addEventListener("click", () => loadOfficialSchedule("phase1"));
-  }
-
-  const btnP1ApplyConfig = $("btn-p1-apply-config");
-  if (btnP1ApplyConfig) {
-    btnP1ApplyConfig.addEventListener("click", () => applyCalendarConfig("phase1"));
-  }
-
-  const btnP1DownloadTemplate = $("btn-p1-download-template");
-  if (btnP1DownloadTemplate) {
-    btnP1DownloadTemplate.addEventListener("click", downloadScheduleTemplate);
-  }
-
-  const btnP1ExportCSV = $("btn-p1-export-csv");
-  if (btnP1ExportCSV) {
-    btnP1ExportCSV.addEventListener("click", exportScheduleCSV);
-  }
-
-  const btnP1ClearSchedule = $("btn-p1-clear-schedule");
-  if (btnP1ClearSchedule) {
-    btnP1ClearSchedule.addEventListener("click", () => clearSchedule("phase1"));
-  }
-
-  const p1CalBtnPrevMonth = $("p1-cal-btn-prev-month");
-  if (p1CalBtnPrevMonth) {
-    p1CalBtnPrevMonth.addEventListener("click", () => {
-      const cur = state.p1_calendar_currentDate;
-      state.p1_calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() - 1, 1);
-      renderP1Calendar();
-    });
-  }
-
-  const p1CalBtnNextMonth = $("p1-cal-btn-next-month");
-  if (p1CalBtnNextMonth) {
-    p1CalBtnNextMonth.addEventListener("click", () => {
-      const cur = state.p1_calendar_currentDate;
-      state.p1_calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      renderP1Calendar();
-    });
-  }
-
-  const p1CalBtnToday = $("p1-cal-btn-today");
-  if (p1CalBtnToday) {
-    p1CalBtnToday.addEventListener("click", () => {
-      state.p1_calendar_currentDate = new Date();
-      state.p1_calendar_selectedDate = getLocalDateString(new Date());
-      renderP1Calendar();
-    });
-  }
-
-  // Phase-1 Quick Add Quest Form
-  const p1FormQuickAdd = $("p1-form-quick-add-quest");
-  if (p1FormQuickAdd) {
-    p1FormQuickAdd.addEventListener("submit", (e) => {
-      e.preventDefault();
-      addQuickQuest("phase1");
-    });
-  }
-
-  // Phase-1 LeetCode Days Grid
-  const p1DaysGrid = $("p1-calendar-days-grid");
-  if (p1DaysGrid) {
-    p1DaysGrid.addEventListener("mousemove", (e) => {
-      const cell = e.target.closest(".lc-day-cell");
-      if (cell) {
-        showP1CalendarHoverPopover(e, cell);
-      } else {
-        hideP1CalendarHoverPopover();
-      }
-    });
-
-    p1DaysGrid.addEventListener("mouseleave", () => {
-      hideP1CalendarHoverPopover();
-    });
-
-    p1DaysGrid.addEventListener("click", (e) => {
-      hideP1CalendarHoverPopover();
-      const cell = e.target.closest(".lc-day-cell");
-      if (cell && cell.dataset.date) {
-        state.p1_calendar_selectedDate = cell.dataset.date;
-        renderP1Calendar();
-      }
-    });
-  }
-
-  // Phase-1 Daily Quests List
-  const p1DayTasksList = $("p1-cal-selected-day-tasks");
-  if (p1DayTasksList) {
-    p1DayTasksList.addEventListener("change", (e) => {
-      if (e.target && (e.target.classList.contains("quest-status-check") || e.target.classList.contains("task-status-check"))) {
-        const id = e.target.dataset.id;
-        toggleTaskComplete(id, "phase1");
-      }
-    });
-
-    p1DayTasksList.addEventListener("click", (e) => {
-      const reviewExamBtn = e.target.closest(".p1-review-exam-btn");
-      if (reviewExamBtn) {
-        reviewP1HistoricalTest(reviewExamBtn.dataset.id);
-        return;
-      }
-
-      const btn = e.target.closest("button[data-action]");
-      if (!btn) return;
-      const action = btn.dataset.action;
-      const id = btn.dataset.id;
-
-      if (action === "practice-obj" || action === "practice") {
-        setPhase("phase1");
-        renderP1SetupList();
-        showScreen("setup");
-      } else if (action === "edit") {
-        const t = (state.calendar || []).find(x => x.id === id);
-        if (t) openTaskModal(t, "Phase-1");
-      } else if (action === "delete") {
-        deleteTask(id, "phase1");
-      }
-    });
-  }
-
-  const btnP1OpenAddTask = $("p1-btn-open-add-task-modal");
-  if (btnP1OpenAddTask) {
-    btnP1OpenAddTask.addEventListener("click", () => openTaskModal(null, "Phase-1"));
-  }
-
-  const p1CalUploadCard = document.querySelector("#screen-calendar-p1 .calendar-upload-card");
-  if (p1CalUploadCard) {
-    p1CalUploadCard.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      p1CalUploadCard.classList.add("drag-over");
-    });
-    p1CalUploadCard.addEventListener("dragleave", () => {
-      p1CalUploadCard.classList.remove("drag-over");
-    });
-    p1CalUploadCard.addEventListener("drop", (e) => {
-      e.preventDefault();
-      p1CalUploadCard.classList.remove("drag-over");
-      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        handleCalendarExcelImport({ target: { files: e.dataTransfer.files } }, "phase1");
-      }
-    });
-  }
-
-
-
-  // ==========================================
-  // PHASE-2 CALENDAR EVENTS & DAILY QUESTS
-  // ==========================================
-  const p2CalExcelImport = $("p2-calendar-excel-import");
-  if (p2CalExcelImport) {
-    p2CalExcelImport.addEventListener("change", (e) => handleCalendarExcelImport(e, "phase2"));
-  }
-
-  const btnP2LoadOfficial = $("btn-p2-load-official-schedule");
-  if (btnP2LoadOfficial) {
-    btnP2LoadOfficial.addEventListener("click", () => loadOfficialSchedule("phase2"));
-  }
-
-  const btnP2ApplyConfig = $("btn-p2-apply-config");
-  if (btnP2ApplyConfig) {
-    btnP2ApplyConfig.addEventListener("click", () => applyCalendarConfig("phase2"));
-  }
-
-  const btnP2DownloadTemplate = $("btn-p2-download-template");
-  if (btnP2DownloadTemplate) {
-    btnP2DownloadTemplate.addEventListener("click", downloadScheduleTemplate);
-  }
-
-  const btnP2ExportCSV = $("btn-p2-export-csv");
-  if (btnP2ExportCSV) {
-    btnP2ExportCSV.addEventListener("click", exportScheduleCSV);
-  }
-
-  const btnP2ClearSchedule = $("btn-p2-clear-schedule");
-  if (btnP2ClearSchedule) {
-    btnP2ClearSchedule.addEventListener("click", () => clearSchedule("phase2"));
-  }
-
-  const p2CalBtnPrevMonth = $("p2-cal-btn-prev-month");
-  if (p2CalBtnPrevMonth) {
-    p2CalBtnPrevMonth.addEventListener("click", () => {
-      const cur = state.p2_calendar_currentDate;
-      state.p2_calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() - 1, 1);
-      renderP2Calendar();
-    });
-  }
-
-  const p2CalBtnNextMonth = $("p2-cal-btn-next-month");
-  if (p2CalBtnNextMonth) {
-    p2CalBtnNextMonth.addEventListener("click", () => {
-      const cur = state.p2_calendar_currentDate;
-      state.p2_calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      renderP2Calendar();
-    });
-  }
-
-  const p2CalBtnToday = $("p2-cal-btn-today");
-  if (p2CalBtnToday) {
-    p2CalBtnToday.addEventListener("click", () => {
-      state.p2_calendar_currentDate = new Date();
-      state.p2_calendar_selectedDate = getLocalDateString(new Date());
-      renderP2Calendar();
-    });
-  }
-
-  // Phase-2 Quick Add Quest Form
-  const p2FormQuickAdd = $("p2-form-quick-add-quest");
-  if (p2FormQuickAdd) {
-    p2FormQuickAdd.addEventListener("submit", (e) => {
-      e.preventDefault();
-      addQuickQuest("phase2");
-    });
-  }
-
-  // Phase-2 LeetCode Days Grid
-  const p2DaysGrid = $("p2-calendar-days-grid");
-  if (p2DaysGrid) {
-    p2DaysGrid.addEventListener("mousemove", (e) => {
-      const cell = e.target.closest(".lc-day-cell");
-      if (cell) {
-        showP2CalendarHoverPopover(e, cell);
-      } else {
-        hideP2CalendarHoverPopover();
-      }
-    });
-
-    p2DaysGrid.addEventListener("mouseleave", () => {
-      hideP2CalendarHoverPopover();
-    });
-
-    p2DaysGrid.addEventListener("click", (e) => {
-      hideP2CalendarHoverPopover();
-      const cell = e.target.closest(".lc-day-cell");
-      if (cell && cell.dataset.date) {
-        state.p2_calendar_selectedDate = cell.dataset.date;
-        renderP2Calendar();
-      }
-    });
-  }
-
-  // Phase-2 Daily Quests List
-  const p2DayTasksList = $("p2-cal-selected-day-tasks");
-  if (p2DayTasksList) {
-    p2DayTasksList.addEventListener("change", (e) => {
-      if (e.target && (e.target.classList.contains("quest-status-check") || e.target.classList.contains("task-status-check"))) {
-        const id = e.target.dataset.id;
-        toggleTaskComplete(id, "phase2");
-      }
-    });
-
-    p2DayTasksList.addEventListener("click", (e) => {
-      const reviewExamBtn = e.target.closest(".p2-review-exam-btn");
-      if (reviewExamBtn) {
-        const testId = reviewExamBtn.dataset.testId;
-        setPhase("phase2");
-        renderHistory();
-        showScreen("history");
-        setTimeout(() => {
-          const revContainer = $(`review-container-${testId}`);
-          if (revContainer) {
-            revContainer.style.display = "block";
-            const btn = document.querySelector(`.btn-toggle-answer-review[data-test-id="${testId}"]`);
-            if (btn) btn.textContent = "📖 Hide Answers & Marks";
-            revContainer.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }, 150);
-        return;
-      }
-
-      const btn = e.target.closest("button[data-action]");
-      if (!btn) return;
-      const action = btn.dataset.action;
-      const id = btn.dataset.id;
-
-      if (action === "practice-p2-sub" || action === "practice") {
-        setPhase("phase2");
-        renderSetupList();
-        showScreen("setup");
-      } else if (action === "practice-obj") {
-        setPhase("phase2");
-        renderSetupList();
-        showScreen("setup");
-      } else if (action === "edit") {
-        const t = (state.calendar || []).find(x => x.id === id);
-        if (t) openTaskModal(t, "Phase-2");
-      } else if (action === "delete") {
-        deleteTask(id, "phase2");
-      }
-    });
-  }
-
-  const btnP2OpenAddTask = $("p2-btn-open-add-task-modal");
-  if (btnP2OpenAddTask) {
-    btnP2OpenAddTask.addEventListener("click", () => openTaskModal(null, "Phase-2"));
-  }
-
-  const p2CalUploadCard = document.querySelector("#screen-calendar-p2 .calendar-upload-card");
-  if (p2CalUploadCard) {
-    p2CalUploadCard.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      p2CalUploadCard.classList.add("drag-over");
-    });
-    p2CalUploadCard.addEventListener("dragleave", () => {
-      p2CalUploadCard.classList.remove("drag-over");
-    });
-    p2CalUploadCard.addEventListener("drop", (e) => {
-      e.preventDefault();
-      p2CalUploadCard.classList.remove("drag-over");
-      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        handleCalendarExcelImport({ target: { files: e.dataTransfer.files } }, "phase2");
-      }
-    });
-  }
-
-
-  window.addEventListener("scroll", () => {
-    hideP1CalendarHoverPopover();
-    hideP2CalendarHoverPopover();
-  }, { passive: true });
-
-  const btnCloseTaskModal = $("btn-close-task-modal");
-  if (btnCloseTaskModal) {
-    btnCloseTaskModal.addEventListener("click", closeTaskModal);
-  }
-
-  const btnCancelTask = $("btn-cancel-task");
-  if (btnCancelTask) {
-    btnCancelTask.addEventListener("click", closeTaskModal);
-  }
-
-  const formTaskModal = $("form-task-modal");
-  if (formTaskModal) {
-    formTaskModal.addEventListener("submit", handleTaskFormSubmit);
-  }
-
-    // Initial load
+  // Initial load
   setPhase(state.phase);
   checkResumeActiveTest();
 });

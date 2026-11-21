@@ -6,7 +6,7 @@ A personal, offline typing test and descriptive answer practice website designed
 
 ## Features
 
-- **Phase Selection (Phase 1 Objective & Phase 2 Descriptive):** Switch instantly between objective MCQ test simulation and descriptive answer writing practice from the top header bar.
+- **Objective (MCQ) / Subjective (Phase-2) switch:** The header switch toggles between the MCQ console (Phase-1 and Phase-2 objective papers) and descriptive answer writing.
 - **Phase-1 Objective Practice (Real TCS iON Simulation):**
   - Real exam interface with countdown timer, candidate profile bar, and question options `[A]` through `[E]`.
   - Authentic 5-color TCS iON Question Palette: Answered (Green), Not Answered (Red), Not Visited (Grey), Marked for Review (Purple), and Answered & Marked for Review.
@@ -15,17 +15,18 @@ A personal, offline typing test and descriptive answer practice website designed
   - Four dedicated papers: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
   - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support, and optional paste prevention.
   - Automatic AI evaluation prompt generation (ready for Gemini, Claude, and ChatGPT).
-- **Study Plan & Calendar (Excel / CSV Timetable Import):**
-  - Interactive monthly and agenda timetable to plan daily RBI Grade B preparation.
-  - Client-side Excel (.xlsx, .xls) and CSV parser: import any study schedule spreadsheet with automated column mapping (`Date`, `Subject`, `Topic`, `Phase`, `Type`, `Time`, `Status`).
-  - Pre-packaged with a comprehensive **30-Day RBI Grade B Exam Study Plan** spanning Phase-1 MCQs and Phase-2 Descriptive Writing.
-  - One-click **▶ Practice** buttons on calendar tasks that immediately launch into Phase-1 or Phase-2 console.
-  - Template download and export functionality.
+- **Calendar & TODO (your daily routine):**
+  - One calendar for the whole plan. The built-in plan is `RBI_Study_Schedule.xlsx` (415 days); you can also upload your own timetable.
+  - Every plan day gets 3 exam TODOs: **Phase-2 subjective exam**, **Phase-2 objective exam** and **Phase-1 objective exam**, plus a current-affairs TODO on days the plan has one.
+  - **Test days are always visible:** chapter tests, mix tests and current-affairs objective tests are tagged on the calendar (P2 / P1 / CA), and the next ones are listed under **Upcoming tests**.
+  - Click a day to see its plan focus and TODOs. Tick TODOs, add your own TODO for any date, edit / move a TODO, or hide a plan TODO (restorable).
+  - **▶ Start subjective / ▶ Start objective** on a TODO opens the right test; submitting that test ticks the TODO automatically.
+  - Streak, today's 3 exams, month progress and plan progress at the top. A day is complete when all of its TODOs are ticked.
+  - Plan settings: Day 1 date, "days already finished", built-in plan, upload timetable (.xlsx / .csv), template, export plan / your TODOs, remove plan.
 - **DOCX & PDF File Import:** Directly upload Word (.docx) or PDF (.pdf) documents with robust decompression handling (including ZIP data descriptors) to extract questions, options, answer keys, and model answers.
 - **Included Example Practice Documents:**
   - `Spotlight-Questions-1-6-Nov-2026.docx`: 200 General Awareness Phase-1 MCQs with options and full answer key table.
   - `CH-1-National_Income-Answer-Writing.docx`: ESI Chapter 1 National Income descriptive practice questions with model answers.
-  - `demo_questions.docx` & `demo_questions.pdf`: Multi-subject Phase-2 practice questions.
 - **Question Bank & Batch Management:** Multi-select checkbox deletion, subject filtering, keyword search, random question generator, and JSON import/export.
 - **History Tracking:** Comprehensive logs of test scores, accuracy %, time spent, and performance trends for both phases.
 
