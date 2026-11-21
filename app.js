@@ -96,6 +96,15 @@ function showScreen(name) {
     header.style.display = isExam ? "none" : "";
   }
 
+  // Update navigation button active class
+  document.querySelectorAll("#app-header nav button").forEach(btn => btn.classList.remove("active"));
+  const activeNavBtn = $("nav-" + name);
+  if (activeNavBtn) activeNavBtn.classList.add("active");
+
+  if (name === "calendar") {
+    renderCalendar();
+  }
+
   window.scrollTo(0, 0);
 }
 
@@ -166,7 +175,15 @@ const state = {
   p1_lastResultTest: null,
   p1_resultFilter: "all",
   p1_setup_page: 1,    // current page for Phase 1 setup questions list
-  p1_bank_page: 1      // current page for Phase 1 question bank list
+  p1_bank_page: 1,     // current page for Phase 1 question bank list
+
+  // Calendar & Study Schedule State
+  calendar: loadJSON("rbi_study_schedule", null),
+  calendar_currentDate: new Date(),
+  calendar_selectedDate: getLocalDateString(new Date()),
+  calendar_filterPhase: "all",
+  calendar_filterStatus: "all",
+  calendar_view: "month"
 };
 
 // Render reusable pagination controls (50 items per page; hidden if totalPages <= 1)
@@ -389,18 +406,23 @@ function renderSetupList() {
     const topicText = q.topic ? ` · <em>${escapeHTML(q.topic)}</em>` : "";
 
     li.innerHTML = `
-      <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%;">
-        <input type="checkbox" class="q-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select question ${globalIdx + 1}">
-        <div class="q-info" style="flex: 1;">
-          <strong>[${escapeHTML(q.paper)}]</strong> (${escapeHTML(q.marks)} marks, ${escapeHTML(q.wordLimit)} words)${topicText}
-          ${modelWarn}
-          <span style="font-size:11px; color:var(--muted); margin-left:6px;">Q${globalIdx + 1}</span>
+      <div style="display: flex; align-items: flex-start; gap: 10px; width: 100%;">
+        <input type="checkbox" class="q-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select question ${globalIdx + 1}" style="margin-top:3px;">
+        <div class="q-info" style="flex: 1; min-width: 0;">
+          <div class="p1-q-meta-badges">
+            <span class="badge-subject">${escapeHTML(q.paper)}</span>
+            <span class="badge-topic">${escapeHTML(q.marks)} marks · ${escapeHTML(q.wordLimit)} words</span>
+            ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
+            ${modelWarn}
+            <span style="font-size:11px; color:var(--muted); margin-left:auto;">Q${globalIdx + 1}</span>
+          </div>
           <div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.5; font-weight: 500;">${escapeHTML(q.text)}</div>
         </div>
         <div class="q-actions">
-          <button type="button" class="btn-move-up" data-action="move-up" data-id="${escapeHTML(q.id)}" ${globalIdx === 0 ? "disabled" : ""}>▲</button>
+          ${globalIdx > 0 ? `<button type="button" class="btn-move-up" data-action="move-up" data-id="${escapeHTML(q.id)}">▲</button>` : ""}
+          ${globalIdx < questions.length - 1 ? `<button type="button" class="btn-move-down" data-action="move-down" data-id="${escapeHTML(q.id)}">▼</button>` : ""}
           <button type="button" class="btn-edit" data-action="edit" data-id="${escapeHTML(q.id)}">Edit</button>
-          <button type="button" class="btn-delete danger" data-action="delete" data-id="${escapeHTML(q.id)}">Delete</button>
+          <button type="button" class="btn-delete danger" data-action="delete" data-id="${escapeHTML(q.id)}">✕</button>
         </div>
       </div>
     `;
@@ -456,6 +478,18 @@ function moveUpSetupQuestion(id) {
     const temp = state.setup.questions[idx];
     state.setup.questions[idx] = state.setup.questions[idx - 1];
     state.setup.questions[idx - 1] = temp;
+    saveSetup();
+    renderSetupList();
+  }
+}
+
+// Move a question down one position in the test sequence
+function moveDownSetupQuestion(id) {
+  const idx = state.setup.questions.findIndex(item => item.id === id);
+  if (idx >= 0 && idx < state.setup.questions.length - 1) {
+    const temp = state.setup.questions[idx];
+    state.setup.questions[idx] = state.setup.questions[idx + 1];
+    state.setup.questions[idx + 1] = temp;
     saveSetup();
     renderSetupList();
   }
@@ -3584,6 +3618,944 @@ function clearP1History() {
   renderP1History();
 }
 
+// ============================================================
+// STUDY PLAN & CALENDAR INFRASTRUCTURE (EXCEL / CSV IMPORT)
+// ============================================================
+
+// Extract all files from a standard PKZIP archive (DOCX or XLSX)
+async function extractZipEntries(buf) {
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  let eocdOffset = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65536); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) {
+      eocdOffset = i;
+      break;
+    }
+  }
+  if (eocdOffset === -1) throw new Error("Invalid or uncompressed archive format.");
+
+  const totalEntries = view.getUint16(eocdOffset + 10, true);
+  const cdOffset = view.getUint32(eocdOffset + 16, true);
+
+  const entries = {};
+  let curr = cdOffset;
+  for (let i = 0; i < totalEntries; i++) {
+    if (view.getUint32(curr, true) !== 0x02014b50) break;
+    const compMethod = view.getUint16(curr + 10, true);
+    const compSize = view.getUint32(curr + 20, true);
+    const nameLen = view.getUint16(curr + 28, true);
+    const extraLen = view.getUint16(curr + 30, true);
+    const commLen = view.getUint16(curr + 32, true);
+    const localOffset = view.getUint32(curr + 42, true);
+
+    const nameBytes = new Uint8Array(buf.buffer, buf.byteOffset + curr + 46, nameLen);
+    const name = new TextDecoder().decode(nameBytes);
+
+    // Read local header
+    const localNameLen = view.getUint16(localOffset + 26, true);
+    const localExtraLen = view.getUint16(localOffset + 28, true);
+    const dataOffset = localOffset + 30 + localNameLen + localExtraLen;
+
+    const compBytes = new Uint8Array(buf.buffer, buf.byteOffset + dataOffset, compSize);
+    let decompressed;
+    if (compMethod === 0) {
+      decompressed = compBytes;
+    } else if (compMethod === 8) {
+      if (typeof DecompressionStream !== "undefined") {
+        const ds = new DecompressionStream("deflate-raw");
+        const writer = ds.writable.getWriter();
+        writer.write(compBytes);
+        writer.close();
+        const reader = ds.readable.getReader();
+        const chunks = [];
+        let totalLen = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          totalLen += value.length;
+        }
+        decompressed = new Uint8Array(totalLen);
+        let pos = 0;
+        for (const ch of chunks) {
+          decompressed.set(ch, pos);
+          pos += ch.length;
+        }
+      } else {
+        throw new Error("DecompressionStream is not supported in this environment.");
+      }
+    } else {
+      throw new Error(`Unsupported compression method: ${compMethod}`);
+    }
+
+    entries[name] = new TextDecoder().decode(decompressed);
+    curr += 46 + nameLen + extraLen + commLen;
+  }
+  return entries;
+}
+
+// Convert Excel column letters (A, B, AA...) to zero-based column index
+function colLettersToIndex(col) {
+  let idx = 0;
+  for (let i = 0; i < col.length; i++) {
+    idx = idx * 26 + (col.charCodeAt(i) - 64);
+  }
+  return idx - 1;
+}
+
+// Parse an XLSX ArrayBuffer completely offline in pure vanilla JS
+async function parseXLSX(arrayBuffer) {
+  const buf = new Uint8Array(arrayBuffer);
+  const entries = await extractZipEntries(buf);
+
+  // 1. Parse shared strings table (xl/sharedStrings.xml)
+  const sharedStrings = [];
+  const sstXml = entries["xl/sharedStrings.xml"] || entries["xl/SharedStrings.xml"] || "";
+  if (sstXml) {
+    const siRegex = /<si\b[^>]*>(.*?)<\/si>/gs;
+    let match;
+    while ((match = siRegex.exec(sstXml)) !== null) {
+      const tRegex = /<t\b[^>]*>(.*?)<\/t>/gs;
+      let tMatch;
+      let text = "";
+      while ((tMatch = tRegex.exec(match[1])) !== null) {
+        text += tMatch[1];
+      }
+      sharedStrings.push(
+        text.replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+      );
+    }
+  }
+
+  // 2. Locate first sheet XML
+  let sheetXmlKey = Object.keys(entries).find(k => /^xl\/worksheets\/sheet\d+\.xml$/i.test(k));
+  if (!sheetXmlKey) sheetXmlKey = Object.keys(entries).find(k => /^xl\/worksheets\/.*\.xml$/i.test(k));
+  if (!sheetXmlKey) throw new Error("No worksheets found in this Excel spreadsheet.");
+
+  const sheetXml = entries[sheetXmlKey];
+  const rowRegex = /<row\b[^>]*>(.*?)<\/row>/gs;
+  const rows = [];
+  let rowMatch;
+
+  while ((rowMatch = rowRegex.exec(sheetXml)) !== null) {
+    const rowContent = rowMatch[1];
+    const cellRegex = /<c\b([^>]*)>(?:<v>(.*?)<\/v>|<is><t>(.*?)<\/t><\/is>)?<\/c>/gs;
+    let cMatch;
+    const row = [];
+
+    while ((cMatch = cellRegex.exec(rowContent)) !== null) {
+      const attrs = cMatch[1];
+      const val = cMatch[2] || "";
+      const isVal = cMatch[3] || "";
+
+      // derive column index from r="A1"
+      const rAttrMatch = /r="([A-Z]+)(\d+)"/.exec(attrs);
+      let colIdx = row.length;
+      if (rAttrMatch) {
+        colIdx = colLettersToIndex(rAttrMatch[1]);
+      }
+
+      // pad any skipped empty cells
+      while (row.length < colIdx) {
+        row.push("");
+      }
+
+      const isString = /t="s"/.test(attrs);
+      const isInline = /t="inlineStr"/.test(attrs);
+
+      let cellValue = "";
+      if (isString) {
+        cellValue = sharedStrings[Number(val)] || "";
+      } else if (isInline) {
+        cellValue = isVal;
+      } else {
+        cellValue = val;
+      }
+
+      row[colIdx] = String(cellValue).trim();
+    }
+
+    if (row.length > 0 && row.some(cell => String(cell).trim().length > 0)) {
+      rows.push(row);
+    }
+  }
+
+  return rows;
+}
+
+// Parse RFC-compliant CSV or TSV string respecting quotes
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let curr = "";
+  let insideQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    const next = text[i + 1];
+    if (c === '"') {
+      if (insideQuotes && next === '"') {
+        curr += '"';
+        i++;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+    } else if ((c === ',' || c === '\t') && !insideQuotes) {
+      row.push(curr.trim());
+      curr = "";
+    } else if ((c === '\r' || c === '\n') && !insideQuotes) {
+      if (c === '\r' && next === '\n') i++;
+      row.push(curr.trim());
+      if (row.length > 0 && row.some(cell => cell.length > 0)) {
+        rows.push(row);
+      }
+      row = [];
+      curr = "";
+    } else {
+      curr += c;
+    }
+  }
+  if (curr.length > 0 || row.length > 0) {
+    row.push(curr.trim());
+    if (row.some(cell => cell.length > 0)) rows.push(row);
+  }
+  return rows;
+}
+
+// Parse various spreadsheet date formats into "YYYY-MM-DD"
+function parseScheduleDate(raw) {
+  if (!raw) return getLocalDateString(new Date());
+  const str = String(raw).trim();
+
+  // Excel serial number (e.g. 46347)
+  const num = Number(str);
+  if (!isNaN(num) && num > 20000 && num < 80000) {
+    try {
+      const date = new Date((num - 25569) * 86400 * 1000);
+      return getLocalDateString(date);
+    } catch (e) {}
+  }
+
+  // Already standard YYYY-MM-DD
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
+    const [y, m, d] = str.split("-");
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  // DD-MM-YYYY or DD/MM/YYYY
+  if (/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/.test(str)) {
+    const delim = str.includes("-") ? "-" : "/";
+    const [d, m, y] = str.split(delim);
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  // Standard Date parse fallback
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return getLocalDateString(parsed);
+  }
+
+  return getLocalDateString(new Date());
+}
+
+// Convert 2D spreadsheet rows into structured task objects
+function mapScheduleRowsToTasks(rows) {
+  if (!rows || rows.length < 2) return [];
+
+  // Identify column headers with fuzzy matching
+  const headers = rows[0].map(h => String(h || "").trim().toLowerCase());
+  const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+
+  const dateCol = findCol(["date", "day", "when", "scheduled", "timeline"]);
+  const phaseCol = findCol(["phase", "tier", "stage", "part"]);
+  const subjectCol = findCol(["subject", "paper", "section", "module", "course"]);
+  const topicCol = findCol(["topic", "title", "task", "chapter", "unit", "description", "details", "content"]);
+  const typeCol = findCol(["type", "mode", "category", "activity", "format"]);
+  const timeCol = findCol(["time", "duration", "hours", "slot", "timing"]);
+  const statusCol = findCol(["status", "completed", "done", "state"]);
+
+  const tasks = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length === 0 || !r.some(cell => String(cell).trim().length > 0)) continue;
+
+    const rawDate = dateCol !== -1 ? r[dateCol] : "";
+    const rawPhase = phaseCol !== -1 ? String(r[phaseCol] || "").trim() : "";
+    const rawSubject = subjectCol !== -1 ? String(r[subjectCol] || "").trim() : "";
+    const rawTopic = topicCol !== -1 ? String(r[topicCol] || "").trim() : (r[0] || "Study Session");
+    const rawType = typeCol !== -1 ? String(r[typeCol] || "").trim() : "";
+    const rawTime = timeCol !== -1 ? String(r[timeCol] || "").trim() : "";
+    const rawStatus = statusCol !== -1 ? String(r[statusCol] || "").trim().toLowerCase() : "";
+
+    // Normalize Phase
+    let phase = "General";
+    const phaseLower = rawPhase.toLowerCase();
+    if (phaseLower.includes("1") || phaseLower.includes("p1") || phaseLower.includes("objective") || phaseLower.includes("mcq")) {
+      phase = "Phase-1";
+    } else if (phaseLower.includes("2") || phaseLower.includes("p2") || phaseLower.includes("descriptive") || phaseLower.includes("writing")) {
+      phase = "Phase-2";
+    }
+
+    // Normalize Task Type
+    let taskType = "Study Task";
+    const typeLower = (rawType + " " + rawTopic).toLowerCase();
+    if (typeLower.includes("mcq") || typeLower.includes("objective") || typeLower.includes("spotlight")) {
+      taskType = "MCQ Practice";
+    } else if (typeLower.includes("descriptive") || typeLower.includes("writing") || typeLower.includes("essay") || typeLower.includes("precis")) {
+      taskType = "Descriptive Writing";
+    } else if (typeLower.includes("mock") || typeLower.includes("test") || typeLower.includes("full length")) {
+      taskType = "Mock Test";
+    } else if (typeLower.includes("revision") || typeLower.includes("review")) {
+      taskType = "Revision";
+    } else if (typeLower.includes("reading") || typeLower.includes("notes") || typeLower.includes("chapter")) {
+      taskType = "Reading / Notes";
+    }
+
+    const isCompleted = ["completed", "done", "yes", "true", "1", "finished"].includes(rawStatus);
+
+    tasks.push({
+      id: makeId("task"),
+      date: parseScheduleDate(rawDate),
+      phase: phase,
+      subject: rawSubject || (phase === "Phase-1" ? "General Awareness" : "ESI"),
+      topic: rawTopic || "Scheduled Preparation Task",
+      type: taskType,
+      time: rawTime || "",
+      status: isCompleted ? "completed" : "pending"
+    });
+  }
+
+  return tasks;
+}
+
+// Generate a 30-Day RBI Grade B Exam Study Plan
+function generateDefaultSchedule() {
+  const plan = [];
+  const today = new Date();
+
+  const subjectsAndTopics = [
+    { phase: "Phase-1", subject: "General Awareness", topic: "Spotlight Nov 1-6 Current Affairs (Part 1 - 50 MCQs)", type: "MCQ Practice", time: "10:00 AM" },
+    { phase: "Phase-2", subject: "ESI", topic: "Chapter 1: National Income - Concepts & Methods of Measurement", type: "Descriptive Writing", time: "11:00 AM" },
+    { phase: "Phase-1", subject: "Reasoning Ability", topic: "Puzzles & Seating Arrangement (Circular & Floor)", type: "MCQ Practice", time: "02:00 PM" },
+    { phase: "Phase-2", subject: "Finance", topic: "Financial System in India - Structure & RBI Functions", type: "Descriptive Writing", time: "10:00 AM" },
+    { phase: "Phase-1", subject: "Quantitative Aptitude", topic: "Data Interpretation (Bar & Pie) + Percentage/Ratio", type: "MCQ Practice", time: "03:00 PM" },
+    { phase: "Phase-2", subject: "Management", topic: "Leadership Theories - Transformational vs Transactional", type: "Descriptive Writing", time: "11:00 AM" },
+    { phase: "General", subject: "Weekly Revision", topic: "Spotlight GA Week 1 & 2 Rapid Revision + Formula Review", type: "Revision", time: "04:00 PM" },
+    { phase: "Phase-1", subject: "English Language", topic: "Reading Comprehension & Para Jumbles", type: "MCQ Practice", time: "10:00 AM" },
+    { phase: "Phase-2", subject: "English Descriptive", topic: "Essay Writing: Digital Currency (CBDC) & Financial Inclusion", type: "Descriptive Writing", time: "11:00 AM" },
+    { phase: "Phase-1", subject: "Mock Test", topic: "Phase-1 Full Length Mock Speed Test 1 (200 MCQs)", type: "Mock Test", time: "09:00 AM" },
+    { phase: "Phase-2", subject: "ESI", topic: "Inflation - Types, Causes & Monetary Policy Transmission", type: "Descriptive Writing", time: "10:00 AM" },
+    { phase: "Phase-1", subject: "General Awareness", topic: "Spotlight Banking & Financial Awareness Quiz", type: "MCQ Practice", time: "02:00 PM" },
+    { phase: "Phase-2", subject: "Finance", topic: "Primary & Secondary Markets - SEBI Regulations", type: "Descriptive Writing", time: "11:00 AM" },
+    { phase: "Phase-1", subject: "Reasoning Ability", topic: "Critical Reasoning, Syllogisms & Machine Input", type: "MCQ Practice", time: "03:00 PM" },
+    { phase: "Phase-2", subject: "Management", topic: "Motivation Theories - Maslow, Herzberg & Vroom", type: "Descriptive Writing", time: "10:00 AM" },
+    { phase: "Phase-1", subject: "Quantitative Aptitude", topic: "Time & Work, Speed Distance & Quadratic Equations", type: "MCQ Practice", time: "02:00 PM" },
+    { phase: "Phase-2", subject: "ESI", topic: "Sustainable Development Goals (SDGs) & Environmental Issues", type: "Descriptive Writing", time: "11:00 AM" },
+    { phase: "Phase-1", subject: "English Language", topic: "Error Spotting & Vocabulary Enhancement", type: "MCQ Practice", time: "10:00 AM" },
+    { phase: "Phase-2", subject: "English Descriptive", topic: "Précis Writing: Economic Reforms in Post-Pandemic India", type: "Descriptive Writing", time: "03:00 PM" },
+    { phase: "Phase-1", subject: "Mock Test", topic: "Phase-1 Full Length Mock Exam 2 (Speed & Accuracy)", type: "Mock Test", time: "09:00 AM" },
+    { phase: "Phase-2", subject: "Finance", topic: "Corporate Governance in Public & Private Sector Banks", type: "Descriptive Writing", time: "10:00 AM" },
+    { phase: "Phase-1", subject: "General Awareness", topic: "Union Budget, Economic Survey & Government Schemes", type: "MCQ Practice", time: "02:00 PM" },
+    { phase: "Phase-2", subject: "Management", topic: "Communication - Channels, Barriers & Organizational Culture", type: "Descriptive Writing", time: "11:00 AM" },
+    { phase: "Phase-1", subject: "Reasoning Ability", topic: "Advanced Multi-Variable Puzzles & Coding-Decoding", type: "MCQ Practice", time: "03:00 PM" },
+    { phase: "Phase-2", subject: "ESI", topic: "Poverty Alleviation & Employment Generation Programs in India", type: "Descriptive Writing", time: "10:00 AM" },
+    { phase: "Phase-1", subject: "Quantitative Aptitude", topic: "Caselet Data Interpretation & Number Series", type: "MCQ Practice", time: "02:00 PM" },
+    { phase: "Phase-2", subject: "Finance & Mgmt", topic: "Composite Phase-2 Descriptive Writing Simulation", type: "Descriptive Writing", time: "10:00 AM" },
+    { phase: "Phase-1", subject: "Mock Test", topic: "Phase-1 Final Marathon Mock Test (All 4 Sections)", type: "Mock Test", time: "09:00 AM" },
+    { phase: "General", subject: "Full Revision", topic: "Consolidated Formulas, High-Yield Facts & Model Answers", type: "Revision", time: "10:00 AM" },
+    { phase: "General", subject: "Final Readiness", topic: "Exam Hall Time Strategy & Mindset Optimization", type: "Revision", time: "11:00 AM" }
+  ];
+
+  for (let i = 0; i < subjectsAndTopics.length; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+    const item = subjectsAndTopics[i];
+    plan.push({
+      id: makeId("task"),
+      date: getLocalDateString(d),
+      phase: item.phase,
+      subject: item.subject,
+      topic: item.topic,
+      type: item.type,
+      time: item.time,
+      status: i === 0 ? "completed" : "pending"
+    });
+  }
+
+  return plan;
+}
+
+// Save calendar tasks into localStorage
+function saveCalendarSchedule() {
+  saveJSON("rbi_study_schedule", state.calendar || []);
+}
+
+// Renders the overall calendar screen
+function renderCalendar() {
+  if (!state.calendar) {
+    state.calendar = generateDefaultSchedule();
+    saveCalendarSchedule();
+  }
+
+  renderCalendarSummary();
+  renderCalendarControls();
+
+  const monthView = $("calendar-month-view");
+  const agendaView = $("calendar-agenda-view");
+  const viewMonthBtn = $("cal-view-month");
+  const viewAgendaBtn = $("cal-view-agenda");
+
+  if (state.calendar_view === "month") {
+    if (monthView) monthView.style.display = "";
+    if (agendaView) agendaView.style.display = "none";
+    if (viewMonthBtn) viewMonthBtn.classList.add("active");
+    if (viewAgendaBtn) viewAgendaBtn.classList.remove("active");
+    renderMonthGrid();
+  } else {
+    if (monthView) monthView.style.display = "none";
+    if (agendaView) agendaView.style.display = "";
+    if (viewMonthBtn) viewMonthBtn.classList.remove("active");
+    if (viewAgendaBtn) viewAgendaBtn.classList.add("active");
+    renderAgendaView();
+  }
+
+  renderSelectedDayTasks();
+}
+
+// Renders stats progress bar
+function renderCalendarSummary() {
+  const container = $("calendar-progress-bar");
+  if (!container) return;
+
+  const tasks = state.calendar || [];
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.status === "completed").length;
+  const pending = total - completed;
+  const todayStr = getLocalDateString(new Date());
+  const todayTasks = tasks.filter(t => t.date === todayStr);
+
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  container.innerHTML = `
+    <div class="summary-stat-card">
+      <div class="val">${total}</div>
+      <div class="lbl">Total Scheduled Tasks</div>
+    </div>
+    <div class="summary-stat-card">
+      <div class="val" style="color:#16a34a;">${completed} <span style="font-size:14px; font-weight:normal;">(${pct}%)</span></div>
+      <div class="lbl">Tasks Completed</div>
+    </div>
+    <div class="summary-stat-card">
+      <div class="val" style="color:#d97706;">${pending}</div>
+      <div class="lbl">Tasks Pending</div>
+    </div>
+    <div class="summary-stat-card">
+      <div class="val" style="color:#2563eb;">${todayTasks.length}</div>
+      <div class="lbl">Today's Schedule</div>
+    </div>
+  `;
+}
+
+// Updates month/year heading
+function renderCalendarControls() {
+  const heading = $("cal-month-year-display");
+  if (!heading) return;
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const year = state.calendar_currentDate.getFullYear();
+  const month = state.calendar_currentDate.getMonth();
+  heading.textContent = `${monthNames[month]} ${year}`;
+}
+
+// Renders the 7-column Month Grid
+function renderMonthGrid() {
+  const grid = $("calendar-days-grid");
+  if (!grid) return;
+
+  const cur = state.calendar_currentDate;
+  const year = cur.getFullYear();
+  const month = cur.getMonth();
+
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  const todayStr = getLocalDateString(new Date());
+  const selectedStr = state.calendar_selectedDate;
+
+  const tasks = state.calendar || [];
+
+  // Filter tasks by phase and status if set
+  const filteredTasks = tasks.filter(t => {
+    if (state.calendar_filterPhase === "phase1" && t.phase !== "Phase-1") return false;
+    if (state.calendar_filterPhase === "phase2" && t.phase !== "Phase-2") return false;
+    if (state.calendar_filterStatus === "pending" && t.status === "completed") return false;
+    if (state.calendar_filterStatus === "completed" && t.status !== "completed") return false;
+    return true;
+  });
+
+  // Group tasks by date string
+  const taskMap = {};
+  for (const t of filteredTasks) {
+    if (!taskMap[t.date]) taskMap[t.date] = [];
+    taskMap[t.date].push(t);
+  }
+
+  let html = "";
+
+  // 1. Preceding days from previous month
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    const dayNum = daysInPrevMonth - i;
+    const prevDate = new Date(year, month - 1, dayNum);
+    const dateStr = getLocalDateString(prevDate);
+    html += renderDayCell(dayNum, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || []);
+  }
+
+  // 2. Current month days
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    html += renderDayCell(d, dateStr, false, todayStr, selectedStr, taskMap[dateStr] || []);
+  }
+
+  // 3. Trailing days from next month
+  const totalCells = firstDayOfWeek + daysInMonth;
+  const remainder = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let d = 1; d <= remainder; d++) {
+    const nextDate = new Date(year, month + 1, d);
+    const dateStr = getLocalDateString(nextDate);
+    html += renderDayCell(d, dateStr, true, todayStr, selectedStr, taskMap[dateStr] || []);
+  }
+
+  grid.innerHTML = html;
+}
+
+// Render individual day cell HTML
+function renderDayCell(dayNum, dateStr, isOtherMonth, todayStr, selectedStr, dayTasks) {
+  const isToday = dateStr === todayStr;
+  const isSelected = dateStr === selectedStr;
+
+  const countBadge = dayTasks.length > 0 ? `<span class="cal-day-task-count">${dayTasks.length}</span>` : "";
+
+  // Display top 3 task pills
+  const maxPills = 3;
+  let pillsHtml = "";
+  for (let i = 0; i < Math.min(dayTasks.length, maxPills); i++) {
+    const t = dayTasks[i];
+    let phaseClass = "general";
+    if (t.phase === "Phase-1") phaseClass = "phase-1";
+    if (t.phase === "Phase-2") phaseClass = "phase-2";
+    if (t.type === "Revision") phaseClass = "revision";
+    if (t.type === "Mock Test") phaseClass = "mock";
+
+    const doneClass = t.status === "completed" ? "is-completed" : "";
+    const doneCheck = t.status === "completed" ? "✓ " : "• ";
+    pillsHtml += `
+      <div class="cal-event-pill ${phaseClass} ${doneClass}" title="${escapeHTML(t.subject + ': ' + t.topic)}">
+        <span>${doneCheck}<strong>${escapeHTML(t.phase)}</strong> ${escapeHTML(t.topic)}</span>
+      </div>
+    `;
+  }
+  if (dayTasks.length > maxPills) {
+    pillsHtml += `<div class="cal-more-pill">+${dayTasks.length - maxPills} more</div>`;
+  }
+
+  return `
+    <div class="cal-day-cell ${isOtherMonth ? 'is-other-month' : ''} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''}" data-date="${dateStr}">
+      <div class="cal-day-header">
+        <span class="cal-day-num">${dayNum}</span>
+        ${countBadge}
+      </div>
+      <div class="cal-day-events">
+        ${pillsHtml}
+      </div>
+    </div>
+  `;
+}
+
+// Renders right-hand day detail panel
+function renderSelectedDayTasks() {
+  const heading = $("cal-selected-date-heading");
+  const sub = $("cal-selected-date-sub");
+  const list = $("cal-selected-day-tasks");
+  if (!heading || !list) return;
+
+  const selDateStr = state.calendar_selectedDate;
+  const dateObj = new Date(selDateStr + "T00:00:00");
+  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  const humanDate = dateObj.toLocaleDateString(undefined, options);
+
+  heading.textContent = humanDate;
+
+  const tasks = state.calendar || [];
+  const dayTasks = tasks.filter(t => t.date === selDateStr);
+  sub.textContent = `${dayTasks.length} task${dayTasks.length === 1 ? '' : 's'} scheduled`;
+
+  if (dayTasks.length === 0) {
+    list.innerHTML = `
+      <div style="text-align: center; padding: 36px 16px; color: var(--muted); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px;">
+        <span style="font-size: 24px; display: block; margin-bottom: 6px;">📅</span>
+        <strong style="color: #334155; font-size: 13.5px; display: block;">No tasks scheduled for this day</strong>
+        <p style="font-size: 12px; margin: 4px 0 12px 0;">Stay consistent with your RBI Grade B prep!</p>
+        <button type="button" id="btn-empty-add-task" class="btn-minimal-primary" style="font-size: 12.5px; padding: 6px 14px;">+ Add Task</button>
+      </div>
+    `;
+    const emptyBtn = $("btn-empty-add-task");
+    if (emptyBtn) emptyBtn.addEventListener("click", () => openTaskModal());
+    return;
+  }
+
+  list.innerHTML = dayTasks.map(t => {
+    const isDone = t.status === "completed";
+    let phaseClass = "general";
+    if (t.phase === "Phase-1") phaseClass = "phase-1";
+    if (t.phase === "Phase-2") phaseClass = "phase-2";
+
+    const practiceAction = (t.phase === "Phase-1" || t.phase === "Phase-2")
+      ? `<button type="button" class="task-action-btn practice-btn" data-action="practice" data-phase="${t.phase}">▶ Practice</button>`
+      : "";
+
+    return `
+      <div class="task-card ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
+        <div class="task-card-top">
+          <div class="task-badges">
+            <span class="task-phase-badge ${phaseClass}">${escapeHTML(t.phase)}</span>
+            <span class="task-type-badge">${escapeHTML(t.type)}</span>
+          </div>
+          ${t.time ? `<span class="task-time-badge">⏱️ ${escapeHTML(t.time)}</span>` : ""}
+        </div>
+        <div class="task-title">${escapeHTML(t.topic)}</div>
+        <div class="task-subject">${escapeHTML(t.subject)}</div>
+        <div class="task-actions-row">
+          <label class="task-complete-toggle">
+            <input type="checkbox" class="task-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
+            <span>${isDone ? 'Completed' : 'Mark done'}</span>
+          </label>
+          <div class="task-btn-group">
+            ${practiceAction}
+            <button type="button" class="task-action-btn" data-action="edit" data-id="${t.id}">✏️</button>
+            <button type="button" class="task-action-btn danger-btn" data-action="delete" data-id="${t.id}">✕</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// Renders the Agenda / List View
+function renderAgendaView() {
+  const container = $("calendar-agenda-list");
+  if (!container) return;
+
+  const tasks = state.calendar || [];
+  const filteredTasks = tasks.filter(t => {
+    if (state.calendar_filterPhase === "phase1" && t.phase !== "Phase-1") return false;
+    if (state.calendar_filterPhase === "phase2" && t.phase !== "Phase-2") return false;
+    if (state.calendar_filterStatus === "pending" && t.status === "completed") return false;
+    if (state.calendar_filterStatus === "completed" && t.status !== "completed") return false;
+    return true;
+  });
+
+  if (filteredTasks.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: var(--muted);">
+        No tasks match your selected phase or status filter.
+      </div>
+    `;
+    return;
+  }
+
+  // Sort chronologically by date
+  filteredTasks.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Group by date
+  const groups = {};
+  for (const t of filteredTasks) {
+    if (!groups[t.date]) groups[t.date] = [];
+    groups[t.date].push(t);
+  }
+
+  let html = "";
+  for (const [dateStr, dateTasks] of Object.entries(groups)) {
+    const dateObj = new Date(dateStr + "T00:00:00");
+    const humanDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+    html += `
+      <div class="agenda-date-group">
+        <div class="agenda-date-header">
+          <span>📅 ${humanDate}</span>
+          <span style="font-size:12px; font-weight:normal; color:var(--muted);">${dateTasks.length} task(s)</span>
+        </div>
+        <div class="agenda-tasks-list">
+    `;
+
+    for (const t of dateTasks) {
+      const isDone = t.status === "completed";
+      let phaseClass = "general";
+      if (t.phase === "Phase-1") phaseClass = "phase-1";
+      if (t.phase === "Phase-2") phaseClass = "phase-2";
+
+      html += `
+        <div class="agenda-task-item ${isDone ? 'is-completed' : ''}" data-id="${t.id}">
+          <div class="agenda-task-left">
+            <input type="checkbox" class="task-status-check" ${isDone ? 'checked' : ''} data-id="${t.id}">
+            <div>
+              <div style="font-weight: 600; font-size: 13.5px; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escapeHTML(t.topic)}</div>
+              <div style="font-size: 11.5px; color: var(--muted);">${escapeHTML(t.subject)} · <span class="task-phase-badge ${phaseClass}">${escapeHTML(t.phase)}</span> (${escapeHTML(t.type)})</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            ${t.time ? `<span style="font-size:11.5px; color:var(--muted);">⏱️ ${escapeHTML(t.time)}</span>` : ""}
+            <button type="button" class="task-action-btn danger-btn" data-action="delete" data-id="${t.id}">✕</button>
+          </div>
+        </div>
+      `;
+    }
+
+    html += `</div></div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// Handle Excel or CSV import
+async function handleCalendarExcelImport(event) {
+  const statusElem = $("calendar-import-status");
+  const file = event.target && event.target.files && event.target.files[0];
+  if (!file) return;
+
+  if (statusElem) {
+    statusElem.textContent = `Reading ${file.name}...`;
+    statusElem.style.color = "var(--primary)";
+  }
+
+  try {
+    let rows = [];
+    const isXLSX = /\.xlsx$/i.test(file.name) || /\.xls$/i.test(file.name);
+
+    if (isXLSX) {
+      const buffer = await file.arrayBuffer();
+      try {
+        rows = await parseXLSX(buffer);
+      } catch (xlsxErr) {
+        // Fallback in case user uploaded a CSV named .xls
+        const text = await file.text();
+        rows = parseCSV(text);
+      }
+    } else {
+      const text = await file.text();
+      rows = parseCSV(text);
+    }
+
+    if (!rows || rows.length < 2) {
+      throw new Error("Spreadsheet contains no data rows or could not be parsed.");
+    }
+
+    const importedTasks = mapScheduleRowsToTasks(rows);
+    if (importedTasks.length === 0) {
+      throw new Error("No tasks could be mapped. Please ensure columns include Date, Topic, and Subject.");
+    }
+
+    // Merge or replace
+    const existing = state.calendar || [];
+    let merged = [];
+    if (existing.length > 0 && confirm(`Imported ${importedTasks.length} task(s). Do you want to REPLACE your existing schedule? (Click Cancel to MERGE with current schedule)`)) {
+      merged = importedTasks;
+    } else {
+      merged = existing.concat(importedTasks);
+    }
+
+    state.calendar = merged;
+    saveCalendarSchedule();
+
+    if (statusElem) {
+      statusElem.textContent = `✓ Successfully imported ${importedTasks.length} task(s) from ${file.name}!`;
+      setTimeout(() => { statusElem.textContent = ""; }, 5000);
+    }
+
+    // Reset file input
+    event.target.value = "";
+
+    renderCalendar();
+  } catch (err) {
+    console.error("Calendar import error:", err);
+    if (statusElem) {
+      statusElem.textContent = `Import error: ${err.message}`;
+      statusElem.style.color = "var(--danger)";
+    }
+  }
+}
+
+// Load built-in 30-Day RBI Plan
+function loadSampleSchedule() {
+  if (state.calendar && state.calendar.length > 0) {
+    if (!confirm("Load the 30-Day RBI Grade B Exam Study Plan? This will update your calendar schedule.")) return;
+  }
+  state.calendar = generateDefaultSchedule();
+  saveCalendarSchedule();
+  renderCalendar();
+  const statusElem = $("calendar-import-status");
+  if (statusElem) {
+    statusElem.textContent = "✓ Loaded 30-Day RBI Grade B Preparation Schedule!";
+    setTimeout(() => { statusElem.textContent = ""; }, 4000);
+  }
+}
+
+// Download ready-to-use spreadsheet CSV template
+function downloadScheduleTemplate() {
+  const csvContent =
+`Date,Phase,Subject,Topic,Type,Time,Status
+2026-11-21,Phase-1,General Awareness,Spotlight Nov 1-6 Current Affairs (50 MCQs),MCQ Practice,10:00 AM,completed
+2026-11-22,Phase-2,ESI,Chapter 1: National Income - Concepts & Measurement,Descriptive Writing,11:00 AM,pending
+2026-11-23,Phase-1,Reasoning Ability,Puzzles & Seating Arrangement (Circular & Floor),MCQ Practice,02:00 PM,pending
+2026-11-24,Phase-2,Finance,Financial System in India - Structure & RBI Functions,Descriptive Writing,10:00 AM,pending
+2026-11-25,Phase-1,Quantitative Aptitude,Data Interpretation & Percentage/Ratio,MCQ Practice,03:00 PM,pending
+2026-11-26,Phase-2,Management,Leadership Theories - Transformational vs Transactional,Descriptive Writing,11:00 AM,pending
+2026-11-27,General,Weekly Revision,Spotlight GA Week 1 & 2 Rapid Review,Revision,04:00 PM,pending
+2026-11-28,Phase-1,English Language,Reading Comprehension & Para Jumbles,MCQ Practice,10:00 AM,pending
+2026-11-29,Phase-2,English Descriptive,Essay: Digital Currency & Economic Inclusion,Descriptive Writing,11:00 AM,pending
+2026-11-30,Phase-1,Mock Test,Phase-1 Full Length Mock Speed Test 1,Mock Test,09:00 AM,pending`;
+
+  downloadText("RBI_Grade_B_Schedule_Template.csv", csvContent);
+}
+
+// Export current schedule as CSV
+function exportScheduleCSV() {
+  const tasks = state.calendar || [];
+  if (tasks.length === 0) {
+    alert("No tasks currently scheduled to export.");
+    return;
+  }
+
+  let csv = "Date,Phase,Subject,Topic,Type,Time,Status\n";
+  for (const t of tasks) {
+    const escapeCsv = (str) => `"${String(str || "").replace(/"/g, '""')}"`;
+    csv += `${escapeCsv(t.date)},${escapeCsv(t.phase)},${escapeCsv(t.subject)},${escapeCsv(t.topic)},${escapeCsv(t.type)},${escapeCsv(t.time)},${escapeCsv(t.status)}\n`;
+  }
+
+  downloadText(`RBI_Study_Schedule_${getLocalDateString(new Date())}.csv`, csv);
+}
+
+// Clear all scheduled tasks
+function clearSchedule() {
+  if (!confirm("Are you sure you want to clear your entire study schedule?")) return;
+  state.calendar = [];
+  saveCalendarSchedule();
+  renderCalendar();
+}
+
+// Toggle completion state of a task
+function toggleTaskComplete(id) {
+  const tasks = state.calendar || [];
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  task.status = task.status === "completed" ? "pending" : "completed";
+  saveCalendarSchedule();
+  renderCalendar();
+}
+
+// Delete a single task
+function deleteTask(id) {
+  if (!confirm("Delete this scheduled task?")) return;
+  state.calendar = (state.calendar || []).filter(t => t.id !== id);
+  saveCalendarSchedule();
+  renderCalendar();
+}
+
+// Open modal to add or edit task
+function openTaskModal(taskToEdit = null) {
+  const modal = $("modal-task");
+  if (!modal) return;
+
+  const dateInput = $("task-input-date");
+  const phaseInput = $("task-input-phase");
+  const typeInput = $("task-input-type");
+  const subjectInput = $("task-input-subject");
+  const timeInput = $("task-input-time");
+  const topicInput = $("task-input-topic");
+  const editIdInput = $("task-input-edit-id");
+  const title = $("modal-task-title");
+
+  if (taskToEdit) {
+    title.textContent = "Edit Scheduled Task";
+    dateInput.value = taskToEdit.date || state.calendar_selectedDate;
+    phaseInput.value = taskToEdit.phase || "Phase-1";
+    typeInput.value = taskToEdit.type || "MCQ Practice";
+    subjectInput.value = taskToEdit.subject || "";
+    timeInput.value = taskToEdit.time || "";
+    topicInput.value = taskToEdit.topic || "";
+    editIdInput.value = taskToEdit.id;
+  } else {
+    title.textContent = "Add Scheduled Task";
+    dateInput.value = state.calendar_selectedDate || getLocalDateString(new Date());
+    phaseInput.value = state.phase === "phase2" ? "Phase-2" : "Phase-1";
+    typeInput.value = state.phase === "phase2" ? "Descriptive Writing" : "MCQ Practice";
+    subjectInput.value = state.phase === "phase2" ? "ESI" : "General Awareness";
+    timeInput.value = "10:00 AM";
+    topicInput.value = "";
+    editIdInput.value = "";
+  }
+
+  modal.style.display = "flex";
+}
+
+// Close task modal
+function closeTaskModal() {
+  const modal = $("modal-task");
+  if (modal) modal.style.display = "none";
+}
+
+// Save task from modal form
+function handleTaskFormSubmit(e) {
+  e.preventDefault();
+  const date = $("task-input-date").value;
+  const phase = $("task-input-phase").value;
+  const type = $("task-input-type").value;
+  const subject = $("task-input-subject").value.trim();
+  const time = $("task-input-time").value.trim();
+  const topic = $("task-input-topic").value.trim();
+  const editId = $("task-input-edit-id").value;
+
+  if (!date || !topic || !subject) {
+    alert("Please fill in Date, Subject, and Topic.");
+    return;
+  }
+
+  const tasks = state.calendar || [];
+  if (editId) {
+    const idx = tasks.findIndex(t => t.id === editId);
+    if (idx !== -1) {
+      tasks[idx].date = date;
+      tasks[idx].phase = phase;
+      tasks[idx].type = type;
+      tasks[idx].subject = subject;
+      tasks[idx].time = time;
+      tasks[idx].topic = topic;
+    }
+  } else {
+    tasks.push({
+      id: makeId("task"),
+      date: date,
+      phase: phase,
+      type: type,
+      subject: subject,
+      time: time,
+      topic: topic,
+      status: "pending"
+    });
+    state.calendar_selectedDate = date;
+  }
+
+  state.calendar = tasks;
+  saveCalendarSchedule();
+  closeTaskModal();
+  renderCalendar();
+}
+
 // Wire all global DOM event listeners and initialize screen state
 document.addEventListener("DOMContentLoaded", () => {
   // Navigation
@@ -3620,6 +4592,13 @@ document.addEventListener("DOMContentLoaded", () => {
         renderHistory();
       }
       showScreen("history");
+    });
+  }
+
+  const navCalendar = $("nav-calendar");
+  if (navCalendar) {
+    navCalendar.addEventListener("click", () => {
+      showScreen("calendar");
     });
   }
 
@@ -3703,6 +4682,8 @@ document.addEventListener("DOMContentLoaded", () => {
         deleteSetupQuestion(id);
       } else if (action === "move-up") {
         moveUpSetupQuestion(id);
+      } else if (action === "move-down") {
+        moveDownSetupQuestion(id);
       }
     });
   }
@@ -4407,6 +5388,193 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnClearP1History = $("btn-clear-p1-history");
   if (btnClearP1History) {
     btnClearP1History.addEventListener("click", clearP1History);
+  }
+
+  // ==========================================
+  // CALENDAR & STUDY SCHEDULE EVENTS
+  // ==========================================
+  const calExcelImport = $("calendar-excel-import");
+  if (calExcelImport) {
+    calExcelImport.addEventListener("change", handleCalendarExcelImport);
+  }
+
+  const btnLoadSampleSchedule = $("btn-load-sample-schedule");
+  if (btnLoadSampleSchedule) {
+    btnLoadSampleSchedule.addEventListener("click", loadSampleSchedule);
+  }
+
+  const btnDownloadTemplate = $("btn-download-schedule-template");
+  if (btnDownloadTemplate) {
+    btnDownloadTemplate.addEventListener("click", downloadScheduleTemplate);
+  }
+
+  const btnExportCSV = $("btn-export-schedule-csv");
+  if (btnExportCSV) {
+    btnExportCSV.addEventListener("click", exportScheduleCSV);
+  }
+
+  const btnClearSchedule = $("btn-clear-schedule");
+  if (btnClearSchedule) {
+    btnClearSchedule.addEventListener("click", clearSchedule);
+  }
+
+  const calBtnPrevMonth = $("cal-btn-prev-month");
+  if (calBtnPrevMonth) {
+    calBtnPrevMonth.addEventListener("click", () => {
+      const cur = state.calendar_currentDate;
+      state.calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() - 1, 1);
+      renderCalendar();
+    });
+  }
+
+  const calBtnNextMonth = $("cal-btn-next-month");
+  if (calBtnNextMonth) {
+    calBtnNextMonth.addEventListener("click", () => {
+      const cur = state.calendar_currentDate;
+      state.calendar_currentDate = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      renderCalendar();
+    });
+  }
+
+  const calBtnToday = $("cal-btn-today");
+  if (calBtnToday) {
+    calBtnToday.addEventListener("click", () => {
+      state.calendar_currentDate = new Date();
+      state.calendar_selectedDate = getLocalDateString(new Date());
+      renderCalendar();
+    });
+  }
+
+  const calFilterPhase = $("cal-filter-phase");
+  if (calFilterPhase) {
+    calFilterPhase.addEventListener("change", (e) => {
+      state.calendar_filterPhase = e.target.value;
+      renderCalendar();
+    });
+  }
+
+  const calFilterStatus = $("cal-filter-status");
+  if (calFilterStatus) {
+    calFilterStatus.addEventListener("change", (e) => {
+      state.calendar_filterStatus = e.target.value;
+      renderCalendar();
+    });
+  }
+
+  const calViewMonthBtn = $("cal-view-month");
+  if (calViewMonthBtn) {
+    calViewMonthBtn.addEventListener("click", () => {
+      state.calendar_view = "month";
+      renderCalendar();
+    });
+  }
+
+  const calViewAgendaBtn = $("cal-view-agenda");
+  if (calViewAgendaBtn) {
+    calViewAgendaBtn.addEventListener("click", () => {
+      state.calendar_view = "agenda";
+      renderCalendar();
+    });
+  }
+
+  const daysGrid = $("calendar-days-grid");
+  if (daysGrid) {
+    daysGrid.addEventListener("click", (e) => {
+      const cell = e.target.closest(".cal-day-cell");
+      if (cell && cell.dataset.date) {
+        state.calendar_selectedDate = cell.dataset.date;
+        renderCalendar();
+      }
+    });
+  }
+
+  const dayTasksList = $("cal-selected-day-tasks");
+  if (dayTasksList) {
+    dayTasksList.addEventListener("change", (e) => {
+      if (e.target && e.target.classList.contains("task-status-check")) {
+        const id = e.target.dataset.id;
+        toggleTaskComplete(id);
+      }
+    });
+
+    dayTasksList.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === "practice") {
+        const phase = btn.dataset.phase;
+        if (phase === "Phase-1") {
+          setPhase("phase1");
+          renderP1SetupList();
+          showScreen("setup");
+        } else {
+          setPhase("phase2");
+          renderSetupList();
+          showScreen("setup");
+        }
+      } else if (action === "edit") {
+        const t = (state.calendar || []).find(x => x.id === id);
+        if (t) openTaskModal(t);
+      } else if (action === "delete") {
+        deleteTask(id);
+      }
+    });
+  }
+
+  const agendaList = $("calendar-agenda-list");
+  if (agendaList) {
+    agendaList.addEventListener("change", (e) => {
+      if (e.target && e.target.classList.contains("task-status-check")) {
+        const id = e.target.dataset.id;
+        toggleTaskComplete(id);
+      }
+    });
+
+    agendaList.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-action='delete']");
+      if (btn && btn.dataset.id) {
+        deleteTask(btn.dataset.id);
+      }
+    });
+  }
+
+  const btnOpenAddTask = $("btn-open-add-task-modal");
+  if (btnOpenAddTask) {
+    btnOpenAddTask.addEventListener("click", () => openTaskModal());
+  }
+
+  const btnCloseTaskModal = $("btn-close-task-modal");
+  if (btnCloseTaskModal) {
+    btnCloseTaskModal.addEventListener("click", closeTaskModal);
+  }
+
+  const btnCancelTask = $("btn-cancel-task");
+  if (btnCancelTask) {
+    btnCancelTask.addEventListener("click", closeTaskModal);
+  }
+
+  const formTaskModal = $("form-task-modal");
+  if (formTaskModal) {
+    formTaskModal.addEventListener("submit", handleTaskFormSubmit);
+  }
+
+  const calUploadCard = document.querySelector(".calendar-upload-card");
+  if (calUploadCard) {
+    calUploadCard.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      calUploadCard.classList.add("drag-over");
+    });
+    calUploadCard.addEventListener("dragleave", () => {
+      calUploadCard.classList.remove("drag-over");
+    });
+    calUploadCard.addEventListener("drop", (e) => {
+      e.preventDefault();
+      calUploadCard.classList.remove("drag-over");
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleCalendarExcelImport({ target: { files: e.dataTransfer.files } });
+      }
+    });
   }
 
   // Initial load

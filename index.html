@@ -18,6 +18,7 @@
     <nav>
       <button type="button" id="nav-setup">New Test</button>
       <button type="button" id="nav-bank">Question Bank</button>
+      <button type="button" id="nav-calendar">📅 Calendar</button>
       <button type="button" id="nav-history">History</button>
     </nav>
   </header>
@@ -328,15 +329,17 @@
         <button type="button" id="btn-p1-bank-random-20">Add 20 Random MCQs to Today's Test</button>
         <button type="button" id="btn-p1-bank-random-50" class="secondary">Add 50 Random MCQs</button>
       </div>
-      <input id="p1-bank-search" type="text" placeholder="Search question, keyword, or topic...">
-      <select id="p1-bank-filter-subject">
-        <option value="">All subjects</option>
-        <option value="General Awareness">General Awareness (Spotlight)</option>
-        <option value="Reasoning Ability">Reasoning Ability</option>
-        <option value="Quantitative Aptitude">Quantitative Aptitude</option>
-        <option value="English Language">English Language</option>
-        <option value="Other">Other</option>
-      </select>
+      <div class="bank-search-row">
+        <input id="p1-bank-search" type="text" placeholder="Search question, keyword, or topic...">
+        <select id="p1-bank-filter-subject">
+          <option value="">All subjects</option>
+          <option value="General Awareness">General Awareness (Spotlight)</option>
+          <option value="Reasoning Ability">Reasoning Ability</option>
+          <option value="Quantitative Aptitude">Quantitative Aptitude</option>
+          <option value="English Language">English Language</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
 
       <div class="bank-list-header">
         <div id="p1-bank-batch-actions">
@@ -351,10 +354,12 @@
 
       <div id="p1-bank-list"></div>
       <div id="p1-bank-pagination" class="pagination-wrapper" style="display: none;"></div>
-      <button type="button" id="btn-p1-bank-export">Export MCQs (.json)</button>
-      <label class="file-btn">Import MCQs (.json) <input id="p1-bank-import" type="file" accept=".json" hidden></label>
-      <label class="file-btn secondary-file-btn">Import DOCX / PDF <input id="p1-bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
-      <button type="button" id="btn-p1-bank-clear-all" class="danger">Delete all MCQs in bank</button>
+      <div class="bank-footer-actions">
+        <button type="button" id="btn-p1-bank-export">Export MCQs (.json)</button>
+        <label class="file-btn">Import MCQs (.json) <input id="p1-bank-import" type="file" accept=".json" hidden></label>
+        <label class="file-btn secondary-file-btn">Import DOCX / PDF <input id="p1-bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
+        <button type="button" id="btn-p1-bank-clear-all" class="danger">Delete all MCQs in bank</button>
+      </div>
     </section>
 
     <!-- Screen: Phase-1 History -->
@@ -670,15 +675,17 @@
       <div style="margin-bottom: 12px;">
         <button type="button" id="btn-bank-random">Add 3 random questions</button>
       </div>
-      <input id="bank-search" type="text" placeholder="Search question or topic...">
-      <select id="bank-filter-paper">
-        <option value="">All subjects</option>
-        <option value="ESI">ESI</option>
-        <option value="Finance">Finance</option>
-        <option value="Management">Management</option>
-        <option value="English Descriptive">English Descriptive</option>
-        <option value="Other">Other</option>
-      </select>
+      <div class="bank-search-row">
+        <input id="bank-search" type="text" placeholder="Search question or topic...">
+        <select id="bank-filter-paper">
+          <option value="">All subjects</option>
+          <option value="ESI">ESI</option>
+          <option value="Finance">Finance</option>
+          <option value="Management">Management</option>
+          <option value="English Descriptive">English Descriptive</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
 
       <div class="bank-list-header">
         <div id="bank-batch-actions">
@@ -693,10 +700,173 @@
 
       <div id="bank-list"></div>
       <div id="bank-pagination" class="pagination-wrapper" style="display: none;"></div>
-      <button type="button" id="btn-bank-export">Export bank (.json)</button>
-      <label class="file-btn">Import bank (.json) <input id="bank-import" type="file" accept=".json" hidden></label>
-      <label class="file-btn secondary-file-btn">Import DOCX / PDF <input id="bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
-      <button type="button" id="btn-bank-clear-all" class="danger">Delete all questions in bank</button>
+      <div class="bank-footer-actions">
+        <button type="button" id="btn-bank-export">Export bank (.json)</button>
+        <label class="file-btn">Import bank (.json) <input id="bank-import" type="file" accept=".json" hidden></label>
+        <label class="file-btn secondary-file-btn">Import DOCX / PDF <input id="bank-doc-import" type="file" accept=".docx,.pdf" hidden></label>
+        <button type="button" id="btn-bank-clear-all" class="danger">Delete all questions in bank</button>
+      </div>
+    </section>
+
+    <!-- Screen: Study Plan & Calendar -->
+    <section id="screen-calendar" class="screen" hidden>
+      <div class="setup-header">
+        <div class="setup-title-group">
+          <h2>📅 Study Plan &amp; Exam Schedule</h2>
+          <p class="setup-subtitle">Import your study plan from Excel (.xlsx, .xls, .csv) or manage your daily schedule interactively.</p>
+        </div>
+      </div>
+
+      <!-- Schedule Import Card -->
+      <div class="minimal-upload-card calendar-upload-card">
+        <div class="upload-drop-zone">
+          <div class="upload-icon-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
+          <div class="upload-text-group">
+            <strong>Import Study Schedule from Excel (.xlsx, .xls, .csv)</strong>
+            <span>Upload any spreadsheet with your study timetable. Auto-maps columns: Date, Subject, Topic, Phase, Mode, Time, Status.</span>
+          </div>
+          <label class="btn-minimal-primary">
+            Upload Excel File
+            <input id="calendar-excel-import" type="file" accept=".xlsx,.xls,.csv" hidden>
+          </label>
+        </div>
+
+        <div class="sample-pills-row">
+          <span class="sample-label">Quick Actions:</span>
+          <div class="sample-actions">
+            <button type="button" id="btn-load-sample-schedule" class="sample-pill">⚡ Load 30-Day RBI Plan</button>
+            <button type="button" id="btn-download-schedule-template" class="sample-pill">⬇️ Download Template (.csv)</button>
+            <button type="button" id="btn-export-schedule-csv" class="sample-pill">📤 Export My Schedule (.csv)</button>
+            <button type="button" id="btn-clear-schedule" class="sample-pill danger-pill">🗑️ Clear Schedule</button>
+          </div>
+        </div>
+        <span id="calendar-import-status" class="upload-status-badge"></span>
+      </div>
+
+      <!-- Schedule Stats & Progress Bar -->
+      <div id="calendar-progress-bar" class="schedule-summary-bar"></div>
+
+      <!-- Calendar Controls: Month Navigation & Filters -->
+      <div class="calendar-controls-bar">
+        <div class="cal-nav-group">
+          <button type="button" id="cal-btn-prev-month" class="cal-nav-btn" title="Previous Month">◀</button>
+          <h3 id="cal-month-year-display">November 2026</h3>
+          <button type="button" id="cal-btn-next-month" class="cal-nav-btn" title="Next Month">▶</button>
+          <button type="button" id="cal-btn-today" class="cal-today-btn">Today</button>
+        </div>
+
+        <div class="cal-filter-group">
+          <select id="cal-filter-phase" class="cal-select">
+            <option value="all">All Phases</option>
+            <option value="phase1">Phase-1 (Objective)</option>
+            <option value="phase2">Phase-2 (Descriptive)</option>
+          </select>
+          <select id="cal-filter-status" class="cal-select">
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="completed">Completed</option>
+          </select>
+          <div class="cal-view-toggle">
+            <button type="button" id="cal-view-month" class="cal-view-btn active">Month View</button>
+            <button type="button" id="cal-view-agenda" class="cal-view-btn">Agenda View</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Calendar Body -->
+      <div class="calendar-main-layout">
+        <!-- Left Column: Month Grid or Agenda List -->
+        <div class="calendar-grid-container">
+          <!-- Month View -->
+          <div id="calendar-month-view" class="calendar-grid-wrapper">
+            <div class="calendar-weekdays-row">
+              <div class="cal-weekday">Sun</div>
+              <div class="cal-weekday">Mon</div>
+              <div class="cal-weekday">Tue</div>
+              <div class="cal-weekday">Wed</div>
+              <div class="cal-weekday">Thu</div>
+              <div class="cal-weekday">Fri</div>
+              <div class="cal-weekday">Sat</div>
+            </div>
+            <div id="calendar-days-grid" class="calendar-days-grid"></div>
+          </div>
+
+          <!-- Agenda View -->
+          <div id="calendar-agenda-view" class="calendar-agenda-wrapper" style="display: none;">
+            <div id="calendar-agenda-list" class="calendar-agenda-list"></div>
+          </div>
+        </div>
+
+        <!-- Right Column: Day Detail & Task Management Panel -->
+        <div class="calendar-day-panel">
+          <div class="day-panel-header">
+            <div>
+              <h4 id="cal-selected-date-heading">Selected Day</h4>
+              <span id="cal-selected-date-sub" class="selected-date-sub">0 tasks</span>
+            </div>
+            <button type="button" id="btn-open-add-task-modal" class="btn-minimal-primary add-task-btn">+ Add Task</button>
+          </div>
+
+          <div id="cal-selected-day-tasks" class="day-tasks-list"></div>
+        </div>
+      </div>
+
+      <!-- Add / Edit Task Modal -->
+      <div id="modal-task" class="rbi-modal-backdrop" style="display: none;">
+        <div class="rbi-modal-content" style="max-width: 480px;">
+          <div class="rbi-modal-header">
+            <h3 id="modal-task-title">Add Scheduled Task</h3>
+            <button type="button" id="btn-close-task-modal" class="rbi-modal-close">×</button>
+          </div>
+          <form id="form-task-modal" style="padding: 16px;">
+            <label>Date
+              <input type="date" id="task-input-date" required>
+            </label>
+            <div class="form-row-2col">
+              <label>Phase
+                <select id="task-input-phase">
+                  <option value="Phase-1">Phase-1 (Objective / MCQs)</option>
+                  <option value="Phase-2">Phase-2 (Descriptive Writing)</option>
+                  <option value="General">General / Both</option>
+                </select>
+              </label>
+              <label>Task Type
+                <select id="task-input-type">
+                  <option value="MCQ Practice">MCQ Practice</option>
+                  <option value="Descriptive Writing">Descriptive Writing</option>
+                  <option value="Mock Test">Full Mock Test</option>
+                  <option value="Revision">Revision</option>
+                  <option value="Reading / Notes">Reading / Notes</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+            </div>
+            <div class="form-row-2col">
+              <label>Subject / Paper
+                <input type="text" id="task-input-subject" placeholder="e.g. General Awareness, ESI, Finance" required>
+              </label>
+              <label>Time / Duration (optional)
+                <input type="text" id="task-input-time" placeholder="e.g. 10:00 AM or 2 hrs">
+              </label>
+            </div>
+            <label>Topic / Description
+              <textarea id="task-input-topic" rows="2" placeholder="e.g. Spotlight GA Nov 1-6 MCQs or ESI Ch-1 National Income" required></textarea>
+            </label>
+            <input type="hidden" id="task-input-edit-id" value="">
+            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;">
+              <button type="button" id="btn-cancel-task" class="rbi-btn secondary">Cancel</button>
+              <button type="submit" id="btn-save-task" class="rbi-btn primary">Save Task</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </section>
   </main>
 

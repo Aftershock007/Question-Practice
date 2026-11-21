@@ -15,6 +15,12 @@ A personal, offline typing test and descriptive answer practice website designed
   - Four dedicated papers: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
   - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support, and optional paste prevention.
   - Automatic AI evaluation prompt generation (ready for Gemini, Claude, and ChatGPT).
+- **Study Plan & Calendar (Excel / CSV Timetable Import):**
+  - Interactive monthly and agenda timetable to plan daily RBI Grade B preparation.
+  - Client-side Excel (.xlsx, .xls) and CSV parser: import any study schedule spreadsheet with automated column mapping (`Date`, `Subject`, `Topic`, `Phase`, `Type`, `Time`, `Status`).
+  - Pre-packaged with a comprehensive **30-Day RBI Grade B Exam Study Plan** spanning Phase-1 MCQs and Phase-2 Descriptive Writing.
+  - One-click **▶ Practice** buttons on calendar tasks that immediately launch into Phase-1 or Phase-2 console.
+  - Template download and export functionality.
 - **DOCX & PDF File Import:** Directly upload Word (.docx) or PDF (.pdf) documents with robust decompression handling (including ZIP data descriptors) to extract questions, options, answer keys, and model answers.
 - **Included Example Practice Documents:**
   - `Spotlight-Questions-1-6-Nov-2026.docx`: 200 General Awareness Phase-1 MCQs with options and full answer key table.
