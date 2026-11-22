@@ -757,7 +757,7 @@ function calShellHTML() {
         <span class="cal-settings-sub" data-role="plan-summary"></span>
       </summary>
       <div class="cal-settings-body">
-        <p class="cal-settings-note">Your timetable gives every day its 3 exam TODOs automatically (the built-in plan has 415 days). Uploading a timetable replaces the current one; removing it clears the plan TODOs. Your own TODOs and test history are never touched.</p>
+        <p class="cal-settings-note">Your timetable gives every day its 3 exam TODOs automatically (the built-in one is <strong>RBI_Study_Schedule.xlsx</strong>, 415 days). Uploading a timetable replaces the current one; removing it clears the plan TODOs. Your own TODOs and test history are never touched.</p>
         <div class="cal-settings-grid">
           <label>Plan start date (Day 1)
             <input type="date" data-role="start-date">

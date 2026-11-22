@@ -810,7 +810,7 @@ function showQuestion(index) {
 
   const candRoll = document.querySelector("#screen-exam .cand-roll");
   if (candRoll) {
-    candRoll.innerHTML = `Roll No: <strong>EXAM-2026-P2</strong> | Paper: <strong>${escapeHTML(q.paper || "General")}</strong>`;
+    candRoll.innerHTML = `Roll No: <strong>RBI-2026-P2</strong> | Paper: <strong>${escapeHTML(q.paper || "General")}</strong>`;
   }
 
   const ans = state.test.answers[q.id] || { text: "", wordCount: 0, secondsSpent: 0 };

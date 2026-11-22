@@ -2324,8 +2324,8 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
           '<div class="ai-overall-text">' +
             '<div class="ai-overall-label">' + (allDone ? "Total score" : "Score so far · " + st.graded.length + " of " + st.rows.length + " graded") + "</div>" +
             '<span class="ai-grade-badge ai-g-' + g.cls + '">Grade ' + g.grade + " · " + esc(g.label) + "</span> <span class=\"ai-pct\">" + fmt(pct) + "%</span>" +
-            '<div class="ai-projection">Likely in the real exam: <strong>' + fmt(projLo) + "–" + fmt(projHi) + " / " + fmt(max) + "</strong></div>" +
-            '<p class="ai-muted">This grader is deliberately about 2–3 marks stricter per answer than the real exam panel.</p>' +
+            '<div class="ai-projection">Likely in the real RBI exam: <strong>' + fmt(projLo) + "–" + fmt(projHi) + " / " + fmt(max) + "</strong></div>" +
+            '<p class="ai-muted">This grader is deliberately about 2–3 marks stricter per answer than the real RBI panel.</p>' +
             (function () { const u = reports.reduce((a, r) => addUsage(a, r.usage), null); return u ? '<p class="ai-muted">AI tokens for this test: ' + esc(tokensText(u)) + "</p>" : ""; })() +
           "</div></div>" +
         '<div class="table-scroll"><table class="ai-table ai-q-table"><thead><tr><th>Q</th><th>Paper</th><th>Words</th><th>Score</th><th>Grade</th></tr></thead><tbody>' + rowsHTML + "</tbody></table></div>" +
@@ -2487,10 +2487,10 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const c = writingCounts(w);
     const chip = (n, label) => '<span class="ai-wchip' + (n ? " has" : "") + '"><strong>' + n + "</strong> " + label + "</span>";
     let h = '<div class="ai-wchips">' + chip(c.grammar, "grammar / punctuation") + chip(c.spelling, "spelling") + chip(c.facts, "factual") +
-      (w.style.verdict ? '<span class="ai-cov ai-cov-' + (VERDICT_CLS[w.style.verdict] || "ok") + '">Style: ' + esc(w.style.verdict === "RBI-ready" ? "Exam-ready" : w.style.verdict) + (w.style.score !== null ? " · " + fmt(w.style.score) + "/10" : "") + "</span>" : "") +
+      (w.style.verdict ? '<span class="ai-cov ai-cov-' + (VERDICT_CLS[w.style.verdict] || "ok") + '">Style: ' + esc(w.style.verdict) + (w.style.score !== null ? " · " + fmt(w.style.score) + "/10" : "") + "</span>" : "") +
       "</div>";
     if (w.style.assessment || w.style.issues.length) {
-      h += "<h6>Is the writing style up to exam standard?</h6>" + (w.style.assessment ? "<p>" + inline(w.style.assessment) + "</p>" : "") + (w.style.issues.length ? listHTML(w.style.issues, "") : "");
+      h += "<h6>Is the writing style up to RBI standard?</h6>" + (w.style.assessment ? "<p>" + inline(w.style.assessment) + "</p>" : "") + (w.style.issues.length ? listHTML(w.style.issues, "") : "");
     }
     h += "<h6>Grammar and punctuation</h6>";
     h += w.grammar.length
@@ -2553,7 +2553,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
         '<div class="ai-report-head-text">' +
           '<div class="ai-report-title-row"><span class="ai-grade-badge ai-g-' + g.cls + '">Grade ' + g.grade + " · " + esc(g.label) + '</span><span class="ai-pct">' + fmt(r.percent) + "%</span>" +
           (r.track && TRACKS[r.track] ? '<span class="ai-tag">' + esc(TRACKS[r.track]) + "</span>" : "") + "</div>" +
-          '<div class="ai-projection">Likely in the real exam: <strong>' + proj + "</strong></div>" +
+          '<div class="ai-projection">Likely in the real RBI exam: <strong>' + proj + "</strong></div>" +
           '<div class="ai-muted">Strict grader: about 2–3 marks tougher than the real panel, so clearing it here means you are safe there.</div>' +
         "</div></div>" +
       (r.summary ? '<p class="ai-summary">' + inline(r.summary) + "</p>" : "") +
