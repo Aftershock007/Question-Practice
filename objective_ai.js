@@ -109,7 +109,7 @@ function mcqVerifyPrompt(batch, topics) {
   lines.push("These MCQs were extracted automatically from a DOCX/PDF file. Extraction can go wrong: question text can be cut off, or merged with a heading or with another question; options can be missing, shifted or belong to another question; and the answer key can end up on the wrong question.");
   lines.push("");
   lines.push("For EVERY question below, decide:");
-  lines.push("1. text_ok: is the question text complete and readable on its own (not cut off, not merged with another question or a section heading)? A data table, passage or list printed before the question is fine. A question-type tag such as SINGLE CORRECT, ASSERTION or DATA at the start is fine.");
+  lines.push("1. text_ok: is the question text complete and readable on its own (not cut off, not merged with another question or a section heading)? A data table, passage or list printed before the question is fine. When a \"Passage / data\" block is given, the question is meant to be answered from it: solve it from that passage or table, and set text_ok false if the question clearly needs a passage, table or chart that is missing or cut off. A question-type tag such as SINGLE CORRECT, ASSERTION or DATA at the start is fine.");
   lines.push("2. options_ok: do the options belong to this question and form a complete, sensible set?");
   lines.push("3. key_correct: solve the question yourself, then say whether the given answer key is correct. Questions marked MULTI-CORRECT, or that say one or more options may be correct, can have several correct options and the key then lists all of them. When an explanation is given, check that the key agrees with it. Mark key_correct false ONLY when you are confident the key is wrong.");
   lines.push("4. topic: the sub-topic the question tests." + (topics.length ? " Use one of these chapter topics when it fits: " + topics.map(t => "\"" + t + "\"").join(", ") + ". Otherwise give a short topic name (2-5 words)." : " Give a broad sub-topic name of 2-5 words, such as \"Data Interpretation\", \"Percentages\", \"Syllogism\" or \"Banking Regulation\" - not a name for a single question. Questions on the same sub-topic MUST get exactly the same name, so the whole file uses only a handful of topics."));
@@ -121,6 +121,10 @@ function mcqVerifyPrompt(batch, topics) {
   batch.forEach((q, i) => {
     lines.push("");
     lines.push(`[n=${i + 1}]${q.number != null ? " (numbered " + q.number + " in the file)" : ""}`);
+    // a shared passage / table is sent once, then referred to by the questions after it
+    const prev = batch[i - 1];
+    if (q.passage && prev && prev.passage === q.passage) lines.push("Passage / data: the same as for the previous question.");
+    else if (q.passage) lines.push("Passage / data the question is based on:\n" + q.passage);
     lines.push("Question: " + q.text);
     (q.options || []).forEach(o => lines.push(`(${o.label}) ${o.text}`));
     lines.push("Answer key: " + (q.correctAnswer ? formatMCQAnswer(q.correctAnswer) : "MISSING"));
@@ -346,7 +350,7 @@ function p1AnalysisPrompt(test, stats) {
       const a = test.answers[i];
       if (mcqIsCorrect(a, q.correctAnswer) || count >= 40) return;
       count++;
-      L.push(`[Q${i + 1}] ${String(q.text).slice(0, 900)}`);
+      L.push(`[Q${i + 1}] ${q.passage ? "Passage / data: " + String(q.passage).slice(0, 1500) + "\nQuestion: " : ""}${String(q.text).slice(0, 900)}`);
       (q.options || []).forEach(o => L.push(`(${o.label}) ${String(o.text).slice(0, 300)}`));
       L.push(`Correct: ${formatMCQAnswer(q.correctAnswer)} · Candidate: ${a ? formatMCQAnswer(a) : "not attempted"}`);
       if (q.explanation) L.push("Key explanation: " + String(q.explanation).slice(0, 600));
@@ -577,7 +581,9 @@ document.addEventListener("click", (e) => {
   } else if (action === "goto-q") {
     const card = document.querySelector(`#p1-result-list [data-q-index="${Number(btn.dataset.q) - 1}"]`);
     if (!card) {
+      // show "All questions" on the page that holds this question
       state.p1_resultFilter = "all";
+      state.p1_resultPage = Math.floor((Number(btn.dataset.q) - 1) / QUESTIONS_PER_PAGE) + 1;
       document.querySelectorAll("#screen-result-p1 .rf-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === "all"));
       renderP1ResultReviewList();
     }

@@ -86,6 +86,11 @@
             </label>
           </div>
 
+          <label>Passage, case or data table (optional)
+            <textarea id="p1-q-passage" rows="3" placeholder="For reading comprehension, caselets and data interpretation. Table rows: separate cells with &quot; | &quot;, e.g. Bank | Deposits | Advances"></textarea>
+            <span class="field-hint">Shown above the question in the exam. Editing it updates every question that shares the same passage.</span>
+          </label>
+
           <label>Question Prompt
             <textarea id="p1-q-text" rows="3" required placeholder="Type the question statement..."></textarea>
           </label>
@@ -195,6 +200,7 @@
             <span>Select one option from the choices below. Click <strong>'Save &amp; Next'</strong> to save your answer.</span>
           </div>
 
+          <div id="p1-exam-passage" class="q-passage" hidden aria-label="Passage or data for this question"></div>
           <div id="p1-exam-question-text" class="rbi-question-box"></div>
 
           <div class="rbi-answer-header">
@@ -319,6 +325,7 @@
       </div>
 
       <div id="p1-result-list" class="p1-result-list"></div>
+      <div id="p1-result-pagination" class="pagination-wrapper" style="display: none;"></div>
 
       <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
         <button type="button" id="p1-btn-download-results">Download Analysis (.txt)</button>
@@ -391,6 +398,11 @@
               <input id="q-topic" type="text" placeholder="e.g. Monetary Policy">
             </label>
           </div>
+
+          <label>Passage, case or data table (optional)
+            <textarea id="q-passage" rows="3" placeholder="For case studies and passages that several questions share. Table rows: separate cells with &quot; | &quot;"></textarea>
+            <span class="field-hint">Shown above the question in the exam. Editing it updates every question that shares the same passage.</span>
+          </label>
 
           <label>Question
             <textarea id="q-text" rows="4" required placeholder="Type descriptive question statement..."></textarea>
@@ -503,6 +515,7 @@
             <span>Type your descriptive answer in the box provided below using your keyboard. Copy-paste and external formatting are restricted.</span>
           </div>
 
+          <div id="exam-passage" class="q-passage" hidden aria-label="Passage or data for this question"></div>
           <div id="exam-question-text" class="rbi-question-box"></div>
 
           <div class="rbi-answer-header">
@@ -677,6 +690,15 @@
       </div>
     </div>
 
+    <!-- Subject / chapter of an uploaded file, or of a History test (folders.js) -->
+    <div id="folder-modal" class="modal" hidden>
+      <div class="modal-content folder-card" role="dialog" aria-modal="true" aria-labelledby="folder-title">
+        <h3 id="folder-title">Which subject and chapter is this?</h3>
+        <p id="folder-sub" class="test-type-sub"></p>
+        <form id="folder-form" class="folder-form" novalidate></form>
+      </div>
+    </div>
+
     <!-- AI evaluation settings (behaviour in ai_eval.js, defaults in ai_config.js) -->
     <div id="ai-settings-modal" class="modal" hidden>
       <div class="modal-content ai-settings-card" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title">
@@ -737,8 +759,11 @@
   <script src="schedule_data.js"></script>
   <script src="app.js"></script>
   <script src="ai_config.js"></script>
+  <!-- private, git-ignored API key (missing on GitHub Pages: then the key saved in AI Settings is used) -->
+  <script src="ai_key.local.js" onerror="this.remove()"></script>
   <script src="ai_eval.js"></script>
   <script src="objective_ai.js"></script>
   <script src="calendar.js"></script>
+  <script src="folders.js"></script>
 </body>
 </html>

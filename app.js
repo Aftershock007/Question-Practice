@@ -64,6 +64,105 @@ function escapeHTML(str) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+// Text that may hold a data table: runs of "cell | cell" lines (how DOCX and PDF tables are
+// read) become an HTML table, every other line stays exactly as written. No whitespace
+// between tags, because question boxes use white-space: pre-wrap.
+function richTextHTML(text) {
+  const lines = String(text || "").split("\n");
+  const isRow = l => /\s\|\s/.test(l) || /^\s*\|.+\|\s*$/.test(l);
+  const cells = l => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+  let html = "";
+  let buf = [];
+  let rows = [];
+  const flushText = () => {
+    if (buf.length) html += `<div class="rt-text">${escapeHTML(buf.join("\n"))}</div>`;
+    buf = [];
+  };
+  const flushTable = () => {
+    if (rows.length === 1) buf.push(rows[0].join(" | "));
+    else if (rows.length) {
+      const width = Math.max(...rows.map(r => r.length));
+      const cellsHTML = (r, tag) => Array.from({ length: width }, (_, k) => `<${tag}>${escapeHTML(r[k] || "")}</${tag}>`).join("");
+      // the first row is a header unless it already holds figures ("A | 4,000 | 3,000")
+      const head = !rows[0].slice(1).some(c => /^[-−+(]?[\d₹$]/.test(c));
+      const body = head ? rows.slice(1) : rows;
+      html += `<div class="rt-table-wrap"><table class="rt-table">${head ? `<thead><tr>${cellsHTML(rows[0], "th")}</tr></thead>` : ""}<tbody>${body.map(r => `<tr>${cellsHTML(r, "td")}</tr>`).join("")}</tbody></table></div>`;
+    }
+    rows = [];
+  };
+  for (const l of lines) {
+    if (isRow(l)) {
+      flushText();
+      rows.push(cells(l));
+    } else {
+      flushTable();
+      buf.push(l);
+    }
+  }
+  flushTable();
+  flushText();
+  return html;
+}
+
+// A question's full text for prompts, exports and duplicate checks: its passage / table first
+function questionWithPassage(q) {
+  return (q && q.passage ? q.passage + "\n\n" : "") + String((q && q.text) || "");
+}
+
+// The question as an AI prompt sees it: the passage / data it is based on, then the question
+function questionPromptText(q) {
+  if (!q || !q.passage) return String((q && q.text) || "");
+  return "[Passage / data this question is based on]\n" + q.passage + "\n\n[Question]\n" + String(q.text || "");
+}
+
+// After you edit a question's passage, questions that shared the old text get the new one
+function syncSharedPassage(list, edited, oldPassage) {
+  if (!oldPassage || oldPassage === (edited.passage || "")) return 0;
+  let n = 0;
+  list.forEach(q => {
+    if (q !== edited && q.passage === oldPassage) {
+      if (edited.passage) q.passage = edited.passage; else delete q.passage;
+      n++;
+    }
+  });
+  return n;
+}
+
+// "passage", "case", "table" or "passage and table": what a shared block holds
+function passageKind(passage) {
+  const lines = String(passage || "").split("\n").filter(l => l.trim());
+  const rows = lines.filter(l => /\s\|\s/.test(l)).length;
+  if (/^(?:Case\s*Study|Case\s*let|Caselet)\b/i.test(lines[0] || "")) return "case";
+  if (rows >= 2) return lines.length - rows > 2 ? "passage and table" : "table";
+  return "passage";
+}
+
+// The passage / table above question i, with which questions of the list share it
+function passageBlockHTML(questions, i) {
+  const q = questions[i];
+  if (!q || !q.passage) return "";
+  let a = i;
+  let b = i;
+  while (a > 0 && questions[a - 1].passage === q.passage) a--;
+  while (b < questions.length - 1 && questions[b + 1].passage === q.passage) b++;
+  const kind = passageKind(q.passage);
+  const head = a === b ? `Read the ${kind} below to answer this question.` : `Questions ${a + 1} ${b === a + 1 ? "and" : "to"} ${b + 1} are based on the ${kind} below.`;
+  return `<div class="q-passage-head">${escapeHTML(head)}</div><div class="q-passage-body">${richTextHTML(q.passage)}</div>`;
+}
+
+// Show (or hide) the passage slot of an exam screen for question i
+function renderPassageSlot(slotId, questions, i) {
+  const slot = $(slotId);
+  if (!slot) return;
+  const html = passageBlockHTML(questions, i);
+  // the same passage as the previous question stays as it is (and keeps its scroll position)
+  if (html && slot._passageHtml === html && !slot.hidden) return;
+  slot._passageHtml = html;
+  slot.hidden = !html;
+  slot.innerHTML = html;
+  slot.scrollTop = 0;
+}
+
 // Format local date as YYYY-MM-DD
 function getLocalDateString(dateInput) {
   const d = dateInput ? new Date(dateInput) : new Date();
@@ -204,10 +303,14 @@ const state = {
   p1_lastAutoSave: 0,
   p1_lastResultTest: null,
   p1_resultFilter: "all",
+  p1_resultPage: 1,      // page of the result / history question review
   p1_setup_page: 1     // current page for Phase 1 setup questions list
 };
 
-// Render reusable pagination controls (50 items per page; hidden if totalPages <= 1)
+// Questions per page on the setup lists and in result / history reviews
+const QUESTIONS_PER_PAGE = 20;
+
+// Render reusable pagination controls (20 items per page; hidden if totalPages <= 1)
 function renderPaginationControls({ containerId, currentPage, totalPages, totalItems, onPageChange }) {
   const container = $(containerId);
   if (!container) return;
@@ -227,7 +330,7 @@ function renderPaginationControls({ containerId, currentPage, totalPages, totalI
 
   container.innerHTML = `
     <div class="pagination-bar">
-      <span class="pagination-info">Page ${currentPage} of ${totalPages} (${totalItems} total questions · 50 per page)</span>
+      <span class="pagination-info">Page ${currentPage} of ${totalPages} (${totalItems} questions · ${QUESTIONS_PER_PAGE} per page)</span>
       <div class="pagination-actions">
         <button type="button" class="pagination-nav-btn prev" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>
         <div class="pagination-pages">${pagesHtml}</div>
@@ -413,7 +516,7 @@ function renderSetupList() {
     return;
   }
 
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = QUESTIONS_PER_PAGE;
   const totalItems = questions.length;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
   if (state.setup_page > totalPages) state.setup_page = totalPages;
@@ -441,6 +544,7 @@ function renderSetupList() {
             ${modelWarn}
             <span class="q-num">Q${globalIdx + 1}</span>
           </div>
+          ${q.passage ? `<details class="q-passage-peek"><summary>Based on a ${escapeHTML(passageKind(q.passage))}</summary><div class="q-passage-body">${richTextHTML(q.passage)}</div></details>` : ""}
           <div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.5; font-weight: 500;">${escapeHTML(q.text)}</div>
         </div>
         <div class="q-actions">
@@ -483,6 +587,7 @@ function fillQuestionForm(q) {
   selectValueEnsuringOption("q-paper", q.paper || "ESI");
   $("q-topic").value = q.topic || "";
   $("q-text").value = q.text || "";
+  $("q-passage").value = q.passage || "";
   selectValueEnsuringOption("q-marks", q.marks || 10, " marks");
   $("q-wordlimit").value = q.wordLimit || defaultWordLimit(q.marks || 10);
   $("q-model").value = q.modelAnswer || "";
@@ -536,6 +641,7 @@ function handleQuestionFormSubmit(event) {
   const paper = $("q-paper").value;
   const topic = $("q-topic").value.trim();
   const text = $("q-text").value.trim();
+  const passage = ($("q-passage").value || "").trim();
   const marks = Number($("q-marks").value) || 10;
   const wordLimit = Math.max(50, Number($("q-wordlimit").value) || defaultWordLimit(marks));
   const modelAnswer = $("q-model").value.trim();
@@ -555,11 +661,14 @@ function handleQuestionFormSubmit(event) {
     wordLimit,
     modelAnswer
   };
+  if (passage) questionObj.passage = passage;
 
   if (editId) {
     const idx = state.setup.questions.findIndex(q => q.id === editId);
     if (idx >= 0) {
+      const old = state.setup.questions[idx].passage || "";
       state.setup.questions[idx] = questionObj;
+      syncSharedPassage(state.setup.questions, questionObj, old);
     } else {
       state.setup.questions.push(questionObj);
     }
@@ -629,6 +738,7 @@ function startTest(testType) {
     id: makeId("t"),
     date: new Date().toISOString(),
     testType: testType || "Subjective Practice",
+    folder: typeof testFolderFromQuestions === "function" ? testFolderFromQuestions(questionsCopy) : null,
     totalMinutes: totalMinutes,
     usedSeconds: 0,
     autoSubmitted: false,
@@ -707,7 +817,10 @@ function showQuestion(index) {
 
   $("exam-qpos").textContent = `Question No. ${index + 1}`;
   $("exam-marks").textContent = `Marks: ${Number(q.marks || 0).toFixed(2)} · Word Limit: ${q.wordLimit}`;
-  $("exam-question-text").textContent = q.text;
+  renderPassageSlot("exam-passage", state.test.questions, index);
+  $("exam-question-text").innerHTML = richTextHTML(q.text);
+  const qTop = $("exam-qpos");
+  if (qTop && qTop.getBoundingClientRect().top < 0) qTop.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const secName = $("exam-section-name");
   if (secName) {
@@ -1093,7 +1206,7 @@ function buildQuestionText(test, question, index) {
     WORD_PERCENT: wordPercent,
     TIME_SPENT: formatDuration(ans.secondsSpent || 0),
     DATE: new Date(test.date).toLocaleString(),
-    QUESTION: question.text,
+    QUESTION: questionPromptText(question),
     ANSWER: answerText || "[NO ANSWER WRITTEN]",
     MODEL_ANSWER: modelText || "[No model answer provided - evaluate using your own expert knowledge of the topic.]"
   };
@@ -1312,7 +1425,7 @@ function renderHistory() {
     return;
   }
 
-  listElem.innerHTML = "";
+  const cardsById = new Map();
 
   history.forEach(t => {
     const card = document.createElement("div");
@@ -1369,6 +1482,7 @@ function renderHistory() {
             <span class="q-review-badge">Q${idx + 1} · ${escapeHTML(q.paper)}</span>
             <span class="q-review-marks-tag">${escapeHTML(q.marks)} Marks · Target: ${escapeHTML(q.wordLimit)} Words</span>
           </div>
+          ${q.passage ? `<details class="q-passage-peek"><summary>The ${escapeHTML(passageKind(q.passage))} this question is based on</summary><div class="q-passage-body">${richTextHTML(q.passage)}</div></details>` : ""}
           <div class="q-review-prompt">${escapeHTML(q.text)}</div>
           <div class="q-review-answer-box">
             <div class="q-review-answer-title">
@@ -1404,6 +1518,7 @@ function renderHistory() {
           <button type="button" class="btn-toggle-answer-review btn-soft" data-test-id="${escapeHTML(t.id)}">Review answers</button>
           <button type="button" class="btn-open-results" data-test-id="${escapeHTML(t.id)}">Open results</button>
           <button type="button" class="btn-retake btn-soft" data-test-id="${escapeHTML(t.id)}">Retake</button>
+          <button type="button" class="btn-soft btn-move-folder" data-store="rbi_history" data-test-id="${escapeHTML(t.id)}">Move to folder</button>
           <button type="button" class="btn-delete-test btn-soft btn-soft-danger" data-test-id="${escapeHTML(t.id)}">Delete</button>
         </div>
       </div>
@@ -1433,8 +1548,11 @@ function renderHistory() {
       </div>
     `;
 
-    listElem.appendChild(card);
+    cardsById.set(t.id, card);
   });
+  // Subject > Chapter tests > chapter > Full / Partial chapter, and Subject > Mix tests
+  if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, history, t => cardsById.get(t.id), "p2");
+  else { listElem.innerHTML = ""; history.forEach(t => listElem.appendChild(cardsById.get(t.id))); }
 }
 
 // Score summary badge of one descriptive test in History
@@ -1977,9 +2095,13 @@ function pdfItemsToLines(items, pageNo) {
       const visible = it.str.trim() !== "";
       if (!sameLine) {
         if (cur) lines.push(cur);
-        cur = { page: pageNo, x, y, xEnd: visible ? x + width : x, size, text: it.str, sizeChars: {} };
+        cur = { page: pageNo, x, y, xEnd: visible ? x + width : x, size, text: it.str, sizeChars: {}, pieces: [{ x, xEnd: visible ? x + width : x, text: it.str }] };
       } else {
         const gap = x - cur.xEnd;
+        // a wide gap inside a line may be a table column ("2023-24      40,000      1,200")
+        const piece = cur.pieces[cur.pieces.length - 1];
+        if (visible && gap > Math.max(cur.size, size) * 2.5) cur.pieces.push({ x, xEnd: x + width, text: it.str });
+        else { piece.text += (gap > size * 0.15 && !/\s$/.test(piece.text) && !/^\s/.test(it.str) ? " " : "") + it.str; if (visible) piece.xEnd = Math.max(piece.xEnd, x + width); }
         // A word gap - or a narrower one after a label such as "100." / "[a]" (the tab after it shrinks)
         const needsSpace = gap > size * 0.15 || (gap > size * 0.05 && /[.):\]]$/.test(cur.text));
         if (needsSpace && !/\s$/.test(cur.text) && !/^\s/.test(it.str)) cur.text += " ";
@@ -1995,7 +2117,28 @@ function pdfItemsToLines(items, pageNo) {
     }
   }
   if (cur) lines.push(cur);
-  return lines
+  const clean = t => t.replace(/[●•]/g, "•").replace(/[   ]/g, " ").replace(/[–—]/g, "-").replace(/\s+/g, " ").trim();
+  // A data row ("2023-24 | 40,000 | 1,200 | 72%"): three or more cells split by wide gaps.
+  // Not answer-key rows ("1   c   Moderate"), number grids ("1  2  3  4") or a label
+  // followed by its tab ("1.   It has six members", "(a)   ...  (b)   ...").
+  const isDataRow = ps => {
+    const cells = ps.map(p => clean(p.text)).filter(Boolean);
+    if (cells.length < 3 || cells.length !== ps.length) return false;
+    // a lone answer letter after the first cell ("1 | c | Moderate"); "A | 4,000 | 3,000" is a row label
+    if (cells.slice(1).some(c => /^[\(\[]?[a-eA-E](?:\s*,\s*[a-eA-E])*[\)\]]?(?:\s|$)/.test(c)) || cells.some(c => /^[\(\[]?[a-eA-E][\)\].]\s/.test(c))) return false;
+    // "12 | ... | a long explanation": an answer-key row, not data
+    if (/^\d{1,3}$/.test(cells[0]) && cells.some(c => c.length > 60)) return false;
+    if (cells.every(c => /^\d{1,3}$/.test(c))) return false;
+    if (/^(?:[\(\[]?(?:[a-zA-Z]|\d{1,3}|[ivxIVX]{1,4})[\)\].:]|Q(?:uestion)?\s*\.?\s*\d{1,4}\s*[.):\-]?|•)$/.test(cells[0])) return false;
+    return cells.some(c => /\d/.test(c));
+  };
+  const out = [];
+  lines.forEach(l => {
+    if (l.pieces && l.pieces.length >= 3 && isDataRow(l.pieces)) {
+      l.pieces.forEach(p => out.push(Object.assign({}, l, { x: p.x, xEnd: p.xEnd, text: p.text, pieces: null })));
+    } else out.push(l);
+  });
+  return out
     .map(l => Object.assign(l, {
       size: Number(Object.keys(l.sizeChars).sort((a, b) => l.sizeChars[b] - l.sizeChars[a])[0] || l.size),
       text: l.text
@@ -2258,6 +2401,19 @@ function joinAnswerLines(lines) {
 }
 
 // Parse raw document text into structured question objects with paper, marks, and model answers
+// The line that opens a shared passage, case or data table for several questions:
+// "Read the following passage carefully and answer the questions given below",
+// "Study the table below and answer Questions 6 to 10", "Case Study 2: ...", "Passage 1".
+// A lone "Consider the following statements and answer the question" is not one.
+const PASSAGE_HEADING_RE = /^(?:Case\s*Study|Caselet|Case\s*let|Passage|Reading\s+Comprehension|Comprehension|Data\s+Interpretation\s+Set|DI\s+Set)\s*(?:[-#]?\s*(?:\d{1,2}|[IVX]{1,4}|[A-H]))?\s*(?:[:.\-]\s*.{0,120})?$/i;
+const PASSAGE_LEAD_RE = /^(?:Directions?\b|(?:Read|Study|Go\s+through|Refer\s+to|Look\s+at|Examine|Analy[sz]e|Based\s+on|On\s+the\s+basis\s+of|Use|Consider)\b.{0,90}?\b(?:passage|paragraph|extract|excerpt|case|caselet|table|data|graph|chart|information|report|text|article)s?\b)/i;
+const PASSAGE_MANY_RE = /\bquestions\b|\bQ(?:s|uestions)?\.?\s*(?:No\.?\s*)?\d{1,4}\s*(?:-|to|and|&)\s*\d{1,4}|\(\s*\d{1,4}\s*(?:-|to)\s*\d{1,4}\s*\)/i;
+function isPassageIntro(line) {
+  const l = String(line || "").trim();
+  if (!l || l.length > 400) return false;
+  return PASSAGE_HEADING_RE.test(l) || (PASSAGE_LEAD_RE.test(l) && PASSAGE_MANY_RE.test(l));
+}
+
 function parseQuestionsAndAnswers(rawText) {
   if (!rawText || !rawText.trim()) return [];
 
@@ -2373,11 +2529,52 @@ function parseQuestionsAndAnswers(rawText) {
     }
   }
 
+  // Shared passages / case studies / data tables ("Read the case below and answer Questions
+  // 3 to 5"): from the intro line to the next question. They are cut out of the previous
+  // answer and shown above every question they cover (the range in the intro, otherwise
+  // the following questions up to the next passage or section banner).
+  const passages = [];
+  for (let i = 0; i < rawLines.length; i++) {
+    if (!isPassageIntro(rawLines[i]) || ANSWER_RE.test(rawLines[i])) continue;
+    const nextK = questionStarts.findIndex(st => st.lineIndex > i);
+    if (nextK < 0 || questionStarts.some(st => st.lineIndex === i)) continue;
+    // right under a question's own number it is that question's text ("Q1. (15 marks)" / "Read the case ...")
+    const owner = nextK > 0 ? questionStarts[nextK - 1] : null;
+    if (owner && rawLines.slice(owner.lineIndex + 1, i).filter(Boolean).length === 0) continue;
+    const end = questionStarts[nextK].lineIndex;
+    const idx = [];
+    for (let j = i; j < end; j++) if (rawLines[j]) idx.push(j);
+    while (idx.length > 1 && isSectionBannerLine(rawLines[idx[idx.length - 1]])) idx.pop();
+    // a passage block never holds an answer: then the line was part of an answer
+    if (idx.length < 2 || idx.some(j => ANSWER_RE.test(rawLines[j]))) continue;
+    const r = rawLines[i].match(/\b(?:Q(?:s|uestions?)?\.?\s*(?:No\.?\s*)?)(\d{1,3})\s*(?:-|to|and|&)\s*(?:Q\.?\s*)?(\d{1,3})\b/i) || rawLines[i].match(/\(\s*(\d{1,3})\s*(?:-|to)\s*(\d{1,3})\s*\)/);
+    passages.push({ start: i, end, firstK: nextK, text: idx.map(j => rawLines[j]).join("\n"), from: r ? Number(r[1]) : null, to: r ? Number(r[2]) : null });
+    i = end - 1;
+  }
+  // which passage (if any) each question uses
+  const passageFor = questionStarts.map(() => "");
+  passages.forEach((ps, n) => {
+    const stop = n + 1 < passages.length ? passages[n + 1].firstK : questionStarts.length;
+    for (let k = ps.firstK; k < stop; k++) {
+      const num = questionStarts[k].qNum;
+      if (ps.from !== null && num !== null && num !== undefined) {
+        if (num < ps.from || num > ps.to) { if (num > ps.to) break; continue; }
+      } else if (k > ps.firstK) {
+        // no range given: stop at a section banner between the questions
+        const gap = rawLines.slice(questionStarts[k - 1].lineIndex, questionStarts[k].lineIndex);
+        if (gap.some(l => l && isSectionBannerLine(l))) break;
+      }
+      passageFor[k] = ps.text;
+    }
+  });
+
   const results = [];
 
   for (let k = 0; k < questionStarts.length; k++) {
     const startIdx = questionStarts[k].lineIndex;
-    const endIdx = (k + 1 < questionStarts.length) ? questionStarts[k + 1].lineIndex : rawLines.length;
+    let endIdx = (k + 1 < questionStarts.length) ? questionStarts[k + 1].lineIndex : rawLines.length;
+    const cut = passages.find(ps => ps.start > startIdx && ps.start < endIdx);
+    if (cut) endIdx = cut.start;
     const blockIdx = [];
     for (let i = startIdx; i < endIdx; i++) if (rawLines[i]) blockIdx.push(i);
     // A section banner between two questions ("Chapter 2", "Practice Set B") is not part of the answer
@@ -2515,6 +2712,7 @@ function parseQuestionsAndAnswers(rawText) {
         wordLimit: wordLimit || ((marks === 15) ? 600 : 400),
         modelAnswer
       });
+      if (passageFor[k]) results[results.length - 1].passage = passageFor[k];
     }
   }
 
@@ -2560,6 +2758,9 @@ async function handleDocImport(event) {
     if (mcqLike.length >= 3) {
       if (statusElem) statusElem.textContent = "";
       if (confirm(`"${file.name}" is an objective (MCQ) file with ${mcqLike.length} MCQs, not descriptive questions.\n\nOK = add them to the Objective (MCQ) test instead\nCancel = do not import`)) {
+        const folder = typeof askFileFolder === "function" ? await askFileFolder(file.name, rawText, inferMCQSubject(rawText), mcqLike.length) : {};
+        if (!folder) return;
+        applyFolderToQuestions(mcqLike, folder);
         addImportedMCQs(mcqLike, file.name);
       }
       return;
@@ -2568,6 +2769,17 @@ async function handleDocImport(event) {
     const parsedQuestions = parseQuestionsAndAnswers(rawText);
     if (!parsedQuestions || parsedQuestions.length === 0) {
       throw new Error("Could not detect any questions in the file.");
+    }
+
+    // which subject / chapter the file belongs to (History is sorted into these folders)
+    if (typeof askFileFolder === "function") {
+      if (statusElem) statusElem.textContent = "";
+      const folder = await askFileFolder(file.name, rawText, parsedQuestions[0].paper, parsedQuestions.length);
+      if (!folder) {
+        if (statusElem) statusElem.textContent = "Import cancelled.";
+        return;
+      }
+      applyFolderToQuestions(parsedQuestions, folder);
     }
 
     parsedQuestions.forEach(q => {
@@ -3055,10 +3267,10 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   const takePending = () => {
     const preface = [];
     for (const l of pending) {
-      if (isSectionLine(l)) { setTopic(""); preface.length = 0; continue; }
-      if (isHeading(l) && !preface.length) {
+      if (isSectionLine(l)) { setTopic(""); preface.length = 0; closeOpenPassage(); continue; }
+      if (isHeading(l) && !preface.length && !isPassageIntro(l)) {
         // before the first question only a numbered / "Topic:" heading names a topic (not the file's title lines)
-        if (!isGenericTitle(l) && (questions.length || cur || /^(?:topic\b|\d{1,2}(?:\.\d{1,2})*\s*[.)]?\s+\S)/i.test(l))) setTopic(headingTopic(l));
+        if (!isGenericTitle(l) && (questions.length || cur || /^(?:topic\b|\d{1,2}(?:\.\d{1,2})*\s*[.)]?\s+\S)/i.test(l))) { setTopic(headingTopic(l)); closeOpenPassage(); }
         continue;
       }
       preface.push(l);
@@ -3075,19 +3287,32 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     }
     pending = [];
   };
+  // A passage without a question range ("Read the passage and answer the questions") lasts
+  // until the next passage, set, topic heading or a question with its own preface
+  // (a heading read before the last question of the set is finalized ends it after that question)
+  const closeOpenPassage = (now) => {
+    if (context && context.open) {
+      if (now) context = null; else context.closing = true;
+    }
+  };
   const RANGE_FOR_RE = /\b(?:for|in|answer)\s+(?:the\s+)?(?:following\s+)?(?:Q(?:uestions?|s)?\.?\s*(?:No\.?\s*)?)?(\d{1,4})\s*(?:-|to|and|&)\s*(?:Q\.?\s*)?(\d{1,4})\b/i;
   const finalize = () => {
     if (!cur) return;
     const lines = cur.lines.slice();
     if (cur.number !== null && lines.length) lines[0] = stripNumber(lines[0]);
-    let cleanText = (cur.preface || []).concat(lines).filter(l => l.trim().length > 0 && (!isHeaderOrFooterLine(l) || NOTE_RE.test(l))).join("\n").trim();
+    const keep = l => l.trim().length > 0 && (!isHeaderOrFooterLine(l) || NOTE_RE.test(l));
+    const cleanText = lines.filter(keep).join("\n").trim();
+    // the shared passage / data table (and this question's own preface) are kept apart from
+    // the question, so the exam can show them above every question that uses them
+    let passageLines = [];
     if (context) {
       const n = cur.number;
       const inRange = n !== null ? (n >= context.from && n <= context.to) : context.left > 0;
-      if (inRange) cleanText = context.lines.join("\n") + (cleanText ? "\n" + cleanText : "");
+      if (inRange) passageLines = context.lines.slice();
       context.left--;
-      if ((n !== null && n >= context.to) || context.left <= 0) context = null;
+      if ((n !== null && n >= context.to) || context.left <= 0 || context.closing) context = null;
     }
+    const passage = passageLines.concat(cur.preface || []).filter(keep).join("\n").trim();
     questions.push({
       id: makeId("mcq"),
       subject: defaultSubject,
@@ -3103,6 +3328,7 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       negativeMarks: 0.25,
       _skipped: cur.skipped
     });
+    if (passage) questions[questions.length - 1].passage = passage;
     cur = null;
     inExpl = false;
   };
@@ -3110,10 +3336,15 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     const preface = takePending();
     finalize();
     if (num !== null) {
-      if (num === 1 && lastNum > 1) section++;        // numbering restarts: the next set
+      if (num === 1 && lastNum > 1) { section++; closeOpenPassage(true); }        // numbering restarts: the next set
       lastNum = num;
     }
     cur = { number: num, section, topic, lines: firstLine ? [firstLine] : [], opts: [], explanation: [], inlineAnswer: "", skipped: [], preface: [] };
+    // "Directions: Answer the following questions." with no passage under it is just this question's preface
+    if (context && context.open && context.lines.length < 2 && context.left === Infinity) {
+      cur.preface = context.lines;
+      context = null;
+    }
     if (preface.length) {
       // "Use the table below for Q137 and Q138": the preface belongs to every question of the range
       const r = preface.map(l => l.match(RANGE_FOR_RE)).find(Boolean);
@@ -3122,7 +3353,8 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       if (r && num !== null && from === num && to > from && to - from < 15) {
         context = { from, to, left: to - from + 1, lines: preface };
       } else {
-        cur.preface = preface;
+        closeOpenPassage(true);
+        cur.preface = cur.preface.concat(preface);
       }
     }
   };
@@ -3158,6 +3390,8 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     if (isHeaderOrFooterLine(p) && !(NOTE_RE.test(p) && (cur || questions.length))) {
       if (!cur || cur.opts.length) {
         if (isSectionLine(p)) { takePending(); setTopic(""); }
+        // a set / part / subject banner ("General Awareness") ends a passage that had no range
+        if (isSectionLine(p) || /^(?:Economic\s*(?:&|and)\s*Social\s*Issues|Finance\s*(?:&|and)\s*Management|English\s*(?:Descriptive|Language)|General\s*Awareness|Quantitative\s*Aptitude|Reasoning(?:\s*Ability)?|Section|Part|Set)\b/i.test(p)) closeOpenPassage();
         const ch = p.match(CHAPTER_RE);
         if (ch && !chapter) chapter = sanitizeDashes(ch[1] || p);
       }
@@ -3171,6 +3405,20 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       finalize();
       context = { from: parseInt(dir[1], 10), to: parseInt(dir[2], 10), left: 0, lines: [p] };
       context.left = Math.max(1, context.to - context.from + 1);
+      collectingContext = true;
+      continue;
+    }
+    // "Read the following passage and answer the questions (6 to 10)", "Case Study 2",
+    // "Study the table below ...": a shared passage / table for the questions that follow
+    if (!collectingContext && (!cur || cur.opts.length >= 2) && isPassageIntro(p)) {
+      takePending();
+      finalize();
+      const r = p.match(RANGE_FOR_RE) || p.match(/\(\s*(?:Q(?:s|uestions?)?\.?\s*)?(\d{1,4})\s*(?:-|to)\s*(?:Q\.?\s*)?(\d{1,4})\s*\)/i);
+      const from = r ? parseInt(r[1], 10) : NaN;
+      const to = r ? parseInt(r[2], 10) : NaN;
+      context = r && to > from && to - from < 30
+        ? { from, to, left: to - from + 1, lines: [p] }
+        : { from: 0, to: Infinity, left: Infinity, open: true, lines: [p] };
       collectingContext = true;
       continue;
     }
@@ -3378,6 +3626,16 @@ async function handleP1DocImport(event) {
     const keep = parsedAll.filter(q => parsedQuestions.includes(q) || broken.includes(q));
     const docTitle = rawText.split("\n").map(l => l.trim()).find(Boolean) || "";
     keep.forEach(q => { if (!q.chapter) q.chapter = sanitizeDashes(docTitle).slice(0, 120); });
+    // which subject / chapter the file belongs to (History is sorted into these folders)
+    if (typeof askFileFolder === "function") {
+      if (statusElem) statusElem.textContent = "";
+      const folder = await askFileFolder(file.name, rawText, inferMCQSubject(rawText), keep.length);
+      if (!folder) {
+        if (statusElem) statusElem.textContent = "Import cancelled.";
+        return;
+      }
+      applyFolderToQuestions(keep, folder);
+    }
     addImportedMCQs(keep, file.name, meta);
   } catch (err) {
     if (statusElem) {
@@ -3408,7 +3666,7 @@ function inferMCQSubject(rawText) {
 function addImportedMCQs(parsedQuestions, fileName, meta) {
   meta = meta || {};
   mcqPrepareImported(parsedQuestions);
-  const fresh = parsedQuestions.filter(q => !state.p1_setup.questions.some(sq => sq.text === q.text && JSON.stringify(sq.options) === JSON.stringify(q.options)));
+  const fresh = parsedQuestions.filter(q => !state.p1_setup.questions.some(sq => questionWithPassage(sq) === questionWithPassage(q) && JSON.stringify(sq.options) === JSON.stringify(q.options)));
   fresh.forEach(q => { q.sourceFile = fileName; });
   state.p1_setup.questions = state.p1_setup.questions.concat(fresh);
   // Topics found in the file (used by the AI check to label "mixed" questions)
@@ -3478,7 +3736,7 @@ function renderP1SetupList() {
     return;
   }
 
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = QUESTIONS_PER_PAGE;
   const totalItems = ready.length;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
   if (state.p1_setup_page > totalPages) state.p1_setup_page = totalPages;
@@ -3510,7 +3768,7 @@ function renderP1SetupList() {
             ${(statusPill[st] || statusPill.ok)(q)}
             <span class="q-num">Q${pos + 1}${q.number != null && q.number !== pos + 1 ? ` · file Q${q.number}` : ""}</span>
           </div>
-          <div class="p1-question-full-text">${escapeHTML(q.text || "")}</div>
+          ${q.passage ? `<details class="q-passage-peek"><summary>Based on a ${escapeHTML(passageKind(q.passage))}</summary><div class="q-passage-body">${richTextHTML(q.passage)}</div></details>` : ""}<div class="p1-question-full-text">${escapeHTML(q.text || "")}</div>
           <div class="p1-opts-preview">${optsPreview}</div>
         </div>
         <div class="q-actions">
@@ -3565,19 +3823,21 @@ function renderP1CheckPanel() {
         <div class="ai-progress-track"><div class="ai-progress-fill" style="width:${Math.max(4, pct)}%"></div></div></div>
         <button type="button" class="btn-soft" data-p1-check="stop">Stop</button></div>`;
   } else if (!ready) {
-    ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>AI check is off.</strong> <span class="ai-muted">Add an API key so every question and answer key is verified by AI before the exam.</span></div>
-        <button type="button" class="btn-soft" data-ai-action="open-settings">Add API key</button></div>`;
+    ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>AI check is off.</strong> <span class="ai-muted">No API key is set up in this browser, so questions and answer keys cannot be verified.</span></div>
+        <button type="button" class="ai-btn-primary" data-ai-action="open-settings">AI Check</button></div>`;
   } else if (unchecked.length) {
     ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>${unchecked.length + failed.length} question${unchecked.length + failed.length === 1 ? " is" : "s are"} not checked by AI yet.</strong> <span class="ai-muted">The AI solves each question and confirms the answer key.</span></div>
-        <button type="button" class="ai-btn-primary" data-p1-check="run">Check with AI</button></div>`;
+        <button type="button" class="ai-btn-primary" data-p1-check="run">AI Check</button></div>`;
   } else if (failed.length) {
     const why = failed[0].check.ai && failed[0].check.ai.note;
     ai = `<div class="p1-check-row"><div class="p1-check-grow"><span><strong class="p1-warn">The AI check could not finish for ${failed.length} question${failed.length === 1 ? "" : "s"}</strong>${why ? ` (${escapeHTML(why)})` : ""}.</span>
-        <span class="ai-muted">Their answer keys are not verified yet. Check them again (for example after a rate limit or the daily free limit resets).</span></div>
-        <button type="button" class="ai-btn-primary" data-p1-check="retry-failed">Check them again</button></div>`;
+        <span class="ai-muted">Their answer keys are not verified yet. Run the check again (for example after a rate limit or the daily free limit resets).</span></div>
+        <button type="button" class="ai-btn-primary" data-p1-check="retry-failed">AI Check</button></div>`;
   } else {
     const passed = questions.filter(q => mcqStatus(q) === "ok").length;
-    ai = `<div class="p1-check-row"><div class="p1-check-grow"><span><strong>AI check finished:</strong> ${passed} question${passed === 1 ? "" : "s"} passed${issues.length ? ` · <span class="p1-warn">${issues.length} need${issues.length === 1 ? "s" : ""} attention</span>` : ""}.</span></div></div>`;
+    const again = questions.some(q => q.check && !q.check.user && (q.options || []).length >= 2);
+    ai = `<div class="p1-check-row"><div class="p1-check-grow"><span><strong>AI check finished:</strong> ${passed} question${passed === 1 ? "" : "s"} passed${issues.length ? ` · <span class="p1-warn">${issues.length} need${issues.length === 1 ? "s" : ""} attention</span>` : ""}.</span></div>
+        ${again ? `<button type="button" class="btn-soft" data-p1-check="run-all" title="Check every question and answer key again">AI Check again</button>` : ""}</div>`;
   }
   if (mcqVerify.error && !mcqVerify.running) ai += `<p class="ai-warning">${escapeHTML(mcqVerify.error)}</p>`;
 
@@ -3598,7 +3858,7 @@ function renderP1CheckPanel() {
       <li class="p1-issue" data-id="${escapeHTML(q.id)}">
         <div class="p1-issue-head"><strong>${label(q)}</strong>${q.sourceFile ? `<span class="ai-muted">${escapeHTML(q.sourceFile)}</span>` : ""}</div>
         <ul class="p1-issue-reasons">${reasons.map(r => `<li>${escapeHTML(r)}</li>`).join("")}</ul>
-        <div class="p1-question-full-text">${escapeHTML(q.text || "")}</div>
+        ${q.passage ? `<details class="q-passage-peek"><summary>Based on a ${escapeHTML(passageKind(q.passage))}</summary><div class="q-passage-body">${richTextHTML(q.passage)}</div></details>` : ""}<div class="p1-question-full-text">${escapeHTML(q.text || "")}</div>
         <div class="p1-opts-preview">${(q.options || []).map(o => `<span class="opt-pill"><strong>[${escapeHTML(String(o.label).toUpperCase())}]</strong> ${escapeHTML(o.text || "")}</span>`).join("") || `<span class="ai-muted">No options were read.</span>`}</div>
         <details class="p1-issue-key"><summary>Show the answer key${ai && (ai.note || ai.aiAnswer) ? " and the AI's note" : ""}</summary>
           <p>Answer key in the file: <strong>${q.correctAnswer ? formatMCQAnswer(q.correctAnswer) : "missing"}</strong>${ai && ai.aiAnswer ? ` · AI's answer: <strong>${formatMCQAnswer(ai.aiAnswer)}</strong>` : ""}</p>
@@ -3666,6 +3926,12 @@ function handleP1CheckClick(e) {
     const a = run.dataset.p1Check;
     if (a === "run") mcqVerifyQuestions();
     else if (a === "retry-failed") mcqVerifyQuestions((state.p1_setup.questions || []).filter(q => mcqStatus(q) === "failed"));
+    else if (a === "run-all") {
+      // check everything again (questions you approved or fixed yourself keep your decision)
+      const all = (state.p1_setup.questions || []).filter(q => q.check && !q.check.user);
+      if (all.length > 40 && !confirm(`Check all ${all.length} questions with AI again? This takes about ${Math.max(1, Math.round(all.length / 20 / 3))} minute(s) and uses part of the daily free AI limit.`)) return;
+      mcqVerifyQuestions(all);
+    }
     else if (a === "stop") mcqStopVerify();
     else if (a === "clear-notes") { state.p1_setup.importNotes = []; saveP1Setup(); renderP1SetupList(); }
     return;
@@ -3704,6 +3970,7 @@ function startP1EditQuestion(q) {
   set("p1-q-subject", q.subject || "General Awareness");
   set("p1-q-topic", q.topic || q.aiTopic || "");
   set("p1-q-text", q.text || "");
+  set("p1-q-passage", q.passage || "");
   ["a", "b", "c", "d", "e"].forEach(l => {
     const o = (q.options || []).find(x => x.label === l);
     set("p1-q-opt-" + l, o ? o.text : "");
@@ -3780,6 +4047,7 @@ function handleP1QuestionFormSubmit(e) {
   const subject = $("p1-q-subject").value || "General Awareness";
   const topic = ($("p1-q-topic").value || "").trim();
   const text = $("p1-q-text").value.trim();
+  const passage = ($("p1-q-passage") ? $("p1-q-passage").value : "").trim();
   const optA = ($("p1-q-opt-a").value || "").trim();
   const optB = ($("p1-q-opt-b").value || "").trim();
   const optC = ($("p1-q-opt-c").value || "").trim();
@@ -3815,10 +4083,13 @@ function handleP1QuestionFormSubmit(e) {
 
   if (editing) {
     // You corrected it yourself, so it counts as checked
+    const oldPassage = editing.passage || "";
     Object.assign(editing, { subject, topic, text, options, correctAnswer: correct, explanation });
+    if (passage) editing.passage = passage; else delete editing.passage;
     editing.check = { local: [], ai: null, user: "ok" };
+    syncSharedPassage(state.p1_setup.questions, editing, oldPassage);
   } else {
-    state.p1_setup.questions.push({
+    const q = {
       id: makeId("mcq"),
       subject,
       topic,
@@ -3829,7 +4100,9 @@ function handleP1QuestionFormSubmit(e) {
       marks: pos,
       negativeMarks: neg,
       check: { local: [], ai: null, user: "ok" }
-    });
+    };
+    if (passage) q.passage = passage;
+    state.p1_setup.questions.push(q);
   }
   state.p1_editingId = null;
   saveP1Setup();
@@ -3915,6 +4188,7 @@ async function startP1Exam() {
     id: makeId("test_p1"),
     date: Date.now(),
     testType,
+    folder: typeof testFolderFromQuestions === "function" ? testFolderFromQuestions(questions) : null,
     totalMinutes: minutes,
     positiveMarks: pos,
     negativeMarks: neg,
@@ -4085,7 +4359,8 @@ function showP1Question(index) {
   if (qNeg) qNeg.textContent = `Negative: -${(q.negativeMarks || 0.25).toFixed(2)}`;
 
   const qText = $("p1-exam-question-text");
-  if (qText) qText.textContent = q.text;
+  renderPassageSlot("p1-exam-passage", state.p1_test.questions, index);
+  if (qText) qText.innerHTML = richTextHTML(q.text);
 
   const currentAnswer = String(state.p1_test.answers[index] || "").toLowerCase();
   const multi = isMultiAnswerMCQ(q);
@@ -4110,10 +4385,9 @@ function showP1Question(index) {
   state.p1_questionShownAt = Date.now();
   renderP1Palette();
   updateP1ExamSummary();
-  if (window.innerWidth < 900) {
-    const qBox = $("p1-exam-qpos");
-    if (qBox && qBox.getBoundingClientRect().top < 0) qBox.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  // a long question / passage scrolls the page: bring the next question's top back into view
+  const qBox = $("p1-exam-qpos");
+  if (qBox && qBox.getBoundingClientRect().top < 0) qBox.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // Select an option for active question
@@ -4384,6 +4658,7 @@ function renderP1Result(test) {
   if ($("rf-count-incorrect")) $("rf-count-incorrect").textContent = test.incorrectCount || 0;
   if ($("rf-count-unattempted")) $("rf-count-unattempted").textContent = test.unattemptedCount || 0;
   state.p1_resultFilter = "all";
+  state.p1_resultPage = 1;
   document.querySelectorAll("#screen-result-p1 .rf-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.filter === "all");
   });
@@ -4401,8 +4676,31 @@ function renderP1ResultReviewList() {
   const test = state.p1_lastResultTest;
   const filter = state.p1_resultFilter || "all";
   const cardsHtml = [];
+  // questions that match the filter, 20 per page
+  const matches = [];
+  test.questions.forEach((q, i) => {
+    const ua = test.answers[i] ? String(test.answers[i]).toLowerCase().trim() : null;
+    const ok = mcqIsCorrect(ua, q.correctAnswer ? String(q.correctAnswer).toLowerCase().trim() : "");
+    if ((filter === "correct" && !ok) || (filter === "incorrect" && !(ua && !ok)) || (filter === "unattempted" && ua)) return;
+    matches.push(i);
+  });
+  const totalPages = Math.max(1, Math.ceil(matches.length / QUESTIONS_PER_PAGE));
+  state.p1_resultPage = Math.min(Math.max(1, state.p1_resultPage || 1), totalPages);
+  const pageIdx = matches.slice((state.p1_resultPage - 1) * QUESTIONS_PER_PAGE, state.p1_resultPage * QUESTIONS_PER_PAGE);
+  renderPaginationControls({
+    containerId: "p1-result-pagination",
+    currentPage: state.p1_resultPage,
+    totalPages,
+    totalItems: matches.length,
+    onPageChange: (pg) => {
+      state.p1_resultPage = pg;
+      renderP1ResultReviewList();
+      const top = $("p1-result-list");
+      if (top) top.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
 
-  for (let i = 0; i < test.questions.length; i++) {
+  for (const i of pageIdx) {
     const q = test.questions[i];
     const userAns = test.answers[i] ? String(test.answers[i]).toLowerCase().trim() : null;
     const correctAns = q.correctAnswer ? String(q.correctAnswer).toLowerCase().trim() : "";
@@ -4410,10 +4708,6 @@ function renderP1ResultReviewList() {
     const isUnattempted = !userAns;
     const isCorrect = mcqIsCorrect(userAns, correctAns);
     const isIncorrect = !!userAns && !isCorrect;
-
-    if (filter === "correct" && !isCorrect) continue;
-    if (filter === "incorrect" && !isIncorrect) continue;
-    if (filter === "unattempted" && !isUnattempted) continue;
 
     const cardStatusClass = isCorrect ? "correct" : isIncorrect ? "incorrect" : "unattempted";
     const statusBadge = isCorrect
@@ -4460,6 +4754,7 @@ function renderP1ResultReviewList() {
           </div>
           <div>${statusBadge}</div>
         </div>
+        ${q.passage ? `<details class="q-passage-peek"><summary>The ${escapeHTML(passageKind(q.passage))} this question is based on</summary><div class="q-passage-body">${richTextHTML(q.passage)}</div></details>` : ""}
         <div class="review-card-prompt">${escapeHTML(q.text)}</div>
         <div class="review-options-list">${optionsHtml}</div>
         ${correctAns.length > 1 ? `<div class="rev-explanation"><strong>Correct options:</strong> ${escapeHTML(formatMCQAnswer(correctAns))}${userAns ? ` · <strong>You chose:</strong> ${escapeHTML(formatMCQAnswer(userAns))}` : ""}</div>` : ""}
@@ -4521,6 +4816,7 @@ function downloadP1Result(test) {
     const correctAns = q.correctAnswer ? formatMCQAnswer(q.correctAnswer) : "N/A";
     const status = !test.answers[idx] ? "UNATTEMPTED" : mcqIsCorrect(test.answers[idx], q.correctAnswer) ? "CORRECT" : "INCORRECT";
 
+    if (q.passage && (idx === 0 || test.questions[idx - 1].passage !== q.passage)) lines.push(`[Passage / data for the next question(s)]\n${q.passage}\n`);
     lines.push(`Q${idx + 1}: ${q.text}`);
     (q.options || []).forEach(o => {
       lines.push(`   [${o.label.toUpperCase()}] ${o.text}`);
@@ -4572,7 +4868,7 @@ function renderP1History() {
     `;
   }
 
-  listElem.innerHTML = history.map(t => {
+  const cardHTML = t => {
     const dateStr = new Date(t.date || t.completedAt).toLocaleString();
     return `
       <div class="history-card" style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:12px;">
@@ -4594,11 +4890,15 @@ function renderP1History() {
         </div>
         <div style="display:flex; gap:8px;">
           <button type="button" class="btn-p1-history-review" data-id="${t.id}" style="padding:6px 14px; font-size:13px;">Review Test &amp; Questions</button>
+          <button type="button" class="btn-soft btn-move-folder" data-store="rbi_p1_history" data-test-id="${escapeHTML(t.id)}" style="padding:6px 12px; font-size:13px;">Move to folder</button>
           <button type="button" class="danger btn-p1-history-delete" data-id="${t.id}" style="padding:6px 12px; font-size:13px;">Delete</button>
         </div>
       </div>
     `;
-  }).join("");
+  };
+  // Subject > Chapter tests > chapter > Full / Partial chapter, and Subject > Mix tests
+  if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, history, cardHTML, "p1");
+  else listElem.innerHTML = history.map(cardHTML).join("");
 }
 
 // Review a test attempt from Phase-1 History
@@ -5252,6 +5552,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     historyList.addEventListener("click", (e) => {
+      const moveBtn = e.target.closest(".btn-move-folder");
+      if (moveBtn) {
+        moveHistoryTestToFolder(moveBtn.dataset.store, moveBtn.dataset.testId);
+        return;
+      }
       const toggleRevBtn = e.target.closest(".btn-toggle-answer-review");
       if (toggleRevBtn) {
         const tid = toggleRevBtn.dataset.testId;
@@ -5533,6 +5838,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.querySelectorAll("#screen-result-p1 .rf-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       state.p1_resultFilter = btn.dataset.filter || "all";
+      state.p1_resultPage = 1;
       renderP1ResultReviewList();
     });
   });
@@ -5566,6 +5872,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const p1HistoryList = $("p1-history-list");
   if (p1HistoryList) {
     p1HistoryList.addEventListener("click", (e) => {
+      const moveBtn = e.target.closest(".btn-move-folder");
+      if (moveBtn) {
+        moveHistoryTestToFolder(moveBtn.dataset.store, moveBtn.dataset.testId);
+        return;
+      }
       const revBtn = e.target.closest(".btn-p1-history-review");
       if (revBtn) {
         reviewP1HistoricalTest(revBtn.dataset.id);

@@ -19,6 +19,7 @@
     "ai_eval.js",
     "objective_ai.js",
     "calendar.js",
+    "folders.js",
     "globals.d.ts"
   ],
   "exclude": [

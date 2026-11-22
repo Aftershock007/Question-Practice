@@ -416,4 +416,120 @@ for a in ans2:
     d.add_paragraph(a)
 exp.append({"topic": "Financial Inclusion", "marks": 10, "wordLimit": 400, "question": "What is financial inclusion? Discuss two recent measures that promote it.", "answerStart": ans2[0][:60]})
 save(d, "subj-04-mixed-formats", {"kind": "desc", "questions": exp})
+# ---------------------------------------------------------------------------
+# obj-08: question sets built on a shared passage / table, as in RBI Phase-1:
+# RC passage "Directions (1-5)", a DI table with NO range ("answer the questions
+# that follow"), a "Case Study:" caselet, stand-alone GA questions under a
+# heading (no passage), and a ranged reasoning puzzle. Key = table at the end.
+# ---------------------------------------------------------------------------
+RC_PASSAGE = [
+    "India's push for financial inclusion has moved in three distinct waves. The first, after bank nationalisation in 1969, took branches into villages that had never seen a bank. The second, in the 2000s, relied on business correspondents who carried basic banking to the doorstep. The third wave, which is still unfolding, rests on digital public infrastructure: a bank account for almost every adult, a biometric identity and an interoperable payments system that works on any phone.",
+    "Yet access is not the same as use. Many accounts opened in enrolment drives stayed dormant for months because their holders had little money to save and no reason to transact. Usage rose only when wages, subsidies and pensions began to flow into these accounts directly, giving people a reason to visit the account every month.",
+    "The next challenge is credit. Small borrowers often lack the collateral and the paper records that lenders demand. Data on their digital payments can fill part of this gap, but only if consent is respected and the borrower, not the lender, controls how the data are shared. Inclusion that ignores consumer protection risks replacing one form of exclusion with another.",
+]
+DI_TABLE = [["Bank", "Deposits (Rs crore)", "Advances (Rs crore)", "Gross NPA (Rs crore)"],
+            ["A", "4,000", "3,000", "150"], ["B", "5,000", "3,500", "280"], ["C", "2,500", "2,000", "60"], ["D", "6,000", "4,200", "336"]]
+CASELET = "A small finance bank has a loan book of Rs 1,200 crore. Microfinance loans make up 45% of the book, MSME loans 30%, housing loans 15% and the rest are gold loans. During the year the microfinance book grew by 20%, while the rest of the book did not change."
+PUZZLE = "Five officers P, Q, R, S and T work on five different floors of a building, numbered 1 (bottom) to 5 (top). Only one person works on each floor. S works on floor 1 and T works on the top floor. P works on an even-numbered floor. Q works immediately above R. R does not work on an even-numbered floor."
+Q8 = [
+    ("According to the passage, what made the use of newly opened accounts rise?", ["Enrolment drives that opened more accounts", "Direct transfer of wages, subsidies and pensions into the accounts", "New bank branches in villages", "Lower interest rates on small loans", "Free mobile phones for account holders"], "b", "The second paragraph says usage rose only when wages, subsidies and pensions began to flow into the accounts."),
+    ("Which of the following best describes the third wave of financial inclusion mentioned in the passage?", ["Nationalisation of banks", "Business correspondents visiting homes", "Digital public infrastructure of accounts, identity and payments", "Collateral-free lending by moneylenders", "Opening of rural cooperative banks"], "c", "The third wave rests on digital public infrastructure: accounts, biometric identity and interoperable payments."),
+    ("What does the author see as the main condition for using payment data to extend credit?", ["Lenders must own the data", "Borrowers must provide collateral", "The borrower's consent and control over how the data are shared", "A government guarantee on all loans", "Paper records must also be kept"], "c", "The data help only if consent is respected and the borrower controls how the data are shared."),
+    ("Which word is most similar in meaning to DORMANT as used in the passage?", ["Active", "Inactive", "Closed", "Hidden", "Fraudulent"], "b", "Dormant accounts are accounts that are not being used: inactive."),
+    ("Which of the following can be inferred from the passage?", ["Financial inclusion is complete once accounts are opened", "Access to an account alone does not ensure that it is used", "Business correspondents have been withdrawn", "Digital data can fully replace collateral", "Consumer protection slows inclusion and should be relaxed"], "b", "Access is not the same as use: accounts stayed dormant until money began to flow into them."),
+    ("What is the gross NPA ratio (gross NPA as a percentage of advances) of Bank B?", ["5%", "6%", "7%", "8%", "9%"], "d", "280 / 3,500 = 8%."),
+    ("Which bank has the highest credit-deposit ratio?", ["A", "B", "C", "D", "A and C equally"], "c", "A 75%, B 70%, C 80%, D 70%."),
+    ("The total advances of the four banks are approximately what percentage of their total deposits?", ["70.5%", "72.6%", "74.2%", "76.0%", "68.4%"], "b", "12,700 / 17,500 = 72.6%."),
+    ("By what percentage is the gross NPA of Bank D more than that of Bank A?", ["112%", "118%", "124%", "130%", "136%"], "c", "(336 - 150) / 150 = 124%."),
+    ("What was the value of the bank's gold loans at the start of the year?", ["Rs 100 crore", "Rs 120 crore", "Rs 150 crore", "Rs 180 crore", "Rs 240 crore"], "b", "Gold loans are the remaining 10% of Rs 1,200 crore = Rs 120 crore."),
+    ("What is the size of the loan book at the end of the year?", ["Rs 1,240 crore", "Rs 1,284 crore", "Rs 1,308 crore", "Rs 1,340 crore", "Rs 1,440 crore"], "c", "Microfinance grows from 540 to 648 (+108), so the book is 1,200 + 108 = Rs 1,308 crore."),
+    ("At the end of the year, microfinance makes up approximately what share of the loan book?", ["45.0%", "47.3%", "49.5%", "51.2%", "54.0%"], "c", "648 / 1,308 = 49.5%."),
+    ("In which year was the Reserve Bank of India established?", ["1935", "1947", "1949", "1969", "1934"], "a", "The RBI began operations on 1 April 1935 under the RBI Act, 1934; it was nationalised in 1949."),
+    ("Which of the following is the apex development bank for agriculture and rural development in India?", ["SIDBI", "NABARD", "EXIM Bank", "NHB", "MUDRA"], "b", "NABARD was set up in 1982 as the apex body for agriculture and rural credit."),
+    ("Who works on floor 4?", ["P", "Q", "R", "S", "T"], "b", "S 1, P 2, R 3, Q 4, T 5."),
+    ("How many persons work between S and Q?", ["None", "One", "Two", "Three", "Four"], "c", "P and R work on floors 2 and 3."),
+    ("Who works immediately below T?", ["P", "Q", "R", "S", "None"], "b", "Q works on floor 4, just below T on floor 5."),
+]
+PASSAGE_OF = {}
+for n in range(1, 6): PASSAGE_OF[n] = "Directions (1-5)"
+for n in range(6, 10): PASSAGE_OF[n] = "Study the following table"
+for n in range(10, 13): PASSAGE_OF[n] = "Case Study"
+for n in range(15, 18): PASSAGE_OF[n] = "Directions (15-17)"
+d = doc_new("Phase-1 Mock: Passage, Table and Caselet Sets")
+exp = []
+for i, (stem, opts, ans, why) in enumerate(Q8, 1):
+    if i == 1:
+        d.add_paragraph("Directions (1-5): Read the following passage carefully and answer the questions given below it.")
+        for para in RC_PASSAGE:
+            d.add_paragraph(para)
+    elif i == 6:
+        d.add_paragraph("Study the following table carefully and answer the questions that follow.")
+        table(d, DI_TABLE)
+    elif i == 10:
+        d.add_paragraph("Case Study: Loan book of a small finance bank")
+        d.add_paragraph(CASELET)
+    elif i == 13:
+        d.add_heading("General Awareness", 1)
+        d.add_heading("Banking Awareness", 2)
+    elif i == 15:
+        d.add_paragraph("Directions (15-17): Study the following information carefully and answer the questions given below.")
+        d.add_paragraph(PUZZLE)
+    d.add_paragraph(f"{i}. {stem}")
+    for l, o in zip("abcde", opts):
+        d.add_paragraph(f"({l}) {o}")
+    e = {"number": i, "stem": stem, "options": opts, "answer": ans, "explanation": why, "passage": PASSAGE_OF.get(i)}
+    if i in (13, 14):
+        e["topic"] = "Banking Awareness"
+    exp.append(e)
+d.add_heading("Answer Key", 1)
+table(d, [["Q.No.", "Answer", "Explanation"]] + [[str(e["number"]), e["answer"], e["explanation"]] for e in exp])
+save(d, "obj-08-passage-sets", {"kind": "mcq", "questions": exp})
+
+# ---------------------------------------------------------------------------
+# subj-05: a case study with a data table for Q1-Q2 (no range given), a passage
+# for "Questions 3 and 4" placed after Q2's answer, then a stand-alone Q5
+# ---------------------------------------------------------------------------
+d = doc_new("Finance Descriptive Practice: Case Study and Passage")
+exp = []
+d.add_paragraph("Case Study 1: Asset quality at Shakti Bank")
+d.add_paragraph("Shakti Bank is a mid-sized private bank. Over three years its loan book grew fast, mostly through unsecured personal loans and loans to small businesses. The board has now asked the management to explain the rise in bad loans and to propose a plan.")
+table(d, [["Year", "Gross advances (Rs crore)", "Gross NPA (Rs crore)", "Provision coverage ratio"], ["2023-24", "40,000", "1,200", "72%"], ["2024-25", "48,000", "2,160", "65%"], ["2025-26", "55,000", "3,300", "58%"]])
+d.add_paragraph("Answer the questions that follow on the basis of the case.")
+SUBJ5 = [
+    ("case", 10, "Calculate the gross NPA ratio for each year and explain what the trend shows about the bank's asset quality.",
+     ["The gross NPA ratio rose from 3.0% in 2023-24 to 4.5% in 2024-25 and 6.0% in 2025-26, so bad loans grew much faster than the loan book.",
+      "At the same time the provision coverage ratio fell from 72% to 58%, which means a smaller cushion against losses.",
+      "Conclusion: asset quality is deteriorating, and the fast growth in unsecured lending was not matched by sound underwriting."]),
+    ("case", 15, "Suggest four measures the management should take to improve asset quality and provisioning.",
+     ["First, tighten underwriting for unsecured personal and small-business loans, using cash-flow data and credit bureau checks.",
+      "Second, set up an early-warning system that flags special mention accounts (SMA-0, SMA-1, SMA-2) before they slip into NPA.",
+      "Third, raise provisions towards a coverage ratio of at least 70% and plan for the expected credit loss framework.",
+      "Fourth, strengthen recovery through the SARFAESI Act, IBC proceedings and sale of stressed assets to asset reconstruction companies."]),
+]
+for i, (_, marks, q, ans) in enumerate(SUBJ5, 1):
+    d.add_paragraph(f"Q{i}. {q} ({marks} marks)")
+    d.add_paragraph("Answer:")
+    for a in ans:
+        d.add_paragraph(a)
+    exp.append({"marks": marks, "question": q, "answerStart": ans[0][:60], "passage": "Case Study 1"})
+d.add_paragraph("Read the following passage and answer Questions 3 and 4.")
+d.add_paragraph("Behavioural finance studies how emotions and mental shortcuts shape financial decisions. Investors often hold on to losing shares for too long because selling would make the loss real, a bias known as the disposition effect. They also follow the crowd, buying when prices are rising and selling in panic when they fall. Such herd behaviour can push prices far away from their fundamental value and, at times, feed bubbles and crashes.")
+SUBJ5B = [
+    (10, "Explain the disposition effect with an example.",
+     ["The disposition effect is the tendency of investors to sell winning shares too early and hold losing shares too long, because selling at a loss makes the loss feel real.",
+      "Example: an investor sells a share that has risen 10% to lock in the gain, but keeps a share that has fallen 30% in the hope that it will recover."], "Read the following passage"),
+    (10, "How can herd behaviour threaten financial stability? Suggest two safeguards.",
+     ["Herd behaviour makes many investors buy or sell together, so prices move far from fundamentals and bubbles build up and then burst.",
+      "Safeguards include circuit breakers that pause trading during panic, and investor education together with clear disclosure so that decisions rest on fundamentals."], "Read the following passage"),
+    (10, "Write a note on the role of the Monetary Policy Committee in India.",
+     ["The Monetary Policy Committee (MPC) is a six-member body set up under the amended RBI Act, 1934, that decides the policy repo rate needed to meet the inflation target.",
+      "Three members are from the RBI, including the Governor who has a casting vote, and three are external members appointed by the Central Government."], None),
+]
+for i, (marks, q, ans, ps) in enumerate(SUBJ5B, 3):
+    d.add_paragraph(f"Q{i}. {q} ({marks} marks)")
+    d.add_paragraph("Answer:")
+    for a in ans:
+        d.add_paragraph(a)
+    exp.append({"marks": marks, "question": q, "answerStart": ans[0][:60], "passage": ps})
+save(d, "subj-05-case-and-passage", {"kind": "desc", "questions": exp})
 print("done")

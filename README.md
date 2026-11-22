@@ -11,14 +11,18 @@ A personal, offline typing test and descriptive answer practice website designed
   - Real exam interface with countdown timer, candidate profile bar, and question options `[A]` through `[E]`.
   - Authentic 5-color TCS iON Question Palette: Answered (Green), Not Answered (Red), Not Visited (Grey), Marked for Review (Purple), and Answered & Marked for Review.
   - **Questions with more than one correct option** (MULTI-CORRECT) are answered by ticking every correct option and score only when the set is exactly right.
-  - Immediate net scoring (+1.00 correct, -0.25 negative marking), scorecard, and question-by-question review with filters.
+  - Immediate net scoring (+1.00 correct, -0.25 negative marking), scorecard, and question-by-question review with filters (20 questions per page, in the result and in History).
+  - **Passage, table and caselet sets** (reading comprehension, data interpretation, case studies, puzzles): the shared passage or data table is shown above every question that uses it ("Questions 6 to 9 are based on the table below"), with tables drawn as real tables. It is recognised from lines such as "Directions (1-5): Read the following passage...", "Study the following table carefully and answer the questions that follow", "Case Study: ..." or "Use the table below for Q137 and Q138". The AI check, the analysis and the grading always get the passage too.
+  - The question and its passage grow to their full height: there is never a scrollbar inside the question. The page scrolls, and the question palette on the right stays in place.
   - **Topic-wise analysis** after every test: correct / wrong / left, accuracy and net marks per topic, weakest first. With an AI key, the AI also explains every weak topic (what your mistakes show, the concepts, exam facts to remember, traps) and why each wrong answer was wrong.
 - **Answer-key check before the exam (objective):**
   - The answer key is never shown on the setup screen. Instead you see how many questions have a key and which ones do not.
   - Every imported question is checked: text and options read completely, answer key found, no duplicate numbers. With an AI key, the AI also solves each question and confirms the key (about 1 minute per 20 questions, 4 minutes for 192).
   - Questions that fail go to a separate **Needs attention** section with the reason, and are kept out of the exam: edit them, use the AI's answer, keep them after checking yourself, or remove them. Question numbers missing from the file and answer keys without a question are listed there too.
-  - The exam can start only when the check has finished, and it contains only the questions that passed. If the AI cannot be reached (for example the free daily limit is used up), the affected questions are marked **AI check failed**: press **Check them again** later, or start with them after a clear warning.
+  - The check starts by itself after every upload; the **AI Check** button runs it (again) for every question at any time.
+  - The exam can start only when the check has finished, and it contains only the questions that passed. If the AI cannot be reached (for example the free daily limit is used up), the affected questions are marked **AI check failed**: press **AI Check** again later, or start with them after a clear warning.
   - A question with fewer options than the rest of the file (a real 4-option question among 5-option ones) waits for the AI to confirm it, instead of being rejected outright.
+- **Subject and chapter folders:** every DOCX/PDF upload asks which subject it is (Economics (ESI), Finance, Management, English, General Awareness, Quantitative Aptitude, Reasoning or your own), whether it is a **chapter test** (which chapter, **full** or **partial** chapter) or a **mix test**, and optionally a topic. The subject and chapter are guessed from the file name ("CH-1-National_Income-Questions.docx" = Chapter 1: National Income). **History** is then sorted into folders: *Subject > Chapter tests > Chapter 1: ... > Full chapter / Partial chapter* and *Subject > Mix tests*. Older tests sit in **Not sorted yet**; **Move to folder** on any test changes its folder.
 - **Phase-2 Descriptive Typing Practice:**
   - Four dedicated papers: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
   - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support, and optional paste prevention.
@@ -41,7 +45,7 @@ A personal, offline typing test and descriptive answer practice website designed
 - **Included Example Practice Documents:**
   - `Spotlight-Questions-1-6-Nov-2026.docx`: 200 General Awareness Phase-1 MCQs with options and full answer key table.
   - `CH-1-National_Income-Answer-Writing.docx`: ESI Chapter 1 National Income descriptive practice questions with model answers.
-  - `test-docs/`: 11 import test files (7 objective, 4 subjective) as DOCX and PDF, each in a different layout, with their expected results in `test-docs/expected/`. `obj-04-quant-di` contains deliberate defects (a wrong key, a missing key, a skipped question number, a key without a question) to show the Needs attention section; `obj-06-edge-cases` and `obj-07-key-table-extra-column` cover options on the question line, "Answer: Option B", notes inside questions and explanations, explanation lines that start with "(a)", and answer tables with extra columns. Rebuild them with `python3 test-docs/make_test_docs.py`.
+  - `test-docs/`: 13 import test files (8 objective, 5 subjective) as DOCX and PDF, each in a different layout, with their expected results in `test-docs/expected/`. `obj-04-quant-di` contains deliberate defects (a wrong key, a missing key, a skipped question number, a key without a question) to show the Needs attention section; `obj-06-edge-cases` and `obj-07-key-table-extra-column` cover options on the question line, "Answer: Option B", notes inside questions and explanations, explanation lines that start with "(a)", and answer tables with extra columns; `obj-08-passage-sets` and `subj-05-case-and-passage` cover RC passages, DI tables, caselets, puzzles and case studies shared by several questions. Rebuild them with `python3 test-docs/make_test_docs.py`.
 - **History Tracking:** Comprehensive logs of test scores, accuracy %, time spent, and performance trends for both phases.
 
 ---
@@ -70,6 +74,19 @@ After a subjective test, each answer is sent with the evaluation prompt from `pr
 Scores are written into **History** (and the calendar) automatically. You can still edit them there.
 
 ### Set up (one time, about 2 minutes)
+
+**Built-in key on your own computer:** put your key in `ai_key.local.js` (next to `index.html`). The file is listed in `.gitignore`, so it is never committed, and the app uses it everywhere without asking: the AI check after every upload, the objective analysis and the subjective grading. The public GitHub Pages copy does not have this file (a key there would be public and is revoked automatically), so in a browser that opens the GitHub Pages site, save the key once in **AI Settings** as below.
+
+```js
+// ai_key.local.js
+(function () {
+  const c = window.AI_CONFIG = window.AI_CONFIG || {};
+  c.provider = "openrouter";
+  c.keys = Object.assign({}, c.keys, { openrouter: "sk-or-v1-..." });
+})();
+```
+
+Or, in any browser:
 
 1. Get an API key. The app is set up for **OpenRouter** with the free model **NVIDIA Nemotron 3.5 Super VL** (`nvidia/nemotron-3.5-super-vl:free`): create a key at **[openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)**. Any other provider below works too.
 2. Open the app and click **AI Settings** in the top bar, then paste the key, press **Test connection** and **Save**.

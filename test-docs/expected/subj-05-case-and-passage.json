@@ -1,0 +1,35 @@
+{
+ "kind": "desc",
+ "questions": [
+  {
+   "marks": 10,
+   "question": "Calculate the gross NPA ratio for each year and explain what the trend shows about the bank's asset quality.",
+   "answerStart": "The gross NPA ratio rose from 3.0% in 2023-24 to 4.5% in 202",
+   "passage": "Case Study 1"
+  },
+  {
+   "marks": 15,
+   "question": "Suggest four measures the management should take to improve asset quality and provisioning.",
+   "answerStart": "First, tighten underwriting for unsecured personal and small",
+   "passage": "Case Study 1"
+  },
+  {
+   "marks": 10,
+   "question": "Explain the disposition effect with an example.",
+   "answerStart": "The disposition effect is the tendency of investors to sell ",
+   "passage": "Read the following passage"
+  },
+  {
+   "marks": 10,
+   "question": "How can herd behaviour threaten financial stability? Suggest two safeguards.",
+   "answerStart": "Herd behaviour makes many investors buy or sell together, so",
+   "passage": "Read the following passage"
+  },
+  {
+   "marks": 10,
+   "question": "Write a note on the role of the Monetary Policy Committee in India.",
+   "answerStart": "The Monetary Policy Committee (MPC) is a six-member body set",
+   "passage": null
+  }
+ ]
+}

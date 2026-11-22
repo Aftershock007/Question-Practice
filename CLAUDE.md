@@ -7,9 +7,9 @@ Phase-2 subjective (descriptive typing + AI grading), a Calendar/TODO built from
 - Plain HTML/CSS/vanilla JS only. No frameworks, npm deps, CDNs, build step or backend.
 - Must work from `file://` (double-click `index.html`) and on GitHub Pages. So: **no `type="module"`, no `import`/`export`**.
 - All scripts are classic `<script>` tags sharing ONE global scope. Load order (index.html:736-742) matters:
-  `prompt.js` -> `schedule_data.js` -> `app.js` -> `ai_config.js` -> `ai_eval.js` -> `objective_ai.js` -> `calendar.js`.
+  `prompt.js` -> `schedule_data.js` -> `app.js` -> `ai_config.js` -> `ai_key.local.js` (git-ignored, may be missing) -> `ai_eval.js` -> `objective_ai.js` -> `calendar.js` -> `folders.js`.
   `calendar.js` / `objective_ai.js` use helpers from `app.js`; cross-file calls (`AIEval.*`, `mcqStatus`, `calOnTestScored`...) happen only at runtime.
-- The repo is **public**. Never write a real API key into any tracked file (`ai_config.js` keeps `DEMO_` placeholders).
+- The repo is **public** (and on GitHub Pages). Never write a real API key into any tracked file (`ai_config.js` keeps `DEMO_` placeholders). The user's real key lives in `ai_key.local.js`, which is in `.gitignore`; it sets `AI_CONFIG.provider/keys` so AI runs without asking. E2E tests that need "AI off" must route `**/ai_key.local.js` to an empty script.
 - No emojis anywhere in the UI. Use the CSS tokens in `style.css :root` (`--ink --muted --line --brand --accent --gold`, status colours), not hard-coded colours. Keep TCS iON palette meanings (green answered, red not answered, purple review).
 - DOCX/PDF import must reproduce the source word for word (only intended change: `sanitizeDashes`, en/em dash to "-"). Never strip repeated lines from answer bodies.
 - MCQ answer keys are matched by (set, question number), never by position. The setup screen never shows answer keys. Only questions with `mcqStatus(q) === "ok"` (local + AI check passed, or approved by the user) go into an exam; "failed" (AI unreachable) and, with AI off, "unchecked" ones only after a confirm. Statuses: ok / unchecked / pending / failed / issue.
@@ -25,7 +25,7 @@ Phase-2 subjective (descriptive typing + AI grading), a Calendar/TODO built from
 ## File map (line numbers approximate)
 **app.js** (~5.5k lines): core app, global `state` object (l.177), `$` = getElementById
 - 1-175 helpers: `sanitizeDashes countWords makeId loadJSON saveJSON formatTime escapeHTML getLocalDateString showScreen downloadText copyText defaultWordLimit`
-- 208 `renderPaginationControls` (50/page) · 262 `setPhase("phase1"|"phase2")`
+- `richTextHTML questionWithPassage questionPromptText passageBlockHTML renderPassageSlot` (passages / `cell | cell` tables, ~66-140) · `QUESTIONS_PER_PAGE = 20` + `renderPaginationControls` · 262 `setPhase("phase1"|"phase2")`
 - 300-573 Phase-2 (subjective) setup list/form · 574-1072 Phase-2 exam (`startTest tick showQuestion finishTest checkResumeActiveTest resumeExam`)
 - 1073-1182 result + .txt prompt export (`buildQuestionText buildCombinedText renderResult`) · 1183-1519 Phase-2 history/streak
 - 1520-1934 ZIP inflate + DOCX XML to text (`readZipTextEntries docxXmlToText extractDocxText`)
@@ -48,6 +48,8 @@ Phase-2 subjective (descriptive typing + AI grading), a Calendar/TODO built from
 - 1046 `calTodoItemHTML` (no checkbox for test types) · 1110 `calRenderDayPanel` ("Tests you took" -> `calReviewExam` opens the full result)
 - 616-1040 rendering (`calShellHTML calRenderGrid calRenderDayPanel renderCalendar`) · 1063 `calWire` · 1285 `calImportFile` · 1385 TODO modal · 1454 `initCalendar`
 
+**Passages:** MCQ and descriptive questions may carry `q.passage` (shared RC passage, DI table, caselet; set by the parsers via `isPassageIntro` / "Directions (1-5)" / "for Q137 and Q138"). `q.text` is the question only. Exams show it in `#p1-exam-passage` / `#exam-passage`; prompts use `questionPromptText`. PDF data rows with 3+ wide-gap cells become `cell | cell` (`pdfItemsToLines` `isDataRow`; answer-key rows and option rows are excluded).
+**folders.js**: `askFileFolder` (dialog on every DOCX/PDF import) -> `q.folder = {subject, kind: chapter|mix, chapter, coverage: full|partial}`; tests store `folder` (`testFolderFromQuestions`); `renderHistoryFolders` draws History as Subject > Chapter tests > chapter > Full/Partial and Subject > Mix tests; `moveHistoryTestToFolder`.
 **objective_ai.js** (~520): MCQ import checks (`mcqPrepareImported mcqLocalIssues mcqStatus mcqIssueReasons`, AI check `mcqVerifyQuestions`, batches of 20, 3 parallel) and objective topic analysis (`p1TopicStats p1RunAnalysis p1RenderAnalysis p1WhyNote`).
 **prompt.js**: `EVAL_PROMPT_TEMPLATE` and `COMBINED_HEADER_TEMPLATE`, filled via `fillTemplate`. RULES 1-7 (5: scale parameters/penalties to {{MARKS}}, 6: Indian/British spelling is correct, 7: quote verbatim); Section 3 = 3A red-pen log + 3B writing audit. Keep `JSON_CONTRACT` in ai_eval.js in step with it.
 **index.html**: all screens as `<section id="screen-*">`: `setup-p1 exam-p1 result-p1 history-p1 setup exam result history calendar`. `showScreen("setup")` picks the `-p1` variant when `state.phase === "phase1"`.
@@ -60,7 +62,7 @@ Phase-2 subjective (descriptive typing + AI grading), a Calendar/TODO built from
 ## Verify changes
 - Syntax / cross-file check: `tsc -p jsconfig.json` (must print nothing). Full type checking is intentionally off (about 1.4k cosmetic warnings).
 - In the browser: `python3 -m http.server 8000` (run in background), then use the **Playwright MCP** (`.mcp.json`, headless Chromium) to open `http://localhost:8000/index.html`, click through the affected screens and check console errors. Prefer `browser_snapshot` (text) over screenshots unless the change is visual.
-- Import changes: `test-docs/` has 11 layouts as DOCX + PDF with expected results in `test-docs/expected/*.json` (rebuild: `python3 test-docs/make_test_docs.py` then `soffice --headless --convert-to pdf`). Parse each with the app's own `extractDocxText`/`extractPdfText` + `parseMCQDocument`/`parseQuestionsAndAnswers` in Chromium and compare; also CH-1 (192 MCQs incl. multi-answer, two key formats), CH-2 and Spotlight must stay identical. Check PDF versions too (PDFs flatten tables and split table cells).
+- Import changes: `test-docs/` has 13 layouts (incl. `obj-08-passage-sets`, `subj-05-case-and-passage`; the user's own sample files also live there) as DOCX + PDF with expected results in `test-docs/expected/*.json` (rebuild: `python3 test-docs/make_test_docs.py` then `soffice --headless --convert-to pdf`). Parse each with the app's own `extractDocxText`/`extractPdfText` + `parseMCQDocument`/`parseQuestionsAndAnswers` in Chromium and compare; also CH-1 (192 MCQs incl. multi-answer, two key formats), CH-2 and Spotlight must stay identical. Check PDF versions too (PDFs flatten tables and split table cells).
 - AI calls are slow (grading 1-4 min/answer; MCQ check ~1 min per 20 questions) and the free tier has a daily cap: keep live calls few. To test AI code paths without a key, intercept `https://openrouter.ai/api/v1/chat/completions` in Playwright and return canned JSON (set `rbi_ai_settings` = `{provider:"openrouter", keys:{openrouter:"sk-or-mock"}}`).
 
 ## Code style

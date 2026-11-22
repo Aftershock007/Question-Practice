@@ -29,6 +29,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Environment and sensitive files
+ai_key.local.js
 .env
 .env.local
 .env.development.local

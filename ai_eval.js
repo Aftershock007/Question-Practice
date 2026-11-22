@@ -292,7 +292,9 @@
   function getSettings() {
     const file = fileConfig();
     const local = readOverrides();
-    const provider = PROVIDERS[local.provider] ? local.provider : (PROVIDERS[file.provider] ? file.provider : "gemini");
+    let provider = PROVIDERS[local.provider] ? local.provider : (PROVIDERS[file.provider] ? file.provider : "gemini");
+    // a provider picked in AI Settings that has no key falls back to the one with the built-in key
+    if (provider !== file.provider && PROVIDERS[file.provider] && !resolveProvider(provider).ready && resolveProvider(file.provider).ready) provider = file.provider;
     const autoEvaluate = typeof local.autoEvaluate === "boolean" ? local.autoEvaluate
       : (typeof file.autoEvaluate === "boolean" ? file.autoEvaluate : true);
     return { provider, autoEvaluate };
@@ -2052,6 +2054,7 @@ has no error of that kind, but do not skip real ones.
     L.push("## Q" + (idx + 1) + " · " + (q.paper || "") + " · " + q.marks + " marks: " + fmt(r.score) + " / " + fmt(r.max) +
       (r.notAttempted ? " (not attempted)" : " (" + fmt(r.percent) + "%, Grade " + g.grade + " - " + g.label + ")"));
     L.push("");
+    if (q.passage) L.push("**Based on:**", "", "```text", q.passage, "```", "");
     L.push("**Question:** " + (q.text || ""));
     L.push("");
     if (r.projection) L.push("**Likely real RBI score:** " + fmt(r.projection[0]) + "–" + fmt(r.projection[1]) + " / " + fmt(r.max) + " (this grader is ~2–3 marks stricter)", "");
@@ -2281,7 +2284,7 @@ has no error of that kind, but do not skip real ones.
     const v = String(value || "").trim();
     if (!v) return def.keyOptional ? "Not needed for most local servers." : "No key yet" + (d.key && isPlaceholderKey(d.key) ? " (ai_config.js only has a DEMO placeholder)." : ".");
     if (isPlaceholderKey(v)) return "This is a placeholder, not a real key.";
-    if (v === d.key) return "From ai_config.js.";
+    if (v === d.key) return "Built in (from ai_key.local.js / ai_config.js on this computer).";
     return "Saved only in this browser.";
   }
 

@@ -1,0 +1,245 @@
+{
+ "kind": "mcq",
+ "questions": [
+  {
+   "number": 1,
+   "stem": "According to the passage, what made the use of newly opened accounts rise?",
+   "options": [
+    "Enrolment drives that opened more accounts",
+    "Direct transfer of wages, subsidies and pensions into the accounts",
+    "New bank branches in villages",
+    "Lower interest rates on small loans",
+    "Free mobile phones for account holders"
+   ],
+   "answer": "b",
+   "explanation": "The second paragraph says usage rose only when wages, subsidies and pensions began to flow into the accounts.",
+   "passage": "Directions (1-5)"
+  },
+  {
+   "number": 2,
+   "stem": "Which of the following best describes the third wave of financial inclusion mentioned in the passage?",
+   "options": [
+    "Nationalisation of banks",
+    "Business correspondents visiting homes",
+    "Digital public infrastructure of accounts, identity and payments",
+    "Collateral-free lending by moneylenders",
+    "Opening of rural cooperative banks"
+   ],
+   "answer": "c",
+   "explanation": "The third wave rests on digital public infrastructure: accounts, biometric identity and interoperable payments.",
+   "passage": "Directions (1-5)"
+  },
+  {
+   "number": 3,
+   "stem": "What does the author see as the main condition for using payment data to extend credit?",
+   "options": [
+    "Lenders must own the data",
+    "Borrowers must provide collateral",
+    "The borrower's consent and control over how the data are shared",
+    "A government guarantee on all loans",
+    "Paper records must also be kept"
+   ],
+   "answer": "c",
+   "explanation": "The data help only if consent is respected and the borrower controls how the data are shared.",
+   "passage": "Directions (1-5)"
+  },
+  {
+   "number": 4,
+   "stem": "Which word is most similar in meaning to DORMANT as used in the passage?",
+   "options": [
+    "Active",
+    "Inactive",
+    "Closed",
+    "Hidden",
+    "Fraudulent"
+   ],
+   "answer": "b",
+   "explanation": "Dormant accounts are accounts that are not being used: inactive.",
+   "passage": "Directions (1-5)"
+  },
+  {
+   "number": 5,
+   "stem": "Which of the following can be inferred from the passage?",
+   "options": [
+    "Financial inclusion is complete once accounts are opened",
+    "Access to an account alone does not ensure that it is used",
+    "Business correspondents have been withdrawn",
+    "Digital data can fully replace collateral",
+    "Consumer protection slows inclusion and should be relaxed"
+   ],
+   "answer": "b",
+   "explanation": "Access is not the same as use: accounts stayed dormant until money began to flow into them.",
+   "passage": "Directions (1-5)"
+  },
+  {
+   "number": 6,
+   "stem": "What is the gross NPA ratio (gross NPA as a percentage of advances) of Bank B?",
+   "options": [
+    "5%",
+    "6%",
+    "7%",
+    "8%",
+    "9%"
+   ],
+   "answer": "d",
+   "explanation": "280 / 3,500 = 8%.",
+   "passage": "Study the following table"
+  },
+  {
+   "number": 7,
+   "stem": "Which bank has the highest credit-deposit ratio?",
+   "options": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "A and C equally"
+   ],
+   "answer": "c",
+   "explanation": "A 75%, B 70%, C 80%, D 70%.",
+   "passage": "Study the following table"
+  },
+  {
+   "number": 8,
+   "stem": "The total advances of the four banks are approximately what percentage of their total deposits?",
+   "options": [
+    "70.5%",
+    "72.6%",
+    "74.2%",
+    "76.0%",
+    "68.4%"
+   ],
+   "answer": "b",
+   "explanation": "12,700 / 17,500 = 72.6%.",
+   "passage": "Study the following table"
+  },
+  {
+   "number": 9,
+   "stem": "By what percentage is the gross NPA of Bank D more than that of Bank A?",
+   "options": [
+    "112%",
+    "118%",
+    "124%",
+    "130%",
+    "136%"
+   ],
+   "answer": "c",
+   "explanation": "(336 - 150) / 150 = 124%.",
+   "passage": "Study the following table"
+  },
+  {
+   "number": 10,
+   "stem": "What was the value of the bank's gold loans at the start of the year?",
+   "options": [
+    "Rs 100 crore",
+    "Rs 120 crore",
+    "Rs 150 crore",
+    "Rs 180 crore",
+    "Rs 240 crore"
+   ],
+   "answer": "b",
+   "explanation": "Gold loans are the remaining 10% of Rs 1,200 crore = Rs 120 crore.",
+   "passage": "Case Study"
+  },
+  {
+   "number": 11,
+   "stem": "What is the size of the loan book at the end of the year?",
+   "options": [
+    "Rs 1,240 crore",
+    "Rs 1,284 crore",
+    "Rs 1,308 crore",
+    "Rs 1,340 crore",
+    "Rs 1,440 crore"
+   ],
+   "answer": "c",
+   "explanation": "Microfinance grows from 540 to 648 (+108), so the book is 1,200 + 108 = Rs 1,308 crore.",
+   "passage": "Case Study"
+  },
+  {
+   "number": 12,
+   "stem": "At the end of the year, microfinance makes up approximately what share of the loan book?",
+   "options": [
+    "45.0%",
+    "47.3%",
+    "49.5%",
+    "51.2%",
+    "54.0%"
+   ],
+   "answer": "c",
+   "explanation": "648 / 1,308 = 49.5%.",
+   "passage": "Case Study"
+  },
+  {
+   "number": 13,
+   "stem": "In which year was the Reserve Bank of India established?",
+   "options": [
+    "1935",
+    "1947",
+    "1949",
+    "1969",
+    "1934"
+   ],
+   "answer": "a",
+   "explanation": "The RBI began operations on 1 April 1935 under the RBI Act, 1934; it was nationalised in 1949.",
+   "passage": null,
+   "topic": "Banking Awareness"
+  },
+  {
+   "number": 14,
+   "stem": "Which of the following is the apex development bank for agriculture and rural development in India?",
+   "options": [
+    "SIDBI",
+    "NABARD",
+    "EXIM Bank",
+    "NHB",
+    "MUDRA"
+   ],
+   "answer": "b",
+   "explanation": "NABARD was set up in 1982 as the apex body for agriculture and rural credit.",
+   "passage": null,
+   "topic": "Banking Awareness"
+  },
+  {
+   "number": 15,
+   "stem": "Who works on floor 4?",
+   "options": [
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T"
+   ],
+   "answer": "b",
+   "explanation": "S 1, P 2, R 3, Q 4, T 5.",
+   "passage": "Directions (15-17)"
+  },
+  {
+   "number": 16,
+   "stem": "How many persons work between S and Q?",
+   "options": [
+    "None",
+    "One",
+    "Two",
+    "Three",
+    "Four"
+   ],
+   "answer": "c",
+   "explanation": "P and R work on floors 2 and 3.",
+   "passage": "Directions (15-17)"
+  },
+  {
+   "number": 17,
+   "stem": "Who works immediately below T?",
+   "options": [
+    "P",
+    "Q",
+    "R",
+    "S",
+    "None"
+   ],
+   "answer": "b",
+   "explanation": "Q works on floor 4, just below T on floor 5.",
+   "passage": "Directions (15-17)"
+  }
+ ]
+}
