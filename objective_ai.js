@@ -399,7 +399,7 @@ function p1NormalizeAnalysis(o, stats, meta) {
 
 // Ask the AI to explain the weak topics of a test (result saved and shown on the result screen)
 async function p1RunAnalysis(test) {
-  if (!test || !window.AIEval || !AIEval.isReady()) return;
+  if (!test || !window.AIEval || !AIEval.isReady("analysis")) return;
   const job = p1AnalysisJobs.get(test.id);
   if (job && job.status === "running") return;
   const stats = p1TopicStats(test);
@@ -414,6 +414,7 @@ async function p1RunAnalysis(test) {
   const timer = setInterval(() => p1RenderAnalysisStatus(test), 1000);
   try {
     const res = await AIEval.runJSON({
+      role: "analysis",
       system: P1_ANALYSIS_SYSTEM,
       prompt: p1AnalysisPrompt(test, stats),
       signal: j.controller.signal,
@@ -453,7 +454,7 @@ function p1RenderAnalysis(test) {
   const stats = p1TopicStats(test);
   const analysis = p1LoadAnalyses()[test.id] || null;
   const job = p1AnalysisJobs.get(test.id);
-  const ready = window.AIEval && AIEval.isReady();
+  const ready = window.AIEval && AIEval.isReady("analysis");
   const weak = stats.filter(t => t.level === "weak");
 
   const rows = stats.map(t => `
@@ -471,9 +472,9 @@ function p1RenderAnalysis(test) {
     ai = `<div class="p1-ai-status"><span class="ai-spinner"></span><div><strong>Explaining your weak topics…</strong><span data-p1-ai-status>${escapeHTML(job.message)}</span></div>
       <button type="button" class="btn-soft" data-p1-action="stop-analysis">Stop</button></div>`;
   } else if (job && job.status === "error") {
-    const ex = AIEval.explain(job.error);
+    const ex = AIEval.explain(job.error, "analysis");
     ai = `<div class="ai-error-box"><div class="ai-error-text"><strong>${escapeHTML(ex.title)}</strong><p>${escapeHTML(ex.body)}</p></div>
-      <div class="ai-error-actions"><button type="button" class="ai-btn-primary" data-p1-action="run-analysis">Retry</button>${ex.settings ? `<button type="button" class="btn-soft" data-ai-action="open-settings">AI Settings</button>` : ""}</div></div>`;
+      <div class="ai-error-actions"><button type="button" class="ai-btn-primary" data-p1-action="run-analysis">Retry</button>${ex.settings ? `<button type="button" class="btn-soft" data-ai-action="open-settings" data-engine="verify">API keys</button>` : ""}</div></div>`;
   } else if (analysis) {
     ai = p1AnalysisHTML(analysis, test);
   } else if (ready) {
@@ -481,7 +482,7 @@ function p1RenderAnalysis(test) {
       <button type="button" class="ai-btn-primary" data-p1-action="run-analysis">Explain my weak topics</button></div>`;
   } else {
     ai = `<div class="p1-ai-cta"><p>Add an AI key to get each weak topic explained, with the reason behind every wrong answer.</p>
-      <button type="button" class="btn-soft" data-ai-action="open-settings">Add API key</button></div>`;
+      <button type="button" class="btn-soft" data-ai-action="open-settings" data-engine="verify">Add API key</button></div>`;
   }
 
   box.innerHTML = `
@@ -563,7 +564,7 @@ function p1WhyNote(testId, qIndex) {
 
 // Run right after an objective test is submitted
 function p1AutoAnalysis(test) {
-  if (!test || !window.AIEval || !AIEval.isReady()) return;
+  if (!test || !window.AIEval || !AIEval.isReady("analysis")) return;
   p1RunAnalysis(test);
 }
 

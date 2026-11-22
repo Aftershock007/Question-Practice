@@ -196,7 +196,13 @@ function showScreen(name) {
     targetId = state.phase === "phase1" ? `screen-${name}-p1` : `screen-${name}`;
   }
   const target = $(targetId) || $(name) || $("screen-" + name);
-  if (target) target.hidden = false;
+  if (target) {
+    target.hidden = false;
+    // a short fade-in instead of an abrupt jump
+    target.classList.remove("screen-enter");
+    void target.offsetWidth;
+    target.classList.add("screen-enter");
+  }
 
   const header = $("app-header");
   if (header) {
@@ -489,6 +495,7 @@ function renderSetupList() {
 
   const countElem = $("setup-count");
   if (countElem) countElem.textContent = questions.length;
+  if (typeof renderDescCheckPanel === "function") renderDescCheckPanel();
 
   const suggestedElem = $("setup-suggested-time");
   if (suggestedElem) {
@@ -500,8 +507,7 @@ function renderSetupList() {
   if (minutesInput && document.activeElement !== minutesInput) {
     minutesInput.value = state.setup.totalMinutes || 30;
   }
-  const pasteBox = $("setup-block-paste");
-  if (pasteBox) pasteBox.checked = state.setup.blockPaste !== false;
+
 
   if (questions.length === 0) {
     list.innerHTML = `<li class="empty-list-placeholder">No questions added yet. Upload a document (DOCX/PDF) or add questions manually to begin.</li>`;
@@ -542,6 +548,7 @@ function renderSetupList() {
             <span class="badge-topic">${escapeHTML(q.marks)} marks · ${escapeHTML(q.wordLimit)} words</span>
             ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
             ${modelWarn}
+            ${typeof descStatusPill === "function" ? descStatusPill(q) : ""}
             <span class="q-num">Q${globalIdx + 1}</span>
           </div>
           ${q.passage ? `<details class="q-passage-peek"><summary>Based on a ${escapeHTML(passageKind(q.passage))}</summary><div class="q-passage-body">${richTextHTML(q.passage)}</div></details>` : ""}
@@ -659,7 +666,8 @@ function handleQuestionFormSubmit(event) {
     text,
     marks,
     wordLimit,
-    modelAnswer
+    modelAnswer,
+    check: { ai: null, user: "ok" }     // typed or corrected by you
   };
   if (passage) questionObj.passage = passage;
 
@@ -701,6 +709,8 @@ async function handleStartTestClick() {
   state.setup.totalMinutes = minutes;
   saveSetup();
 
+  if (typeof descVerify !== "undefined" && descVerify.running) return;
+  if (typeof descConfirmStart === "function" && !descConfirmStart()) return;
   const hasEmptyModel = state.setup.questions.some(q => !q.modelAnswer || !q.modelAnswer.trim());
   if (hasEmptyModel) {
     if (!confirm("Some questions have no model answer. The AI will grade without a reference. Continue?")) {
@@ -729,9 +739,7 @@ function startTest(testType) {
     scores[q.id] = null;
   });
 
-  const blockPasteCheckbox = $("setup-block-paste");
-  const blockPaste = blockPasteCheckbox ? blockPasteCheckbox.checked : true;
-  state.setup.blockPaste = blockPaste;
+  const blockPaste = true;       // copy and paste are always blocked in the answer box
   saveSetup();
 
   const test = {
@@ -1051,18 +1059,32 @@ function updateExamSummary() {
   const modRev = $("modal-sum-marked"); if (modRev) modRev.textContent = markedReview;
 }
 
-// Intercept paste and drag-and-drop actions when paste restriction is enabled
-function handlePasteOrDrop(e) {
-  if (state.test && state.test.blockPaste) {
-    e.preventDefault();
-    const wcElem = $("exam-wordcount");
-    if (wcElem) {
-      wcElem.textContent = "Paste is disabled (exam mode)";
-      setTimeout(() => {
-        updateWordCount();
-      }, 1500);
-    }
+// A short warning that slides in at the top of the screen and fades out by itself
+function showExamWarning(message) {
+  let toast = $("exam-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "exam-toast";
+    toast.className = "exam-toast";
+    toast.setAttribute("role", "alert");
+    document.body.appendChild(toast);
   }
+  toast.textContent = message;
+  toast.classList.remove("is-visible");
+  void toast.offsetWidth;            // restart the animation for a repeated warning
+  toast.classList.add("is-visible");
+  clearTimeout(showExamWarning.timer);
+  showExamWarning.timer = setTimeout(() => toast.classList.remove("is-visible"), 2600);
+}
+
+// Copy, cut, paste and drag-and-drop are never allowed in the answer box (as in the real exam)
+function handlePasteOrDrop(e) {
+  if (!state.test) return;
+  e.preventDefault();
+  const copying = e.type === "copy" || e.type === "cut";
+  showExamWarning(copying
+    ? "Copying is not allowed in the exam. Your answer stays only in this box."
+    : "Pasting is not allowed in the exam. Type your answer yourself.");
 }
 
 // Finalize the test, calculate time spent, and archive the attempt to history
@@ -2784,10 +2806,13 @@ async function handleDocImport(event) {
 
     parsedQuestions.forEach(q => {
       q.id = makeId("q");
+      q.check = { ai: null, user: "" };
       state.setup.questions.push(q);
     });
     saveSetup();
     renderSetupList();
+    // every imported question and model answer is checked by AI (model 1)
+    if (typeof descVerifyQuestions === "function" && window.AIEval && AIEval.isReady("check")) descVerifyQuestions();
 
     if (statusElem) {
       statusElem.textContent = `Added ${parsedQuestions.length} question(s) from ${file.name}.`;
@@ -3824,7 +3849,7 @@ function renderP1CheckPanel() {
         <button type="button" class="btn-soft" data-p1-check="stop">Stop</button></div>`;
   } else if (!ready) {
     ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>AI check is off.</strong> <span class="ai-muted">No API key is set up in this browser, so questions and answer keys cannot be verified.</span></div>
-        <button type="button" class="ai-btn-primary" data-ai-action="open-settings">AI Check</button></div>`;
+        <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="verify">AI Check</button></div>`;
   } else if (unchecked.length) {
     ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>${unchecked.length + failed.length} question${unchecked.length + failed.length === 1 ? " is" : "s are"} not checked by AI yet.</strong> <span class="ai-muted">The AI solves each question and confirms the answer key.</span></div>
         <button type="button" class="ai-btn-primary" data-p1-check="run">AI Check</button></div>`;
@@ -3912,10 +3937,17 @@ function updateP1StartButton() {
   btn.textContent = mcqVerify.running ? "Checking questions with AI…" : (n ? `Start Objective Test (${n} question${n === 1 ? "" : "s"})` : "Start Objective Test");
 }
 
-// Called by ai_eval.js after AI Settings are saved
+// Called by ai_eval.js after API keys are saved
 function onAISettingsSaved() {
   const setup = $("screen-setup-p1");
   if (setup && !setup.hidden) renderP1SetupList();
+  const setup2 = $("screen-setup");
+  if (setup2 && !setup2.hidden) renderSetupList();
+  // a key was just added: check what is waiting, automatically
+  if (window.AIEval && AIEval.isReady("check")) {
+    if ((state.p1_setup.questions || []).some(q => mcqStatus(q) === "unchecked" || mcqStatus(q) === "failed")) mcqVerifyQuestions();
+    if (typeof descVerifyQuestions === "function" && (state.setup.questions || []).some(q => ["unchecked", "failed"].includes(descStatus(q)) && !(q.check && q.check.user))) descVerifyQuestions();
+  }
   if (state.p1_lastResultTest && typeof p1RenderAnalysis === "function") p1RenderAnalysis(state.p1_lastResultTest);
 }
 
@@ -5334,8 +5366,8 @@ document.addEventListener("DOMContentLoaded", () => {
         handleAnswerInput();
       }
     });
-    examAnswer.addEventListener("paste", handlePasteOrDrop);
-    examAnswer.addEventListener("drop", handlePasteOrDrop);
+    ["paste", "drop", "copy", "cut"].forEach(t => examAnswer.addEventListener(t, handlePasteOrDrop));
+    examAnswer.addEventListener("dragstart", (e) => e.preventDefault());
   }
 
   const btnPrev = $("btn-prev");

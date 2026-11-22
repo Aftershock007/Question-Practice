@@ -19,7 +19,7 @@
       <button type="button" id="nav-setup">New Test</button>
       <button type="button" id="nav-calendar">Calendar</button>
       <button type="button" id="nav-history">History</button>
-      <button type="button" id="nav-ai-settings" data-ai-action="open-settings" title="AI evaluation settings"><span id="ai-nav-dot" class="ai-nav-dot" aria-hidden="true"></span>AI Settings</button>
+      <button type="button" id="nav-ai-settings" class="nav-keys-btn" data-ai-action="open-settings" title="API keys and AI models"><span id="ai-nav-dot" class="ai-nav-dot" aria-hidden="true"></span><span class="ai-nav-label">API keys</span></button>
     </nav>
   </header>
 
@@ -445,6 +445,7 @@
           <button type="button" id="btn-delete-all-setup" class="ghost-danger batch-btn">Delete All</button>
         </div>
       </div>
+      <div id="setup-check" class="p1-check" hidden></div>
       <ol id="setup-question-list"></ol>
       <div id="setup-pagination" class="pagination-wrapper" style="display: none;"></div>
 
@@ -456,7 +457,7 @@
             <p id="setup-suggested-time"></p>
           </div>
           <div style="display: flex; align-items: center; padding-top: 10px;">
-            <label class="checkbox-label"><input id="setup-block-paste" type="checkbox" checked> Block copy-paste in answer box (like real exam)</label>
+            <p class="setup-note">Copy and paste are always disabled in the answer box, as in the real exam.</p>
           </div>
         </div>
       </div>
@@ -703,52 +704,28 @@
     <div id="ai-settings-modal" class="modal" hidden>
       <div class="modal-content ai-settings-card" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title">
         <div class="ai-settings-head">
-          <h3 id="ai-settings-title">AI evaluation</h3>
+          <h3 id="ai-settings-title">API keys and AI models</h3>
           <button type="button" class="ai-icon-btn" data-ai-close aria-label="Close">&times;</button>
         </div>
         <form id="ai-settings-form" autocomplete="off" novalidate>
-          <label for="ai-provider">AI provider</label>
-          <select id="ai-provider"></select>
-          <p id="ai-provider-note" class="ai-field-note"></p>
-
-          <label for="ai-key">API key</label>
-          <div class="ai-input-row">
-            <input id="ai-key" type="password" autocomplete="off" spellcheck="false">
-            <button type="button" id="ai-key-toggle" class="btn-soft">Show</button>
-          </div>
-          <p class="ai-field-note"><span id="ai-key-source"></span> <a id="ai-key-link" href="#" target="_blank" rel="noopener noreferrer">Get a key ↗</a></p>
-
-          <div id="ai-base-row" hidden>
-            <label for="ai-base-url">Server URL (OpenAI-compatible)</label>
-            <input id="ai-base-url" type="url" spellcheck="false" placeholder="http://localhost:11434/v1">
-          </div>
-
-          <label for="ai-model">Model</label>
-          <div class="ai-input-row">
-            <input id="ai-model" type="text" list="ai-model-list" autocomplete="off" spellcheck="false">
-            <button type="button" id="ai-load-models" class="btn-soft">Load models</button>
-          </div>
-          <datalist id="ai-model-list"></datalist>
-          <div id="ai-model-chips" class="ai-chips"></div>
-          <p id="ai-models-status" class="ai-field-status" role="status" aria-live="polite"></p>
+          <p class="ai-session-note">The key is kept only for this browser session: it stays when you refresh the page and is removed when you close the browser. It is never saved in the repository.</p>
+          <div id="ai-keys" class="ai-keys"></div>
+          <h4 class="ai-models-title">Models</h4>
+          <div id="ai-engines" class="ai-engines"></div>
 
           <label class="ai-check" for="ai-auto">
             <input type="checkbox" id="ai-auto">
             <span>Grade my answers automatically when I submit a subjective test</span>
           </label>
 
-          <div class="ai-test-row">
-            <button type="button" id="ai-test" class="btn-soft">Test connection</button>
-            <p id="ai-test-status" class="ai-field-status" role="status" aria-live="polite"></p>
-          </div>
-
-          <p class="ai-privacy">Your key is saved only in this browser, never in the repository. When an answer is graded, the question, your answer and its reference answer are sent directly from this page to the provider you choose.</p>
+          <p class="ai-privacy">When AI is used, the questions (and for grading, your answer and its reference answer) are sent directly from this page to the provider of that model.</p>
+          <p id="ai-save-status" class="ai-field-status" role="status" aria-live="polite"></p>
 
           <div class="ai-settings-actions">
-            <button type="button" id="ai-forget-key" class="btn-soft btn-soft-danger">Remove saved key</button>
+            <button type="button" id="ai-forget-keys" class="btn-soft btn-soft-danger">Remove keys now</button>
             <span class="ai-spacer"></span>
             <button type="button" class="secondary" data-ai-close>Cancel</button>
-            <button type="submit" class="ai-btn-primary">Save</button>
+            <button type="submit" class="ai-btn-primary">Save for this session</button>
           </div>
         </form>
       </div>
@@ -759,10 +736,9 @@
   <script src="schedule_data.js"></script>
   <script src="app.js"></script>
   <script src="ai_config.js"></script>
-  <!-- private, git-ignored API key (missing on GitHub Pages: then the key saved in AI Settings is used) -->
-  <script src="ai_key.local.js" onerror="this.remove()"></script>
   <script src="ai_eval.js"></script>
   <script src="objective_ai.js"></script>
+  <script src="descriptive_ai.js"></script>
   <script src="calendar.js"></script>
   <script src="folders.js"></script>
 </body>

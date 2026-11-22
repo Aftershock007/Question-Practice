@@ -22,10 +22,11 @@ A personal, offline typing test and descriptive answer practice website designed
   - The check starts by itself after every upload; the **AI Check** button runs it (again) for every question at any time.
   - The exam can start only when the check has finished, and it contains only the questions that passed. If the AI cannot be reached (for example the free daily limit is used up), the affected questions are marked **AI check failed**: press **AI Check** again later, or start with them after a clear warning.
   - A question with fewer options than the rest of the file (a real 4-option question among 5-option ones) waits for the AI to confirm it, instead of being rejected outright.
-- **Subject and chapter folders:** every DOCX/PDF upload asks which subject it is (Economics (ESI), Finance, Management, English, General Awareness, Quantitative Aptitude, Reasoning or your own), whether it is a **chapter test** (which chapter, **full** or **partial** chapter) or a **mix test**, and optionally a topic. The subject and chapter are guessed from the file name ("CH-1-National_Income-Questions.docx" = Chapter 1: National Income). **History** is then sorted into folders: *Subject > Chapter tests > Chapter 1: ... > Full chapter / Partial chapter* and *Subject > Mix tests*. Older tests sit in **Not sorted yet**; **Move to folder** on any test changes its folder.
+- **Subject and chapter folders:** every DOCX/PDF upload asks which subject it is (Economics (ESI), Finance, Management, English, General Awareness, Quantitative Aptitude, Reasoning or your own), whether it is a **chapter test** (which chapter, **full** or **partial** chapter) or a **mix test**, and optionally a topic. The subject and chapter are guessed from the file name ("CH-1-National_Income-Questions.docx" = Chapter 1: National Income). **History** is a file explorer (Back / Up, a path bar, a folder tree and folder icons): *Subject > Chapter tests > Chapter 1: ... > Full chapter / Partial chapter* and *Subject > Mix tests*. The subject you choose is also the subject shown in the exam and the review. Older tests sit in **Not sorted yet**; **Move to folder** on any test changes its folder.
 - **Phase-2 Descriptive Typing Practice:**
   - Four dedicated papers: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
-  - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support, and optional paste prevention.
+  - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support. Copy, cut and paste are always blocked in the answer box, with a warning when you try.
+  - **AI check of descriptive questions** after every upload (model 1): the question is complete, the model answer belongs to it, is complete and has no clear factual error, and the marks look right. Problems are listed under **Needs attention**; **AI Check** runs it again.
   - **Built-in AI evaluation:** the moment you submit, every answer is graded by AI with the RBI rubric in `prompt.js` (see [AI evaluation](#ai-evaluation) below), including a line-by-line **writing analysis** (grammar, spelling, factual errors, RBI writing style) and **topic-wise performance**.
   - The full evaluation prompt can still be copied or downloaded for grading in any chatbot (Gemini, Claude, ChatGPT).
 - **Calendar & TODO (your daily routine):**
@@ -73,34 +74,27 @@ After a subjective test, each answer is sent with the evaluation prompt from `pr
 
 Scores are written into **History** (and the calendar) automatically. You can still edit them there.
 
-### Set up (one time, about 2 minutes)
+### Set up (every browser session, 30 seconds)
 
-**Built-in key on your own computer:** put your key in `ai_key.local.js` (next to `index.html`). The file is listed in `.gitignore`, so it is never committed, and the app uses it everywhere without asking: the AI check after every upload, the objective analysis and the subjective grading. The public GitHub Pages copy does not have this file (a key there would be public and is revoked automatically), so in a browser that opens the GitHub Pages site, save the key once in **AI Settings** as below.
+The app uses **two AI models**, both from Google Gemini and both with **one Gemini API key**:
 
-```js
-// ai_key.local.js
-(function () {
-  const c = window.AI_CONFIG = window.AI_CONFIG || {};
-  c.provider = "openrouter";
-  c.keys = Object.assign({}, c.keys, { openrouter: "sk-or-v1-..." });
-})();
-```
+| Model | Default | Used for |
+| --- | --- | --- |
+| Model 1 | `gemini-4-hydrogen`, medium thinking tier | Checking every uploaded DOCX/PDF question (objective answer keys and descriptive questions with their model answers), the marking checklist, and the objective topic-wise analysis |
+| Model 2 | `gemini-4-neon`, high thinking tier | Marks and the full analysis of every subjective answer |
 
-Or, in any browser:
+1. Get a key at **[aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)**.
+2. Click **API keys** in the top bar, paste the key once, optionally press **Test this model**, then **Save for this session**.
 
-1. Get an API key. The app is set up for **OpenRouter** with the free model **NVIDIA Nemotron 3.5 Super VL** (`nvidia/nemotron-3.5-super-vl:free`): create a key at **[openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)**. Any other provider below works too.
-2. Open the app and click **AI Settings** in the top bar, then paste the key, press **Test connection** and **Save**.
-3. That's it. Every subjective test is graded automatically when you submit it. Tests you took before can be graded from **History → Open results → Grade all answers**.
+The key is kept only for the browser session (`sessionStorage`): it survives a page refresh and is removed when you close the browser. It is never stored permanently and never written to the repository. **Remove keys now** clears it at once. The provider, model and thinking tier of each model can be changed under "Model" in the same dialog (any provider below works); `ai_config.js` holds only the defaults and `DEMO_` placeholders. Never put a real key in `ai_config.js`: the repository is public and leaked keys are revoked automatically.
 
-The key is stored **only in your browser** (localStorage). It is never written into this repository, so this works on GitHub Pages too. On a new browser or device, paste it once more.
-
-**Alternative: `ai_config.js`.** It holds `DEMO_...` placeholder keys and the default models for every provider. You can replace a placeholder with a real key, but **this repository is public**: a key committed here is visible to everyone and will be revoked by the provider. Only do that in a private, local copy. Keys saved in AI Settings always take priority. While a key is still a `DEMO_` placeholder, nothing is sent anywhere and the app shows **Add API key** instead.
+**Consistent marks.** Every subjective question gets a fixed, weighted checklist of 5-10 key points taken from the model answer you uploaded with it; every attempt at that question is marked against the same checklist. Each answer is graded twice independently (a third time when the two differ by more than 12% of the marks) and the marks are averaged (or the median is taken). The final mark is then kept within a band around how much of your reference answer the script covers, so a weak answer cannot outscore a strong one. The report shows the gradings and the checklist under **How this mark was set**.
 
 ### Providers
 
 | Provider | Default model | Notes |
 |---|---|---|
-| OpenRouter (default) | `nvidia/nemotron-3.5-super-vl:free` | Free model; OpenRouter caps free requests per day. A reasoning model: about 1-3 minutes per answer, answers are graded in parallel. If you see "blocked by your OpenRouter privacy settings", allow free endpoints at openrouter.ai/settings/privacy. |
+| OpenRouter | `nvidia/nemotron-3.5-super-vl:free` | Free model; OpenRouter caps free requests per day. A reasoning model: about 1-3 minutes per answer, answers are graded in parallel. If you see "blocked by your OpenRouter privacy settings", allow free endpoints at openrouter.ai/settings/privacy. |
 | Google Gemini | `gemini-3.8-flash` | Free tier. If a model is retired, the app automatically retries with `gemini-flash-latest`. |
 | OpenAI | `gpt-6.2-sol` | Paid API. |
 | Anthropic Claude | `claude-opus-5-5` | Paid API. Sonnet / Haiku cost less. |
@@ -109,9 +103,9 @@ The key is stored **only in your browser** (localStorage). It is never written i
 | Mistral | `mistral-medium-latest` | Free experiment plan. |
 | Custom | `llama3.1` | Any OpenAI-compatible server (Ollama, LM Studio, vLLM). For Ollama set `OLLAMA_ORIGINS=*`. |
 
-Providers rename and retire models often. If grading says *Model not available*, open **AI Settings → Load models** and pick one from the list your key can actually use.
+Providers rename and retire models often. If grading says *Model not available*, open **API keys → Model → Load models** and pick one from the list your key can actually use.
 
-If a request fails, the answer card says why in plain words (invalid key, quota used up, rate limit, provider busy, no internet...) with **Retry** and **AI Settings** buttons. Rate limits and temporary outages are retried automatically.
+If a request fails, the answer card says why in plain words (invalid key, quota used up, rate limit, provider busy, no internet...) with **Retry** and **API keys** buttons. Rate limits and temporary outages are retried automatically.
 
 ---
 

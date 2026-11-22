@@ -14,7 +14,6 @@
 const FOLDER_SUBJECTS = ["Economics (ESI)", "Finance", "Management", "English", "General Awareness", "Quantitative Aptitude", "Reasoning"];
 const FOLDER_OTHER = "Other";
 const FOLDER_UNSORTED = "Not sorted yet";
-const FOLDER_CLOSED_KEY = "rbi_history_folders_closed";
 
 // "Economics (ESI)" etc. from the subject / paper the parser guessed
 function folderSubjectFromGuess(guess) {
@@ -167,8 +166,12 @@ function askFileFolder(fileName, rawText, guessSubject, count) {
 function applyFolderToQuestions(questions, folder) {
   if (!folder) return;
   const tag = { subject: folder.subject, kind: folder.kind, chapter: folder.chapter || "", coverage: folder.coverage || "" };
+  // the subject you chose replaces the guessed one (objective: q.subject, subjective: q.paper)
+  const paper = { "Economics (ESI)": "ESI", "Finance": "Finance", "Management": "Management", "English": "English Descriptive" }[folder.subject];
   (questions || []).forEach(q => {
     q.folder = Object.assign({}, tag);
+    if ("subject" in q || !("paper" in q)) q.subject = folder.subject;
+    if ("paper" in q && paper) q.paper = paper;
     if (folder.topic && !q.topic) q.topic = folder.topic;
   });
 }
@@ -201,72 +204,128 @@ function folderLabel(f) {
   return f.subject + " › " + f.chapter + " › " + (f.coverage === "partial" ? "Partial chapter" : "Full chapter");
 }
 
-function folderClosedSet() {
-  try { return new Set(JSON.parse(localStorage.getItem(FOLDER_CLOSED_KEY) || "[]")); } catch (_) { return new Set(); }
-}
-function folderSaveClosed(set) {
-  try { localStorage.setItem(FOLDER_CLOSED_KEY, JSON.stringify([...set].slice(-300))); } catch (_) { /* per-browser convenience only */ }
-}
+// ---- History as a file explorer -------------------------------------------
+// Folders: History > Subject > Chapter tests > Chapter n > Full / Partial chapter
+//                            > Mix tests;  plus "Not sorted yet". Tests are the "files".
+const FOLDER_ICON = '<svg class="ex-ico" viewBox="0 0 48 40" aria-hidden="true"><path class="ex-ico-back" d="M4 6a4 4 0 0 1 4-4h11l5 5h16a4 4 0 0 1 4 4v23a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path class="ex-ico-front" d="M4 14a4 4 0 0 1 4-4h32a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/></svg>';
+const ICON_BACK = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_UP = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15.5V5M5 9.5 10 4.5l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const explorerState = {};   // phaseKey -> { path: [keys], back: [[keys]...] }
 
-// Build the folder tree of History into listElem. cardFor(test) returns the test's card (an
-// element or an HTML string); tests keep their order (newest first) inside each folder.
-function renderHistoryFolders(listElem, tests, cardFor, phaseKey) {
-  const closed = folderClosedSet();
-  const tree = new Map();   // subject -> { chapters: Map(chapterKey -> {name, full: [], partial: []}), mix: [] }
-  const unsorted = [];
+// The folder tree of a list of tests
+function buildHistoryTree(tests) {
+  const root = { key: "", name: "History", kind: "root", children: [], tests: [] };
+  const child = (parent, key, name, kind) => {
+    let c = parent.children.find(x => x.key === key);
+    if (!c) { c = { key, name, kind, children: [], tests: [] }; parent.children.push(c); }
+    return c;
+  };
   tests.forEach(t => {
     const f = testFolderOf(t);
-    if (!f) { unsorted.push(t); return; }
-    if (!tree.has(f.subject)) tree.set(f.subject, { chapters: new Map(), mix: [] });
-    const node = tree.get(f.subject);
-    if (f.kind !== "chapter") { node.mix.push(t); return; }
-    const key = String(f.chapter || "").toLowerCase().replace(/\s+/g, " ").trim();
-    if (!node.chapters.has(key)) node.chapters.set(key, { name: f.chapter, full: [], partial: [] });
-    node.chapters.get(key)[f.coverage === "partial" ? "partial" : "full"].push(t);
+    if (!f) { child(root, "unsorted", FOLDER_UNSORTED, "unsorted").tests.push(t); return; }
+    const subject = child(root, "s:" + f.subject, f.subject, "subject");
+    if (f.kind !== "chapter") { child(subject, "mix", "Mix tests", "group").tests.push(t); return; }
+    const chapters = child(subject, "chapter", "Chapter tests", "group");
+    const ch = child(chapters, "c:" + String(f.chapter || "").toLowerCase().replace(/\s+/g, " ").trim(), f.chapter, "chapter");
+    child(ch, f.coverage === "partial" ? "partial" : "full", f.coverage === "partial" ? "Partial chapter" : "Full chapter", "coverage").tests.push(t);
   });
   const order = (a, b) => {
-    const ia = FOLDER_SUBJECTS.indexOf(a), ib = FOLDER_SUBJECTS.indexOf(b);
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+    const rank = n => (n.kind === "unsorted" ? 999 : n.kind === "subject" ? (FOLDER_SUBJECTS.indexOf(n.name) < 0 ? 98 : FOLDER_SUBJECTS.indexOf(n.name)) : 0);
+    const fixed = { chapter: 0, mix: 1, full: 0, partial: 1 };
+    if (a.key in fixed && b.key in fixed) return fixed[a.key] - fixed[b.key];
+    return rank(a) - rank(b) || a.name.localeCompare(b.name, undefined, { numeric: true });
   };
-  listElem.innerHTML = "";
-  const folder = (parent, key, title, count, level) => {
-    const d = document.createElement("details");
-    d.className = "hist-folder hist-folder-l" + level;
-    d.dataset.folderKey = phaseKey + "|" + key;
-    d.open = !closed.has(d.dataset.folderKey);
-    d.innerHTML = `<summary><span class="hist-folder-name">${escapeHTML(title)}</span><span class="count-badge">${count} test${count === 1 ? "" : "s"}</span></summary><div class="hist-folder-body"></div>`;
-    d.addEventListener("toggle", () => {
-      const set = folderClosedSet();
-      if (d.open) set.delete(d.dataset.folderKey); else set.add(d.dataset.folderKey);
-      folderSaveClosed(set);
-    });
-    parent.appendChild(d);
-    return d.querySelector(".hist-folder-body");
-  };
-  const put = (body, list) => list.forEach(t => {
-    const c = cardFor(t);
-    if (typeof c === "string") body.insertAdjacentHTML("beforeend", c); else if (c) body.appendChild(c);
-  });
-  const countOf = node => node.mix.length + [...node.chapters.values()].reduce((n, c) => n + c.full.length + c.partial.length, 0);
-  [...tree.keys()].sort(order).forEach(subject => {
-    const node = tree.get(subject);
-    const sBody = folder(listElem, subject, subject, countOf(node), 1);
-    if (node.chapters.size) {
-      const chCount = [...node.chapters.values()].reduce((n, c) => n + c.full.length + c.partial.length, 0);
-      const cBody = folder(sBody, subject + "|chapter", "Chapter tests", chCount, 2);
-      [...node.chapters.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name, undefined, { numeric: true })).forEach(([key, ch]) => {
-        const body = folder(cBody, subject + "|chapter|" + key, ch.name, ch.full.length + ch.partial.length, 3);
-        if (ch.full.length) put(folder(body, subject + "|chapter|" + key + "|full", "Full chapter", ch.full.length, 4), ch.full);
-        if (ch.partial.length) put(folder(body, subject + "|chapter|" + key + "|partial", "Partial chapter", ch.partial.length, 4), ch.partial);
-      });
-    }
-    if (node.mix.length) put(folder(sBody, subject + "|mix", "Mix tests", node.mix.length, 2), node.mix);
-  });
-  if (unsorted.length) {
-    const body = folder(listElem, "unsorted", FOLDER_UNSORTED, unsorted.length, 1);
-    body.insertAdjacentHTML("afterbegin", `<p class="hist-folder-hint">These tests were taken before folders existed, or from questions typed by hand. Use "Move to folder" on a test to sort it.</p>`);
-    put(body, unsorted);
+  const count = n => { n.children.sort(order); n.total = n.tests.length + n.children.reduce((s, c) => s + count(c), 0); return n.total; };
+  count(root);
+  return root;
+}
+
+function explorerNode(root, path) {
+  let node = root;
+  const trail = [root];
+  for (const k of path) {
+    const next = node.children.find(c => c.key === k);
+    if (!next) break;
+    node = next;
+    trail.push(node);
   }
+  return { node, trail };
+}
+
+// Draw the explorer into listElem. cardFor(test) gives the test's card (element or HTML).
+function renderHistoryFolders(listElem, tests, cardFor, phaseKey) {
+  const st = explorerState[phaseKey] || (explorerState[phaseKey] = { path: [], back: [] });
+  try { if (!st.loaded) { st.path = JSON.parse(sessionStorage.getItem("rbi_hist_path_" + phaseKey) || "[]"); st.loaded = true; } } catch (_) { st.loaded = true; }
+  const root = buildHistoryTree(tests);
+  const { node, trail } = explorerNode(root, st.path);
+  st.path = trail.slice(1).map(n => n.key);
+  try { sessionStorage.setItem("rbi_hist_path_" + phaseKey, JSON.stringify(st.path)); } catch (_) { /* per-tab convenience */ }
+
+  const go = (path, remember = true) => {
+    if (remember) st.back.push(st.path.slice());
+    st.path = path;
+    renderHistoryFolders(listElem, tests, cardFor, phaseKey);
+  };
+
+  // left: the folder tree (like the navigation pane of a file manager)
+  const treeHTML = (n, path, depth) => n.children.map(c => {
+    const p = path.concat(c.key);
+    const open = st.path.length >= p.length && p.every((k, i) => st.path[i] === k);
+    const current = open && st.path.length === p.length;
+    return `<li><button type="button" class="ex-tree-item${current ? " is-current" : ""}" data-ex-path="${escapeHTML(JSON.stringify(p))}" style="--depth:${depth}">
+        <span class="ex-tree-caret${c.children.length ? (open ? " is-open" : "") : " is-empty"}"></span>${FOLDER_ICON}<span class="ex-tree-name">${escapeHTML(c.name)}</span><span class="ex-tree-count">${c.total}</span></button>
+        ${c.children.length && open ? `<ul>${treeHTML(c, p, depth + 1)}</ul>` : ""}</li>`;
+  }).join("");
+
+  const crumbs = trail.map((n, i) => {
+    const p = trail.slice(1, i + 1).map(x => x.key);
+    return i === trail.length - 1
+      ? `<span class="ex-crumb is-current" aria-current="page">${escapeHTML(n.name)}</span>`
+      : `<button type="button" class="ex-crumb" data-ex-path="${escapeHTML(JSON.stringify(p))}">${escapeHTML(n.name)}</button>`;
+  }).join('<span class="ex-crumb-sep" aria-hidden="true">/</span>');
+
+  const tiles = node.children.map(c => `
+    <button type="button" class="ex-tile" data-ex-path="${escapeHTML(JSON.stringify(st.path.concat(c.key)))}" title="Open ${escapeHTML(c.name)}">
+      ${FOLDER_ICON}
+      <span class="ex-tile-name">${escapeHTML(c.name)}</span>
+      <span class="ex-tile-meta">${c.total} test${c.total === 1 ? "" : "s"}</span>
+    </button>`).join("");
+
+  listElem.innerHTML = `
+    <div class="explorer">
+      <div class="ex-toolbar">
+        <button type="button" class="ex-nav-btn" data-ex-act="back" title="Back" aria-label="Back" ${st.back.length ? "" : "disabled"}>${ICON_BACK}</button>
+        <button type="button" class="ex-nav-btn" data-ex-act="up" title="Up one folder" aria-label="Up one folder" ${st.path.length ? "" : "disabled"}>${ICON_UP}</button>
+        <nav class="ex-crumbs" aria-label="Folder path">${crumbs}</nav>
+        <span class="ex-total">${node.total} test${node.total === 1 ? "" : "s"}</span>
+      </div>
+      <div class="ex-body">
+        <aside class="ex-tree" aria-label="Folders"><ul>
+          <li><button type="button" class="ex-tree-item${st.path.length ? "" : " is-current"}" data-ex-path="[]" style="--depth:0"><span class="ex-tree-caret is-open"></span>${FOLDER_ICON}<span class="ex-tree-name">History</span><span class="ex-tree-count">${root.total}</span></button>
+          <ul>${treeHTML(root, [], 1)}</ul></li></ul>
+        </aside>
+        <section class="ex-main ex-enter">
+          ${tiles ? `<div class="ex-grid">${tiles}</div>` : ""}
+          ${node.kind === "unsorted" ? `<p class="hist-folder-hint">These tests were taken before folders existed, or from questions typed by hand. Use "Move to folder" on a test to sort it.</p>` : ""}
+          ${node.tests.length ? `<div class="ex-files-head">${node.tests.length} test${node.tests.length === 1 ? "" : "s"} in this folder</div><div class="ex-files"></div>` : ""}
+          ${!tiles && !node.tests.length ? `<p class="ex-empty">This folder is empty.</p>` : ""}
+        </section>
+      </div>
+    </div>`;
+  const files = listElem.querySelector(".ex-files");
+  if (files) node.tests.forEach(t => {
+    const c = cardFor(t);
+    if (typeof c === "string") files.insertAdjacentHTML("beforeend", c); else if (c) files.appendChild(c);
+  });
+
+  listElem.querySelector(".explorer").addEventListener("click", (e) => {
+    const nav = e.target.closest("[data-ex-path]");
+    if (nav) { go(JSON.parse(nav.dataset.exPath)); return; }
+    const act = e.target.closest("[data-ex-act]");
+    if (!act) return;
+    if (act.dataset.exAct === "back" && st.back.length) go(st.back.pop(), false);
+    else if (act.dataset.exAct === "up" && st.path.length) go(st.path.slice(0, -1));
+  });
 }
 
 // "Move to folder" on a History test

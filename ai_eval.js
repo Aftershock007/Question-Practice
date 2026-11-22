@@ -5,7 +5,7 @@
 // ----------------------------------------------------------------------------
 // When a subjective test is submitted, every answer is sent - together with the
 // RBI evaluation prompt from prompt.js - to the AI provider set up in
-// "AI Settings" (or ai_config.js). The model replies with structured JSON that
+// "API keys" (top bar; models default from ai_config.js). The model replies with structured JSON that
 // is checked, re-added and shown as an easy-to-read assessment on the Result
 // screen and in History. The score is written into History automatically.
 //
@@ -93,7 +93,7 @@
     }
   };
 
-  const SETTINGS_KEY = "rbi_ai_settings";   // what you saved in AI Settings (overrides ai_config.js)
+  const SETTINGS_KEY = "rbi_ai_settings";   // models chosen in the API keys dialog (keys themselves: sessionStorage)
   const REPORTS_KEY = "rbi_ai_reports";     // { [testId]: { [questionId]: report } }
   // Detailed reports are big (~10-15 KB per answer). Keep them inside a budget so
   // they can never crowd out your test history; the oldest reports are dropped
@@ -247,8 +247,30 @@
   }
 
   // --------------------------------------------------------------------------
-  // 3. Settings: ai_config.js defaults + what you saved in AI Settings
+  // 3. Settings: ai_config.js defaults + what you saved in API keys (top bar)
   // --------------------------------------------------------------------------
+  // Two AI "engines" (model set-ups); every AI task runs on one of them:
+  //   verify: DOCX/PDF question checks (objective + descriptive) and the objective topic analysis
+  //   grade:  marks and the full analysis of every subjective answer
+  // "thinking" is Gemini's thinking level (the model tier): low / medium / high, or "default".
+  const ENGINES = {
+    verify: {
+      id: "verify", n: 1, label: "Question checks and objective analysis",
+      uses: "Checks every uploaded DOCX/PDF question (objective and descriptive) and writes the topic-wise analysis after objective tests.",
+      provider: "gemini", model: "gemini-4-hydrogen", thinking: "medium"
+    },
+    grade: {
+      id: "grade", n: 2, label: "Subjective marks and analysis",
+      uses: "Gives the marks and the full analysis (writing, facts, topics) for every subjective answer.",
+      provider: "gemini", model: "gemini-4-neon", thinking: "high"
+    }
+  };
+  const ROLE_ENGINE = { check: "verify", analysis: "verify", grading: "grade" };
+  const THINKING_LEVELS = ["low", "medium", "high"];
+  // API keys live only in this browser session: kept across refreshes, gone when the browser closes.
+  // One key per provider: both engines on Gemini share the same Gemini key.
+  const SESSION_KEYS = "rbi_ai_session_keys";
+
   function fileConfig() {
     const c = typeof window !== "undefined" ? window.AI_CONFIG : null;
     return c && typeof c === "object" ? c : {};
@@ -272,6 +294,39 @@
     }
   }
 
+  function readSessionKeys() {
+    try {
+      const o = JSON.parse(sessionStorage.getItem(SESSION_KEYS) || "{}");
+      return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeSessionKeys(o) {
+    try {
+      const clean = {};
+      Object.keys(PROVIDERS).forEach(id => { const k = String((o && o[id]) || "").trim(); if (k && !isPlaceholderKey(k)) clean[id] = k; });
+      if (Object.keys(clean).length) sessionStorage.setItem(SESSION_KEYS, JSON.stringify(clean));
+      else sessionStorage.removeItem(SESSION_KEYS);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Keys were once saved permanently (localStorage): they now live only in the session
+  function dropStoredKeys() {
+    const o = readOverrides();
+    if (o.keys || o.provider || o.models) {
+      delete o.keys;
+      delete o.provider;
+      delete o.models;
+      delete o.baseUrls;
+      writeOverrides(o);
+    }
+  }
+
   // Empty keys and DEMO_ placeholders mean "not set up" - they are never sent anywhere.
   function isPlaceholderKey(key) {
     const k = String(key == null ? "" : key).trim();
@@ -292,21 +347,36 @@
   function getSettings() {
     const file = fileConfig();
     const local = readOverrides();
-    let provider = PROVIDERS[local.provider] ? local.provider : (PROVIDERS[file.provider] ? file.provider : "gemini");
-    // a provider picked in AI Settings that has no key falls back to the one with the built-in key
-    if (provider !== file.provider && PROVIDERS[file.provider] && !resolveProvider(provider).ready && resolveProvider(file.provider).ready) provider = file.provider;
     const autoEvaluate = typeof local.autoEvaluate === "boolean" ? local.autoEvaluate
       : (typeof file.autoEvaluate === "boolean" ? file.autoEvaluate : true);
-    return { provider, autoEvaluate };
+    return { autoEvaluate };
   }
 
-  // Values used when nothing was saved in AI Settings
-  function defaultsFor(def) {
-    const file = fileConfig();
+  // An engine's set-up from ai_config.js (falling back to the built-in defaults above)
+  function engineDefaults(id) {
+    const base = ENGINES[id];
+    const f = (fileConfig().engines || {})[id] || {};
+    const provider = PROVIDERS[f.provider] ? f.provider : base.provider;
+    const def = PROVIDERS[provider];
     return {
-      key: pickStr(file.keys, def.id),
-      model: cleanModel(def, pickStr(file.models, def.id)) || def.defaultModel,
-      baseUrl: ((def.customBaseUrl && pickStr(file, "customBaseUrl")) || def.baseUrl || "").replace(/\/+$/, "")
+      provider,
+      model: cleanModel(def, pickStr(f, "model")) || (provider === base.provider ? base.model : def.defaultModel),
+      thinking: f.thinking === "default" || THINKING_LEVELS.includes(f.thinking) ? f.thinking : base.thinking,
+      baseUrl: ((def.customBaseUrl && (pickStr(f, "baseUrl") || pickStr(fileConfig(), "customBaseUrl"))) || def.baseUrl || "").replace(/\/+$/, "")
+    };
+  }
+
+  // What is in use: the API keys dialog (this browser) over ai_config.js
+  function engineSettings(id) {
+    const d = engineDefaults(id);
+    const local = (readOverrides().engines || {})[id] || {};
+    const provider = PROVIDERS[local.provider] ? local.provider : d.provider;
+    const def = PROVIDERS[provider];
+    return {
+      provider,
+      model: cleanModel(def, pickStr(local, "model")) || (provider === d.provider ? d.model : def.defaultModel),
+      thinking: local.thinking === "default" || THINKING_LEVELS.includes(local.thinking) ? local.thinking : d.thinking,
+      baseUrl: ((def.customBaseUrl && pickStr(local, "baseUrl")) || (provider === d.provider ? d.baseUrl : def.baseUrl) || "").replace(/\/+$/, "")
     };
   }
 
@@ -323,25 +393,43 @@
     };
   }
 
-  function resolveProvider(id) {
-    const def = PROVIDERS[id] || PROVIDERS.gemini;
-    const local = readOverrides();
-    const d = defaultsFor(def);
-    const savedKey = pickStr(local.keys, def.id);
+  // A provider's key from ai_config.js (normally a DEMO_ placeholder)
+  function fileKeyFor(provider) {
+    return pickStr(fileConfig().keys, provider);
+  }
+
+  // Providers the two engines use (usually just "gemini": one key for both)
+  function providersInUse(settingsById) {
+    return [...new Set(Object.keys(ENGINES).map(id => (settingsById ? settingsById[id] : engineSettings(id)).provider))];
+  }
+
+  // The full configuration of one engine (its provider's key from this session, else from ai_config.js)
+  function resolveEngine(id) {
+    const engine = ENGINES[id] ? id : "grade";
+    const s = engineSettings(engine);
+    const def = PROVIDERS[s.provider];
+    const sessionKey = pickStr(readSessionKeys(), s.provider);
+    const fileKey = fileKeyFor(s.provider);
     let apiKey = "";
     let keySource = "none";
-    if (!isPlaceholderKey(savedKey)) { apiKey = savedKey; keySource = "browser"; }
-    else if (!isPlaceholderKey(d.key)) { apiKey = d.key; keySource = "file"; }
-    const model = cleanModel(def, pickStr(local.models, def.id)) || d.model;
-    const baseUrl = (def.customBaseUrl && pickStr(local.baseUrls, def.id)) || d.baseUrl;
-    const pc = makeConfig(def, apiKey, model, baseUrl);
+    if (!isPlaceholderKey(sessionKey)) { apiKey = sessionKey; keySource = "session"; }
+    else if (!isPlaceholderKey(fileKey)) { apiKey = fileKey; keySource = "file"; }
+    const pc = makeConfig(def, apiKey, s.model, s.baseUrl);
     pc.keySource = keySource;
+    pc.engine = engine;
+    pc.thinking = def.kind === "gemini" && THINKING_LEVELS.includes(s.thinking) ? s.thinking : "";
     return pc;
   }
 
-  function activeProvider() {
-    return resolveProvider(getSettings().provider);
+  // role: "check" (file checks), "analysis" (objective topic analysis), "grading" (subjective; the default)
+  function activeProvider(role) {
+    return resolveEngine(ROLE_ENGINE[role] || "grade");
   }
+
+  function engineLabel(pc) {
+    return pc.def.label + " · " + pc.model + (pc.thinking ? " (" + pc.thinking + ")" : "");
+  }
+
 
   // --------------------------------------------------------------------------
   // 4. Prompt: the exact copy-paste prompt from prompt.js + a JSON output contract
@@ -363,6 +451,9 @@ object and nothing else (no code fences, no text before or after it).
 
 Keys, in this exact order (section numbers refer to the format above):
 - "track": "A", "B", "C" or "D".                                       [Section 1]
+- "checklist": one entry per key point of the FIXED MARKING CHECKLIST, in its
+  order: {"id": "K1", "coverage": "full" | "partial" | "missing", "quote": the
+  candidate's exact words that cover it, or ""}. [] when there is no checklist.
 - "subparts": every explicit and implicit sub-part of the question, each
   {"part": short name, "coverage": "DEEP & BALANCED" | "TEXTBOOK ONLY" |
   "SUPERFICIAL" | "MISSED", "comment": one line on how it was handled}.
@@ -471,6 +562,7 @@ has no error of that kind, but do not skip real ones.
   const SL = { type: "array", items: S };
   const REPORT_SCHEMA = objSchema({
     track: { type: "string", enum: ["A", "B", "C", "D"] },
+    checklist: { type: "array", items: objSchema({ id: S, coverage: { type: "string", enum: ["full", "partial", "missing"] }, quote: S }) },
     subparts: { type: "array", items: objSchema({ part: S, coverage: { type: "string", enum: Object.keys(COVERAGE) }, comment: S }) },
     caps_triggered: SL,
     pacing_audit: S,
@@ -511,7 +603,127 @@ has no error of that kind, but do not skip real ones.
       throw new AIError("internal", "The evaluation prompt (prompt.js / app.js) is not loaded.");
     }
     const base = buildQuestionText(test, q, idx);
-    return base + "\n\n" + JSON_CONTRACT.replace(/\{\{MARKS\}\}/g, String(q.marks));
+    return base + "\n\n" + schemePromptBlock(schemeOf(q)) + JSON_CONTRACT.replace(/\{\{MARKS\}\}/g, String(q.marks));
+  }
+
+  // --------------------------------------------------------------------------
+  // 4b. Consistency: a FIXED marking checklist per question, built once from the
+  //     reference answer you uploaded and reused for every attempt, plus several
+  //     independent gradings combined into one mark.
+  // --------------------------------------------------------------------------
+  const SCHEMES_KEY = "rbi_ai_schemes";       // { [hash]: { points: [{id, point, weight}], createdAt } }
+  const GRADE_RUNS = 2;                       // independent gradings per answer
+  const RUN_SPREAD = 0.12;                    // runs further apart than 12% of the marks get a third, deciding run
+  const ANCHOR_BELOW = 0.35;                  // the mark may fall at most 35% of the marks below the checklist coverage...
+  const ANCHOR_ABOVE = 0.15;                  // ...and rise at most 15% above it
+  const COVER_VALUE = { full: 1, partial: 0.5, missing: 0 };
+
+  // The same question + reference answer always gives the same hash
+  function schemeHash(q) {
+    const src = [q.text, q.passage || "", q.modelAnswer || "", q.marks].join("\u0001");
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (let i = 0; i < src.length; i++) {
+      const c = src.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ c, 2246822519) >>> 0;
+    }
+    return h1.toString(36) + h2.toString(36);
+  }
+
+  function loadSchemes() {
+    try { const o = JSON.parse(localStorage.getItem(SCHEMES_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (_) { return {}; }
+  }
+
+  function cleanScheme(raw) {
+    const pts = objList(raw && (raw.points || raw.key_points), 12).map((p, i) => ({
+      id: "K" + (i + 1),
+      point: str(p.point || p.text || p.name, 300),
+      weight: clamp(Math.round(num(p.weight) || 1), 1, 3)
+    })).filter(p => p.point);
+    return pts.length >= 2 ? pts : null;
+  }
+
+  // Remember a checklist for a question (stored on the question and in a small cache)
+  function storeScheme(q, raw) {
+    const points = cleanScheme(raw);
+    if (!points || !q) return null;
+    const hash = schemeHash(q);
+    q.scheme = { hash, points };
+    const all = loadSchemes();
+    all[hash] = { points, createdAt: Date.now() };
+    const keys = Object.keys(all);
+    if (keys.length > 400) keys.sort((a, b) => (all[a].createdAt || 0) - (all[b].createdAt || 0)).slice(0, keys.length - 400).forEach(k => delete all[k]);
+    try { localStorage.setItem(SCHEMES_KEY, JSON.stringify(all)); } catch (_) { /* the copy on the question still works */ }
+    return q.scheme;
+  }
+
+  // The checklist of a question (only if it was built from this exact question + reference answer)
+  function schemeOf(q) {
+    if (!q) return null;
+    const hash = schemeHash(q);
+    if (q.scheme && q.scheme.hash === hash && Array.isArray(q.scheme.points)) return q.scheme;
+    const hit = loadSchemes()[hash];
+    return hit && Array.isArray(hit.points) ? { hash, points: hit.points } : null;
+  }
+
+  const SCHEME_SYSTEM = "You are a senior RBI Grade B Phase-2 examiner writing the marking scheme for one descriptive question. Reply with exactly one valid JSON object.";
+
+  function schemePrompt(q) {
+    return [
+      "Build the FIXED marking checklist for this question. It will be used for every attempt at this question, so that marks are consistent between attempts.",
+      q.modelAnswer
+        ? "Take the key points from the REFERENCE ANSWER below (the candidate uploaded it as the base answer for this question) and from what the question explicitly asks. Do not add points that are not in the reference answer unless the question clearly demands them."
+        : "No reference answer was uploaded: list the points an RBI examiner expects for full marks.",
+      "List 5-10 key points. Each point is one concrete, checkable sentence (a concept, cause, effect, figure, example, framework or recommendation), not a vague theme. weight: 3 = core to the question, 2 = important, 1 = supporting detail.",
+      'Return {"points": [{"point": "...", "weight": 1 | 2 | 3}]}',
+      "",
+      "Paper: " + (q.paper || "Other") + " · " + q.marks + " marks · word limit " + (q.wordLimit || ""),
+      q.passage ? "Passage / data:\n" + String(q.passage).slice(0, 3000) : "",
+      "Question: " + q.text,
+      q.modelAnswer ? "REFERENCE ANSWER:\n" + String(q.modelAnswer).slice(0, 6000) : ""
+    ].filter(Boolean).join("\n");
+  }
+
+  // Build the checklist if the question does not have one yet (model 1, from your reference answer)
+  async function ensureScheme(q, opts) {
+    const have = schemeOf(q);
+    if (have) { q.scheme = have; return have; }
+    const res = await runJSON({
+      role: "check",
+      system: SCHEME_SYSTEM,
+      prompt: schemePrompt(q),
+      signal: opts && opts.signal,
+      onStatus: opts && opts.onStatus,
+      validate: o => !!cleanScheme(o)
+    });
+    return storeScheme(q, res.data);
+  }
+
+  function schemePromptBlock(scheme) {
+    if (!scheme) return "";
+    return [
+      "################################################################################",
+      "#  FIXED MARKING CHECKLIST (consistency anchor - same for every attempt)",
+      "################################################################################",
+      "These key points were taken once from the reference answer the candidate uploaded with this question. Every attempt at this question is marked against the same list, so that marks stay consistent and comparable:",
+      ...scheme.points.map(p => p.id + " (weight " + p.weight + "): " + p.point),
+      "",
+      "Rules for the checklist:",
+      "- Report every point in \"checklist\": \"full\" = made correctly and specifically (in any words); \"partial\" = mentioned but vague, incomplete or without the figure / example; \"missing\" = absent or wrong.",
+      "- Judge by meaning, not wording. Never mark a point \"full\" unless you can quote the script.",
+      "- The content marks MUST follow the checklist: an answer that covers more of the weighted points must get more content marks than one that covers fewer. Correct, relevant points beyond the list can earn some credit, but never make up for missing weight-3 points.",
+      "- Apply the rubric, caps and penalties exactly as usual on top of this.",
+      "",
+      ""
+    ].join("\n");
+  }
+
+  // Share of the weighted checklist a report says the answer covers (0-1), or null
+  function checklistCoverage(r) {
+    const list = r && r.checklist;
+    if (!list || !list.length) return null;
+    const total = sum(list.map(c => c.weight || 1));
+    return total ? sum(list.map(c => (c.weight || 1) * (COVER_VALUE[c.coverage] || 0))) / total : null;
   }
 
   // --------------------------------------------------------------------------
@@ -668,7 +880,7 @@ has no error of that kind, but do not skip real ones.
     }
   }
 
-  // Plain-English explanation of an error, plus whether AI Settings can fix it
+  // Plain-English explanation of an error, plus whether the API keys dialog can fix it
   function explainError(err, pc) {
     const label = pc ? pc.def.label : "The AI provider";
     const model = pc ? pc.model : "";
@@ -676,18 +888,18 @@ has no error of that kind, but do not skip real ones.
     const kind = err && err.kind;
     switch (kind) {
       case "not_configured":
-        return { title: "AI grading is not set up", body: "Add your API key in AI Settings to switch on AI grading.", settings: true };
+        return { title: "AI grading is not set up", body: "Add your API keys with the API keys button in the top bar.", settings: true };
       case "auth":
-        return { title: "API key rejected", body: label + " did not accept the API key" + detail + ". Open AI Settings and paste a valid key.", settings: true };
+        return { title: "API key rejected", body: label + " did not accept the API key" + detail + ". Open API keys (top bar) and paste a valid key.", settings: true };
       case "permission":
         return { title: "Access denied", body: label + " refused this request" + detail + ". The key may be restricted, the API not enabled for its project, or the service unavailable in your region.", settings: true };
       case "model":
-        return { title: "Model not available", body: "The model \u201c" + model + "\u201d is not available for your key - it may have been retired or renamed" + detail + ". Open AI Settings, press \u201cLoad models\u201d and pick one.", settings: true };
+        return { title: "Model not available", body: "The model \u201c" + model + "\u201d is not available for your key - it may have been retired or renamed" + detail + ". Open API keys (top bar), press \u201cLoad models\u201d and pick one.", settings: true };
       case "quota":
         if (pc && pc.id === "openrouter" && /:free$/.test(model)) {
-          return { title: "Free daily limit reached", body: "OpenRouter allows only a limited number of free-model requests per day" + detail + ". It resets daily; adding a few credits to your OpenRouter account raises the limit, or pick another model in AI Settings.", settings: true };
+          return { title: "Free daily limit reached", body: "OpenRouter allows only a limited number of free-model requests per day" + detail + ". It resets daily; adding a few credits to your OpenRouter account raises the limit, or pick another model in API keys (top bar).", settings: true };
         }
-        return { title: "Quota used up", body: label + " says this key has no quota left" + detail + ". Free-tier limits reset daily; you can also choose another model or provider in AI Settings.", settings: true };
+        return { title: "Quota used up", body: label + " says this key has no quota left" + detail + ". Free-tier limits reset daily; you can also choose another model or provider in API keys (top bar).", settings: true };
       case "privacy":
         return { title: "Blocked by your OpenRouter privacy settings", body: "No provider of “" + model + "” matches your account's data policy" + detail + ". Free models need “free endpoints that may train on inputs” (or similar) allowed at openrouter.ai/settings/privacy - or pick a paid model.", settings: true };
       case "rate":
@@ -702,14 +914,14 @@ has no error of that kind, but do not skip real ones.
         return { title: "Connection failed", body, settings: !!(pc && pc.def.customBaseUrl) };
       }
       case "timeout":
-        return { title: "No reply in time", body: label + " did not reply in time. Press Retry, or pick a faster model in AI Settings.", settings: false };
+        return { title: "No reply in time", body: label + " did not reply in time. Press Retry, or pick a faster model in API keys (top bar).", settings: false };
       case "blocked":
         return { title: "Grading blocked", body: label + " refused to grade this answer" + detail + ".", settings: false };
       case "truncated":
-        return { title: "Reply cut off", body: "The model stopped before finishing the assessment. Press Retry; if it keeps happening, choose another model in AI Settings.", settings: false };
+        return { title: "Reply cut off", body: "The model stopped before finishing the assessment. Press Retry; if it keeps happening, choose another model in API keys (top bar).", settings: false };
       case "format":
       case "bad_response":
-        return { title: "Unreadable reply", body: "The model did not return the assessment in the expected format, even after asking twice. Press Retry, or choose a stronger model in AI Settings.", settings: false };
+        return { title: "Unreadable reply", body: "The model did not return the assessment in the expected format, even after asking twice. Press Retry, or choose a stronger model in API keys (top bar).", settings: false };
       case "too_large":
         return { title: "Answer too long for this model", body: label + " rejected the request as too large" + detail + ". Choose a model with a bigger context window.", settings: true };
       case "bad_request":
@@ -764,6 +976,8 @@ has no error of that kind, but do not skip real ones.
           ? { responseMimeType: "application/json", responseJsonSchema: schema }
           : { responseMimeType: "application/json" };
       }
+      // The engine's thinking level (model tier): low / medium / high
+      if (pc.thinking) body.generationConfig = Object.assign({}, body.generationConfig, { thinkingConfig: { thinkingLevel: pc.thinking } });
       // No temperature / maxOutputTokens: Gemini 3.x docs say keep sampling defaults,
       // and the default output limit is the model's maximum (thinking included).
       const r = await requestJSON(url, {
@@ -773,6 +987,10 @@ has no error of that kind, but do not skip real ones.
       }, opts);
       if (r.ok) return geminiParse(r.data);
       const err = httpError(pc, r.status, r.data, r.text);
+      // a model without thinking levels: ask again at its default
+      if (err.kind === "bad_request" && pc.thinking && /thinking/i.test(err.detail || err.message || "")) {
+        return geminiGenerate(Object.assign({}, pc, { thinking: "" }), req, opts);
+      }
       if (err.kind === "bad_request" && v !== "plain" &&
           /schema|mime|json|unknown name|invalid json payload|generation_?config|instruction|not supported|unsupported/i.test(err.detail || "")) {
         lastErr = err;
@@ -1020,6 +1238,19 @@ has no error of that kind, but do not skip real ones.
       capped: unclamped !== score,
       modelFinal,
       adjusted: modelFinal !== null && Math.abs(clamp(modelFinal, 0, max) - score) >= 0.125,
+      checklist: (function () {
+        const scheme = schemeOf(q);
+        if (!scheme) return [];
+        const got = objList(o.checklist, 15);
+        return scheme.points.map((p, i) => {
+          const c = got.find(x => String(x.id || "").trim().toUpperCase() === p.id) || got[i] || {};
+          const cov = String(c.coverage || "").toLowerCase();
+          const quote = str(c.quote, 400);
+          // "full" needs words from the script
+          const coverage = COVER_VALUE[cov] === undefined ? "missing" : (cov === "full" && (!quote || !quoteInScript(quote, plainText(answerText))) ? "partial" : cov);
+          return { id: p.id, point: p.point, weight: p.weight, coverage, quote };
+        });
+      })(),
       track: /^[ABCD]$/.test(String(o.track || "").trim().toUpperCase().charAt(0)) ? String(o.track).trim().toUpperCase().charAt(0) : "",
       subparts: objList(o.subparts, 10).map(s => ({ part: str(s.part || s.name, 300), coverage: normCoverage(s.coverage), comment: str(s.comment || s.note, 600) })).filter(s => s.part),
       caps: strList(o.caps_triggered, 8, 300).filter(c => !/^none\.?$/i.test(c)),
@@ -1134,10 +1365,86 @@ has no error of that kind, but do not skip real ones.
     };
   }
 
+  // Grade one answer: the fixed checklist first, then GRADE_RUNS independent gradings
+  // (a third when they disagree), combined into one consistent mark
   async function gradeAnswer(test, idx, opts) {
     const q = test.questions[idx];
+    const onStatus = (opts && opts.onStatus) || function () {};
+    if (!activeProvider("grading").ready) throw new AIError("not_configured", "No API key set up.");
+    const started = Date.now();
+    if (!schemeOf(q) && activeProvider("check").ready) {
+      onStatus("Building the marking checklist from your reference answer…");
+      try { await ensureScheme(q, { signal: opts && opts.signal }); } catch (err) {
+        if (err.kind === "cancelled") throw err;
+        console.warn("Marking checklist not built:", err && err.message);
+      }
+    }
+    const max = maxMarksOf(q);
+    const status = (n) => (m) => onStatus("Grading " + n + " of " + GRADE_RUNS + ": " + m);
+    const settled = await Promise.allSettled(Array.from({ length: GRADE_RUNS }, (_, i) => gradeOnce(test, idx, Object.assign({}, opts, { onStatus: status(i + 1) }))));
+    const runs = settled.filter(x => x.status === "fulfilled").map(x => x.value);
+    if (!runs.length) throw settled[0].reason;
+    if (runs.length === 2 && Math.abs(runs[0].score - runs[1].score) > RUN_SPREAD * max) {
+      onStatus("The two gradings differ by " + fmt(Math.abs(runs[0].score - runs[1].score)) + " marks - a third, deciding grading…");
+      try { runs.push(await gradeOnce(test, idx, Object.assign({}, opts, { onStatus: m => onStatus("Deciding grading: " + m) }))); } catch (err) {
+        if (err.kind === "cancelled") throw err;
+      }
+    }
+    return combineRuns(runs, q, max, started);
+  }
+
+  // One mark from several gradings: the average of two close runs, else the median;
+  // then kept within a band around the reference-checklist coverage
+  function combineRuns(runs, q, max, started) {
+    const scores = runs.map(r => r.score);
+    const sorted = scores.slice().sort((a, b) => a - b);
+    let final = sorted.length === 3 ? sorted[1] : sum(sorted) / sorted.length;
+    const method = sorted.length === 1 ? "single grading" : sorted.length === 2 ? "average of 2 independent gradings" : "median of 3 independent gradings (the first two disagreed)";
+    const covs = runs.map(checklistCoverage).filter(c => c !== null);
+    const coverage = covs.length ? sum(covs) / covs.length : null;
+    let anchored = "";
+    if (coverage !== null) {
+      const anchor = coverage * max;
+      const lo = Math.max(0, anchor - ANCHOR_BELOW * max);
+      const hi = Math.min(max, anchor + ANCHOR_ABOVE * max);
+      if (final < lo) { anchored = "raised"; final = lo; }
+      else if (final > hi) { anchored = "lowered"; final = hi; }
+    }
+    final = clamp(Math.round(final * 4) / 4, 0, max);
+    // the run closest to the final mark supplies the detailed feedback
+    const base = runs.slice().sort((a, b) => Math.abs(a.score - final) - Math.abs(b.score - final))[0];
+    // the checklist shown is the one most runs agree on per point
+    if (base.checklist && base.checklist.length) {
+      base.checklist = base.checklist.map((c, i) => {
+        const votes = runs.map(r => (r.checklist && r.checklist[i] ? r.checklist[i].coverage : null)).filter(Boolean);
+        const tally = {};
+        votes.forEach(v => { tally[v] = (tally[v] || 0) + 1; });
+        const top = Object.keys(tally).sort((a, b) => tally[b] - tally[a] || COVER_VALUE[b] - COVER_VALUE[a])[0];
+        return Object.assign({}, c, { coverage: top || c.coverage });
+      });
+    }
+    const percent = round1(final / max * 100);
+    return Object.assign(base, {
+      score: final,
+      percent,
+      grade: gradeFor(percent).grade,
+      projection: projectionFor(final, max, true),
+      consistency: {
+        runs: scores,
+        method,
+        coverage: coverage === null ? null : round1(coverage * 100),
+        anchored,
+        spread: round2(sorted[sorted.length - 1] - sorted[0])
+      },
+      durationMs: Date.now() - started
+    });
+  }
+
+  // One independent grading of one answer
+  async function gradeOnce(test, idx, opts) {
+    const q = test.questions[idx];
     const ans = answerOf(test, q);
-    const ref = { pc: activeProvider(), fallbackFrom: "" };
+    const ref = { pc: activeProvider("grading"), fallbackFrom: "" };
     if (!ref.pc.ready) throw new AIError("not_configured", "No API key set up.");
     const onStatus = (opts && opts.onStatus) || function () {};
     const req = { system: SYSTEM_INSTRUCTION, prompt: buildPrompt(test, q, idx), json: true };
@@ -1188,7 +1495,7 @@ has no error of that kind, but do not skip real ones.
             wordLimit: wordLimitOf(q),
             provider: ref.pc.id,
             providerLabel: ref.pc.def.label,
-            model: ref.pc.model,
+            model: ref.pc.model + (ref.pc.thinking ? " (" + ref.pc.thinking + ")" : ""),
             modelUsed: res.modelUsed && res.modelUsed !== ref.pc.model ? res.modelUsed : "",
             fallbackFrom: ref.fallbackFrom,
             createdAt: Date.now(),
@@ -1213,7 +1520,7 @@ has no error of that kind, but do not skip real ones.
   // topic analysis): same provider, retries and error messages as grading.
   // req: { system, prompt, schema (Gemini JSON schema or null), signal, onStatus, timeoutMs, validate(obj) }
   async function runJSON(req) {
-    const pc = activeProvider();
+    const pc = activeProvider(req.role || "check");
     if (!pc.ready) throw new AIError("not_configured", "No API key set up.");
     const onStatus = req.onStatus || function () {};
     const netOpts = { timeoutMs: req.timeoutMs || GENERATE_TIMEOUT_MS, signal: req.signal };
@@ -1230,7 +1537,7 @@ has no error of that kind, but do not skip real ones.
       }
       lastRaw = res.text;
       const obj = extractJSON(res.text);
-      if (obj && (!req.validate || req.validate(obj))) return { data: obj, provider: pc.def.label, model: pc.model, modelUsed: res.modelUsed || "" };
+      if (obj && (!req.validate || req.validate(obj))) return { data: obj, provider: pc.def.label, model: pc.model, thinking: pc.thinking, modelUsed: res.modelUsed || "" };
       lastErr = new AIError(res.finish === "length" ? "truncated" : "format", "The reply was not in the expected format.");
       if (round === 1) onStatus("The reply was not complete - asking again…");
     }
@@ -1431,7 +1738,7 @@ has no error of that kind, but do not skip real ones.
       } else {
         job.status = "error";
         job.error = e;
-        job.provider = activeProvider();
+        job.provider = activeProvider("grading");
         console.warn("AI evaluation failed for Q" + (job.idx + 1) + ":", e.kind, e.message, e.detail || "");
       }
     } finally {
@@ -1469,7 +1776,7 @@ has no error of that kind, but do not skip real ones.
   function evaluateTest(test, options) {
     const onlyMissing = !options || options.onlyMissing !== false;
     if (!test || !Array.isArray(test.questions)) return 0;
-    if (!activeProvider().ready) {
+    if (!activeProvider("grading").ready) {
       openSettings(test.id);
       return 0;
     }
@@ -1493,7 +1800,7 @@ has no error of that kind, but do not skip real ones.
   function evaluateQuestion(test, qid) {
     const idx = test.questions.findIndex(q => q.id === qid);
     if (idx < 0) return;
-    if (!activeProvider().ready) {
+    if (!activeProvider("grading").ready) {
       openSettings(test.id);
       return;
     }
@@ -1510,7 +1817,7 @@ has no error of that kind, but do not skip real ones.
   // Called by app.js right after a subjective test is submitted
   function autoEvaluate(test) {
     if (!test || !Array.isArray(test.questions) || !test.questions.length) return;
-    if (getSettings().autoEvaluate && activeProvider().ready) evaluateTest(test, { onlyMissing: true });
+    if (getSettings().autoEvaluate && activeProvider("grading").ready) evaluateTest(test, { onlyMissing: true });
   }
 
   // --------------------------------------------------------------------------
@@ -1593,7 +1900,7 @@ has no error of that kind, but do not skip real ones.
   }
 
   function setupCardHTML(test) {
-    const def = activeProvider().def;
+    const def = activeProvider("grading").def;
     const host = def.keyUrl ? def.keyUrl.replace(/^https?:\/\//, "").split("/")[0] : "";
     return '<div class="ai-setup">' +
       '<div class="ai-setup-text">' +
@@ -1683,7 +1990,7 @@ has no error of that kind, but do not skip real ones.
   }
 
   function panelHTML(test) {
-    const pc = activeProvider();
+    const pc = activeProvider("grading");
     const st = testState(test);
     if (!pc.ready && !st.graded.length) return setupCardHTML(test);
 
@@ -1697,7 +2004,7 @@ has no error of that kind, but do not skip real ones.
       actions += btn("download-test-report", "Download report", test);
       actions += btn("copy-test-report", "Copy report", test);
     }
-    actions += btn("open-settings", "AI Settings", test);
+    actions += btn("open-settings", "API keys", test);
 
     let html = '<div class="ai-panel-head">' +
       '<div class="ai-panel-title"><h3>AI assessment</h3>' +
@@ -1797,7 +2104,7 @@ has no error of that kind, but do not skip real ones.
   }
 
   function slotHTML(test, q, idx) {
-    const pc = activeProvider();
+    const pc = activeProvider("grading");
     const report = getReport(test.id, q.id);
     const job = getJob(test.id, q.id);
     const qAttr = ' data-qid="' + esc(q.id) + '"';
@@ -1816,7 +2123,7 @@ has no error of that kind, but do not skip real ones.
       const ex = explainError(job.error, job.provider || pc);
       html += '<div class="ai-error-box"><div class="ai-error-text"><strong>' + esc(ex.title) + "</strong><p>" + esc(ex.body) + "</p></div>" +
         '<div class="ai-error-actions">' + btn("evaluate-q", "Retry", test, qAttr, "ai-btn-primary") +
-        (ex.settings ? btn("open-settings", "AI Settings", test) : "") +
+        (ex.settings ? btn("open-settings", "API keys", test) : "") +
         (job.error.raw ? btn("show-raw", "Show raw reply", test, qAttr) : "") + "</div>" +
         (job.error.raw ? '<pre class="ai-raw" hidden>' + esc(String(job.error.raw).slice(0, 20000)) + "</pre>" : "") +
         "</div>";
@@ -1993,6 +2300,7 @@ has no error of that kind, but do not skip real ones.
           '<div class="ai-muted">Strict grader: about 2–3 marks tougher than the real panel, so clearing it here means you are safe there.</div>' +
         "</div></div>" +
       (r.summary ? '<p class="ai-summary">' + inline(r.summary) + "</p>" : "") +
+      consistencyHTML(r) +
       '<div class="ai-quick-grid">' +
         '<div class="ai-quick ai-quick-good"><h5>What worked</h5>' + listHTML(r.strengths, "Nothing stood out yet - focus on the fixes.") + "</div>" +
         '<div class="ai-quick ai-quick-bad"><h5>Where you lost marks</h5>' + lossesHTML(r) + "</div>" +
@@ -2014,9 +2322,29 @@ has no error of that kind, but do not skip real ones.
         (r.meritCheck ? "<h6>Merit-list reality check</h6><p>" + inline(r.meritCheck) + "</p>" : "")) : "") +
       '<div class="ai-report-foot"><span class="ai-meta">Graded by ' + esc(r.providerLabel) + " · " + esc(r.model) +
         (r.modelUsed ? " (" + esc(r.modelUsed) + ")" : "") + " · " + esc(when) + (r.durationMs ? " · " + Math.round(r.durationMs / 1000) + " s" : "") +
-        (r.fallbackFrom ? ' · <span class="ai-warn-text">\u201c' + esc(r.fallbackFrom) + "\u201d was unavailable - pick a model in AI Settings</span>" : "") + "</span>" +
+        (r.fallbackFrom ? ' · <span class="ai-warn-text">\u201c' + esc(r.fallbackFrom) + "\u201d was unavailable - pick a model in API keys (top bar)</span>" : "") + "</span>" +
         '<div class="ai-foot-actions">' + footBtns + "</div></div>" +
       "</div>";
+  }
+
+  // How the mark was reached: the independent gradings and the reference checklist
+  function consistencyHTML(r) {
+    const c = r.consistency;
+    const list = r.checklist || [];
+    if (!c && !list.length) return "";
+    const label = { full: "Covered", partial: "Partly", missing: "Missing" };
+    const covered = list.filter(x => x.coverage === "full").length;
+    const partly = list.filter(x => x.coverage === "partial").length;
+    const head = c ? (c.runs.length > 1 ? "Marked " + c.runs.length + " times independently: " + c.runs.map(fmt).join(", ") + " → " + fmt(r.score) : "Marked once: " + fmt(r.score)) : "";
+    const body =
+      (c ? "<p>" + esc(head) + " (" + esc(c.method) + ")." + (c.anchored ? " The mark was " + esc(c.anchored) + " to stay in line with how much of your reference answer the script covers." : "") + "</p>" : "") +
+      (list.length
+        ? "<p>Your reference answer gives " + list.length + " key points: <strong>" + covered + " covered</strong>, " + partly + " partly, " + (list.length - covered - partly) + " missing" + (c && c.coverage !== null ? " (" + fmt(c.coverage) + "% of the weighted checklist)" : "") + ".</p>" +
+          '<table class="ai-table ai-checklist"><thead><tr><th>Key point from your reference answer</th><th>Weight</th><th>In your script</th></tr></thead><tbody>' +
+          list.map(x => '<tr class="ai-ck-' + esc(x.coverage) + '"><td>' + esc(x.point) + (x.quote ? '<div class="ai-muted">\u201c' + esc(x.quote) + "\u201d</div>" : "") + "</td><td>" + x.weight + '</td><td><span class="ai-ck-tag">' + esc(label[x.coverage] || x.coverage) + "</span></td></tr>").join("") +
+          "</tbody></table>"
+        : '<p class="ai-muted">No reference checklist for this question (no model answer was uploaded, or it could not be built).</p>');
+    return section("How this mark was set (consistency check)", list.length ? covered + " of " + list.length + " key points covered" : (c ? c.runs.length + " gradings" : ""), body);
   }
 
   // --------------------------------------------------------------------------
@@ -2059,6 +2387,8 @@ has no error of that kind, but do not skip real ones.
     L.push("");
     if (r.projection) L.push("**Likely real RBI score:** " + fmt(r.projection[0]) + "–" + fmt(r.projection[1]) + " / " + fmt(r.max) + " (this grader is ~2–3 marks stricter)", "");
     if (r.summary) L.push("**In plain words:** " + r.summary, "");
+    if (r.consistency) L.push("**How the mark was set:** " + r.consistency.method + " (" + r.consistency.runs.map(fmt).join(", ") + ")" + (r.consistency.coverage !== null ? "; reference checklist covered " + fmt(r.consistency.coverage) + "%" : "") + (r.consistency.anchored ? "; " + r.consistency.anchored + " to match the checklist" : "") + ".", "");
+    if (r.checklist && r.checklist.length) L.push("### Key points from your reference answer", ...r.checklist.map(x => "- [" + x.coverage + "] (weight " + x.weight + ") " + x.point), "");
     if (r.strengths.length) L.push("### What worked", ...r.strengths.map(s => "- " + s), "");
     if (r.penalties.length) L.push("### Where marks were lost", ...r.penalties.map(p => "- " + p.code + " " + (PENALTY_LABELS[p.code] || "") + " (−" + fmt(p.deduction) + "): " + p.trigger), "");
     if (r.parameters.length) {
@@ -2156,7 +2486,7 @@ has no error of that kind, but do not skip real ones.
 
     switch (action) {
       case "open-settings":
-        openSettings(testId);
+        openSettings(testId, el.dataset.engine || (testId ? "grade" : ""));
         break;
       case "evaluate-all":
         if (test) evaluateTest(test, { onlyMissing: true });
@@ -2237,136 +2567,179 @@ has no error of that kind, but do not skip real ones.
   }
 
   function updateNavDot() {
-    const pc = activeProvider();
+    const ready = Object.keys(ENGINES).filter(id => resolveEngine(id).ready);
     const dot = document.getElementById("ai-nav-dot");
     const navBtn = document.getElementById("nav-ai-settings");
-    if (dot) dot.classList.toggle("on", pc.ready);
-    if (navBtn) navBtn.title = pc.ready ? "AI grading is on: " + pc.def.label + " · " + pc.model : "AI grading is off - add an API key";
+    if (dot) {
+      dot.classList.toggle("on", ready.length === Object.keys(ENGINES).length);
+      dot.classList.toggle("half", ready.length > 0 && ready.length < Object.keys(ENGINES).length);
+    }
+    if (navBtn) {
+      navBtn.title = Object.values(ENGINES).map(e => {
+        const pc = resolveEngine(e.id);
+        return "Model " + e.n + " (" + e.label + "): " + (pc.ready ? engineLabel(pc) : "no API key");
+      }).join("\n");
+      const label = navBtn.querySelector(".ai-nav-label");
+      if (label) label.textContent = ready.length ? "API keys" : "Add API keys";
+    }
   }
 
   // --------------------------------------------------------------------------
-  // 14. AI Settings dialog
+  // 14. API keys & models dialog (one card per engine). Keys go to sessionStorage
+  //     only; provider / model / thinking level are remembered in localStorage.
   // --------------------------------------------------------------------------
   let draft = null; // unsaved values while the dialog is open
 
   function el(id) { return document.getElementById(id); }
+  function card(id) { return document.querySelector('#ai-engines [data-engine="' + id + '"]'); }
+  function field(id, name) { const c = card(id); return c ? c.querySelector('[data-f="' + name + '"]') : null; }
 
-  function openSettings(testId) {
+  function openSettings(testId, focusEngine) {
     const modal = el("ai-settings-modal");
     if (!modal) return;
-    const s = getSettings();
-    draft = { provider: s.provider, autoEvaluate: s.autoEvaluate, per: {}, testId: testId || "" };
-    Object.values(PROVIDERS).forEach(def => {
-      const pc = resolveProvider(def.id);
-      draft.per[def.id] = { key: pc.apiKey, model: pc.model, baseUrl: pc.baseUrl };
-    });
-    fillForm();
+    draft = { autoEvaluate: getSettings().autoEvaluate, testId: testId || "", engines: {}, keys: Object.assign({}, readSessionKeys()) };
+    Object.keys(ENGINES).forEach(id => { draft.engines[id] = Object.assign({}, engineSettings(id)); });
+    renderEngineCards();
+    el("ai-auto").checked = !!draft.autoEvaluate;
     modal.hidden = false;
-    const key = el("ai-key");
-    setTimeout(() => { if (key && !key.value) key.focus(); else if (el("ai-provider")) el("ai-provider").focus(); }, 30);
+    requestAnimationFrame(() => modal.classList.add("is-open"));
+    void focusEngine;
+    setTimeout(() => {
+      const k = document.querySelector('#ai-keys [data-key-provider] input');
+      if (k) k.focus();
+    }, 60);
   }
 
   function closeSettings() {
     const modal = el("ai-settings-modal");
-    if (modal) modal.hidden = true;
+    if (modal) { modal.classList.remove("is-open"); modal.hidden = true; }
     draft = null;
   }
 
-  function setStatus(id, text, kind) {
-    const node = el(id);
+  function setStatusNode(node, text, kind) {
     if (!node) return;
     node.textContent = text || "";
     node.className = "ai-field-status" + (kind ? " is-" + kind : "");
   }
 
-  function keySourceText(def, value) {
-    const d = defaultsFor(def);
+  function keyStateText(provider, value) {
     const v = String(value || "").trim();
-    if (!v) return def.keyOptional ? "Not needed for most local servers." : "No key yet" + (d.key && isPlaceholderKey(d.key) ? " (ai_config.js only has a DEMO placeholder)." : ".");
+    if (!v) return !isPlaceholderKey(fileKeyFor(provider)) ? "Using the key from ai_config.js." : "No key yet.";
     if (isPlaceholderKey(v)) return "This is a placeholder, not a real key.";
-    if (v === d.key) return "Built in (from ai_key.local.js / ai_config.js on this computer).";
-    return "Saved only in this browser.";
+    return "Kept for this browser session only.";
   }
 
-  function fillForm() {
-    const def = PROVIDERS[draft.provider];
-    const p = draft.per[def.id];
-    el("ai-provider").value = def.id;
-    el("ai-provider-note").textContent = def.note || "";
-    const key = el("ai-key");
-    key.value = p.key || "";
-    key.type = "password";
-    key.placeholder = "Paste your " + def.label + " API key" + (def.keyHint ? " (" + def.keyHint + ")" : "");
-    el("ai-key-toggle").textContent = "Show";
-    el("ai-key-source").textContent = keySourceText(def, key.value);
-    const link = el("ai-key-link");
-    link.hidden = !def.keyUrl;
-    if (def.keyUrl) link.href = def.keyUrl;
-    el("ai-base-row").hidden = !def.customBaseUrl;
-    el("ai-base-url").value = p.baseUrl || "";
-    el("ai-model").value = p.model || def.defaultModel;
-    fillModelOptions(def.suggestions.map(id => ({ id, label: id })), false);
-    el("ai-auto").checked = !!draft.autoEvaluate;
-    setStatus("ai-models-status", "");
-    setStatus("ai-test-status", "");
+  // One key field per provider in use: with both models on Gemini, one Gemini key serves both
+  function keyBlockHTML() {
+    const used = providersInUse(draft.engines);
+    return used.map(pid => {
+      const def = PROVIDERS[pid];
+      const who = Object.values(ENGINES).filter(e => draft.engines[e.id].provider === pid).map(e => "model " + e.n);
+      if (def.keyOptional) return "";
+      const v = pickStr(draft.keys, pid);
+      return '<div class="ai-key-block" data-key-provider="' + pid + '">' +
+        '<label>' + esc(def.label) + ' API key <span class="ai-key-for">used by ' + esc(who.join(" and ")) + "</span></label>" +
+        '<div class="ai-input-row"><input type="password" autocomplete="off" spellcheck="false" value="' + esc(v) + '" placeholder="Paste your ' + esc(def.label) + " key" + (def.keyHint ? " (" + esc(def.keyHint) + ")" : "") + '">' +
+        '<button type="button" class="btn-soft" data-key-act="toggle">Show</button></div>' +
+        '<p class="ai-field-note"><span data-key-state>' + esc(keyStateText(pid, v)) + "</span>" + (def.keyUrl ? ' <a href="' + esc(def.keyUrl) + '" target="_blank" rel="noopener noreferrer">Get a key</a>' : "") + "</p>" +
+      "</div>";
+    }).join("");
   }
 
-  function fillModelOptions(models, fromServer) {
-    const list = el("ai-model-list");
-    const chips = el("ai-model-chips");
-    if (list) list.innerHTML = models.map(m => '<option value="' + esc(m.id) + '">' + (m.label && m.label !== m.id ? esc(m.label) : "") + "</option>").join("");
-    if (chips) {
-      chips.innerHTML = models.slice(0, fromServer ? 10 : 6).map(m => '<button type="button" class="ai-chip-btn" data-model="' + esc(m.id) + '">' + esc(m.id) + "</button>").join("");
-    }
+  function engineCardHTML(id) {
+    const e = ENGINES[id];
+    const s = draft.engines[id];
+    const def = PROVIDERS[s.provider];
+    return (
+      '<section class="ai-engine" data-engine="' + id + '">' +
+        '<div class="ai-engine-head"><span class="ai-engine-num">' + e.n + '</span><div><strong>' + esc(e.label) + '</strong><p class="ai-field-note">' + esc(e.uses) + "</p></div></div>" +
+        '<details class="ai-engine-adv"><summary>Model: <span data-f="summary">' + esc(s.model + (def.kind === "gemini" && s.thinking !== "default" ? " · " + s.thinking + " tier" : "")) + "</span></summary>" +
+          '<div class="ai-engine-grid">' +
+            '<label>Provider<select data-f="provider">' + Object.values(PROVIDERS).map(p => '<option value="' + p.id + '"' + (p.id === s.provider ? " selected" : "") + ">" + esc(p.label) + "</option>").join("") + "</select></label>" +
+            '<label' + (def.kind === "gemini" ? "" : " hidden") + ' data-f="thinkwrap">Thinking level (tier)<select data-f="thinking">' +
+              ["default", "low", "medium", "high"].map(t => '<option value="' + t + '"' + (t === s.thinking ? " selected" : "") + ">" + (t === "default" ? "Model default" : t[0].toUpperCase() + t.slice(1)) + "</option>").join("") +
+            "</select></label>" +
+          "</div>" +
+          '<label' + (def.customBaseUrl ? "" : " hidden") + ' data-f="basewrap">Server URL (OpenAI-compatible)<input data-f="baseUrl" type="url" spellcheck="false" value="' + esc(s.baseUrl) + '"></label>' +
+          '<label>Model</label><div class="ai-input-row"><input data-f="model" type="text" list="ai-models-' + id + '" autocomplete="off" spellcheck="false" value="' + esc(s.model) + '">' +
+          '<button type="button" class="btn-soft" data-f-act="load">Load models</button></div>' +
+          '<datalist id="ai-models-' + id + '">' + def.suggestions.concat(e.provider === s.provider ? [e.model] : []).map(m => '<option value="' + esc(m) + '"></option>').join("") + "</datalist>" +
+        "</details>" +
+        '<div class="ai-test-row"><button type="button" class="btn-soft" data-f-act="test">Test this model</button><p class="ai-field-status" data-f="status" role="status" aria-live="polite"></p></div>' +
+      "</section>"
+    );
+  }
+
+  function renderEngineCards() {
+    if (!draft) return;
+    readKeys();
+    const keys = el("ai-keys");
+    if (keys) keys.innerHTML = keyBlockHTML();
+    const box = el("ai-engines");
+    if (box) box.innerHTML = Object.keys(ENGINES).map(engineCardHTML).join("");
+  }
+
+  function readKeys() {
+    if (!draft) return;
+    document.querySelectorAll("#ai-keys [data-key-provider]").forEach(b => {
+      draft.keys[b.dataset.keyProvider] = String(b.querySelector("input").value || "").trim();
+    });
+  }
+
+  function readEngine(id) {
+    if (!draft) return null;
+    const s = draft.engines[id];
+    const get = name => { const f = field(id, name); return f ? String(f.value || "").trim() : ""; };
+    s.provider = PROVIDERS[get("provider")] ? get("provider") : s.provider;
+    s.model = get("model") || s.model;
+    s.thinking = get("thinking") || s.thinking;
+    s.baseUrl = get("baseUrl");
+    return s;
   }
 
   function readForm() {
     if (!draft) return;
-    draft.per[draft.provider] = {
-      key: el("ai-key").value.trim(),
-      model: el("ai-model").value.trim(),
-      baseUrl: el("ai-base-url").value.trim()
-    };
+    readKeys();
+    Object.keys(ENGINES).forEach(readEngine);
     draft.autoEvaluate = el("ai-auto").checked;
   }
 
-  function formConfig() {
-    readForm();
-    const def = PROVIDERS[draft.provider];
-    const p = draft.per[def.id];
-    return makeConfig(def, p.key, p.model, p.baseUrl);
+  // The engine as the form describes it (for "Test" / "Load models" before saving)
+  function formEngineConfig(id) {
+    readKeys();
+    const s = readEngine(id);
+    const def = PROVIDERS[s.provider];
+    const key = pickStr(draft.keys, s.provider) || fileKeyFor(s.provider);
+    const pc = makeConfig(def, key, s.model, s.baseUrl || def.baseUrl);
+    pc.engine = id;
+    pc.thinking = def.kind === "gemini" && THINKING_LEVELS.includes(s.thinking) ? s.thinking : "";
+    return pc;
   }
 
   function saveSettings() {
     readForm();
     const local = readOverrides();
-    const out = {
-      provider: draft.provider,
-      autoEvaluate: draft.autoEvaluate,
-      keys: Object.assign({}, local.keys),
-      models: Object.assign({}, local.models),
-      baseUrls: Object.assign({}, local.baseUrls)
-    };
-    Object.values(PROVIDERS).forEach(def => {
-      const p = draft.per[def.id];
-      if (!p) return;
-      const d = defaultsFor(def);
-      const k = String(p.key || "").trim();
-      if (!k || isPlaceholderKey(k) || k === d.key) delete out.keys[def.id];
-      else out.keys[def.id] = k;
-      const m = cleanModel(def, p.model);
-      if (!m || m === d.model) delete out.models[def.id];
-      else out.models[def.id] = m;
-      if (def.customBaseUrl) {
-        const b = String(p.baseUrl || "").trim().replace(/\/+$/, "");
-        if (!b || b === d.baseUrl) delete out.baseUrls[def.id];
-        else out.baseUrls[def.id] = b;
-      }
+    const engines = {};
+    const keys = {};
+    Object.keys(ENGINES).forEach(id => {
+      const s = draft.engines[id];
+      const d = engineDefaults(id);
+      const def = PROVIDERS[s.provider];
+      const out = {};
+      if (s.provider !== d.provider) out.provider = s.provider;
+      const m = cleanModel(def, s.model);
+      if (m && !(s.provider === d.provider && m === d.model)) out.model = m;
+      if (s.thinking !== d.thinking) out.thinking = s.thinking;
+      if (def.customBaseUrl && s.baseUrl && s.baseUrl !== d.baseUrl) out.baseUrl = s.baseUrl.replace(/\/+$/, "");
+      if (Object.keys(out).length) engines[id] = out;
     });
-    if (!writeOverrides(out)) {
-      setStatus("ai-test-status", "Could not save - this browser is blocking storage for this page.", "error");
+    providersInUse(draft.engines).forEach(pid => { const k = pickStr(draft.keys, pid); if (k && !isPlaceholderKey(k)) keys[pid] = k; });
+    const ok = writeOverrides({ autoEvaluate: draft.autoEvaluate, engines }) && writeSessionKeys(keys);
+    if (!ok) {
+      setStatusNode(el("ai-save-status"), "Could not save - this browser is blocking storage for this page.", "error");
       return;
     }
+    void local;
     const reopenTestId = draft.testId;
     closeSettings();
     updateNavDot();
@@ -2375,7 +2748,7 @@ has no error of that kind, but do not skip real ones.
     if (t && resultVisible) {
       renderResultScreen(t);
       // Opened from "Add API key" on a result: start grading straight away.
-      if (reopenTestId === t.id && activeProvider().ready && getSettings().autoEvaluate && testState(t).missing > 0) {
+      if (reopenTestId === t.id && activeProvider("grading").ready && getSettings().autoEvaluate && testState(t).missing > 0) {
         evaluateTest(t, { onlyMissing: true });
       }
     }
@@ -2389,74 +2762,81 @@ has no error of that kind, but do not skip real ones.
     const modal = el("ai-settings-modal");
     const form = el("ai-settings-form");
     if (!modal || !form) return;
+    dropStoredKeys();
 
-    const select = el("ai-provider");
-    select.innerHTML = Object.values(PROVIDERS).map(p => '<option value="' + p.id + '">' + esc(p.label) + "</option>").join("");
-    select.addEventListener("change", () => {
+    form.addEventListener("input", (e) => {
+      const kb = e.target.closest("[data-key-provider]");
+      if (kb) { kb.querySelector("[data-key-state]").textContent = keyStateText(kb.dataset.keyProvider, e.target.value); return; }
+      const c = e.target.closest("[data-engine]");
+      if (!c) return;
+      const id = c.dataset.engine;
+      if (e.target.dataset.f === "model" || e.target.dataset.f === "thinking") {
+        const s = readEngine(id);
+        const sum = field(id, "summary");
+        if (sum) sum.textContent = s.model + (PROVIDERS[s.provider].kind === "gemini" && s.thinking !== "default" ? " · " + s.thinking + " tier" : "");
+      }
+    });
+
+    form.addEventListener("change", (e) => {
+      const c = e.target.closest("[data-engine]");
+      if (!c || e.target.dataset.f !== "provider") return;
+      const id = c.dataset.engine;
       readForm();
-      draft.provider = select.value;
-      fillForm();
+      const s = draft.engines[id];
+      const def = PROVIDERS[s.provider];
+      const d = engineDefaults(id);
+      s.model = s.provider === d.provider ? d.model : def.defaultModel;
+      s.baseUrl = def.baseUrl || "";
+      renderEngineCards();
+      const adv = card(id) && card(id).querySelector("details");
+      if (adv) adv.open = true;
     });
 
-    el("ai-key").addEventListener("input", () => {
-      el("ai-key-source").textContent = keySourceText(PROVIDERS[draft.provider], el("ai-key").value);
-    });
-
-    el("ai-key-toggle").addEventListener("click", () => {
-      const key = el("ai-key");
-      key.type = key.type === "password" ? "text" : "password";
-      el("ai-key-toggle").textContent = key.type === "password" ? "Show" : "Hide";
-    });
-
-    el("ai-forget-key").addEventListener("click", () => {
-      const def = PROVIDERS[draft.provider];
-      const d = defaultsFor(def);
-      el("ai-key").value = isPlaceholderKey(d.key) ? "" : d.key;
-      el("ai-key-source").textContent = keySourceText(def, el("ai-key").value);
-      setStatus("ai-test-status", "The saved key will be removed when you press Save.", "warn");
-    });
-
-    el("ai-model-chips").addEventListener("click", (e) => {
-      const chip = e.target.closest("[data-model]");
-      if (chip) el("ai-model").value = chip.dataset.model;
-    });
-
-    el("ai-load-models").addEventListener("click", async () => {
-      const pc = formConfig();
-      if (!pc.ready) { setStatus("ai-models-status", pc.def.keyOptional ? "Enter the server URL first." : "Paste your API key first.", "warn"); return; }
-      const loadBtn = el("ai-load-models");
-      loadBtn.disabled = true;
-      setStatus("ai-models-status", "Loading models…", "loading");
+    form.addEventListener("click", async (e) => {
+      const kt = e.target.closest('[data-key-act="toggle"]');
+      if (kt) {
+        const k = kt.closest("[data-key-provider]").querySelector("input");
+        k.type = k.type === "password" ? "text" : "password";
+        kt.textContent = k.type === "password" ? "Show" : "Hide";
+        return;
+      }
+      const b = e.target.closest("[data-f-act]");
+      if (!b) return;
+      const id = b.closest("[data-engine]").dataset.engine;
+      const status = field(id, "status");
+      const act = b.dataset.fAct;
+      const pc = formEngineConfig(id);
+      if (!pc.ready) { setStatusNode(status, pc.def.keyOptional ? "Enter the server URL first." : "Paste the API key first.", "warn"); return; }
+      b.disabled = true;
       try {
-        const models = await listModels(pc);
-        if (!models.length) setStatus("ai-models-status", "No suitable models found for this key.", "warn");
-        else {
-          fillModelOptions(models, true);
-          setStatus("ai-models-status", "Found " + models.length + " model" + (models.length > 1 ? "s" : "") + ". Pick one below, or type in the Model box to search them all.", "ok");
+        if (act === "test") {
+          setStatusNode(status, "Contacting " + engineLabel(pc) + "…", "loading");
+          const res = await testConnection(pc);
+          setStatusNode(status, "Connected: " + res.modelUsed + " replied in " + (res.ms / 1000).toFixed(1) + " s.", "ok");
+        } else if (act === "load") {
+          setStatusNode(status, "Loading models…", "loading");
+          const models = await listModels(pc);
+          const list = el("ai-models-" + id);
+          if (list) list.innerHTML = models.map(m => '<option value="' + esc(m.id) + '">' + (m.label && m.label !== m.id ? esc(m.label) : "") + "</option>").join("");
+          setStatusNode(status, models.length ? "Found " + models.length + " models: type in the Model box to pick one." : "No suitable models found for this key.", models.length ? "ok" : "warn");
         }
       } catch (err) {
         const ex = explainError(err, pc);
-        setStatus("ai-models-status", ex.title + ": " + ex.body, "error");
+        setStatusNode(status, ex.title + ": " + ex.body, "error");
       } finally {
-        loadBtn.disabled = false;
+        b.disabled = false;
       }
     });
 
-    el("ai-test").addEventListener("click", async () => {
-      const pc = formConfig();
-      if (!pc.ready) { setStatus("ai-test-status", pc.def.keyOptional ? "Enter the server URL first." : "Paste your API key first.", "warn"); return; }
-      const testBtn = el("ai-test");
-      testBtn.disabled = true;
-      setStatus("ai-test-status", "Contacting " + pc.def.label + "…", "loading");
-      try {
-        const res = await testConnection(pc);
-        setStatus("ai-test-status", "Connected: " + res.modelUsed + " replied in " + (res.ms / 1000).toFixed(1) + " s. Press Save to use it.", "ok");
-      } catch (err) {
-        const ex = explainError(err, pc);
-        setStatus("ai-test-status", ex.title + ": " + ex.body, "error");
-      } finally {
-        testBtn.disabled = false;
-      }
+    el("ai-forget-keys").addEventListener("click", () => {
+      writeSessionKeys({});
+      document.querySelectorAll("#ai-keys [data-key-provider]").forEach(b => {
+        b.querySelector("input").value = "";
+        b.querySelector("[data-key-state]").textContent = keyStateText(b.dataset.keyProvider, "");
+      });
+      if (draft) draft.keys = {};
+      updateNavDot();
+      setStatusNode(el("ai-save-status"), "The keys were removed from this session.", "warn");
     });
 
     form.addEventListener("submit", (e) => {
@@ -2501,16 +2881,19 @@ has no error of that kind, but do not skip real ones.
     getReport,
     openSettings,
     runJSON,
-    isReady: () => activeProvider().ready,
-    providerLabel: () => { const pc = activeProvider(); return pc.def.label + " · " + pc.model; },
-    explain: (err) => explainError(err, activeProvider()),
+    // role: "check" (file checks, the default here), "analysis" (objective topics), "grading" (subjective)
+    isReady: (role) => activeProvider(role || "check").ready,
+    storeScheme,
+    schemeOf,
+    providerLabel: (role) => engineLabel(activeProvider(role || "check")),
+    explain: (err, role) => explainError(err, activeProvider(role || "check")),
     evaluateTest: (test) => evaluateTest(test, { onlyMissing: true }),
     // exposed for tests / debugging
     _internal: {
       PROVIDERS, REPORT_SCHEMA, JSON_CONTRACT, extractJSON, normalizeReport, httpError, explainError,
-      isPlaceholderKey, resolveProvider, getSettings, projectionFor, gradeFor, buildPrompt, generate,
+      isPlaceholderKey, resolveEngine, getSettings, projectionFor, gradeFor, buildPrompt, generate,
       listModels, testConnection, gradeAnswer, questionMarkdown, testMarkdown, reportHTML, panelHTML,
-      AIError, normalizeWriting, topicStats, quoteInScript, isBritishVariant
+      AIError, normalizeWriting, topicStats, quoteInScript, isBritishVariant, combineRuns, checklistCoverage, schemeHash
     }
   };
 })();
