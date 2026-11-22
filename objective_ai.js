@@ -296,11 +296,14 @@ function p1TopicStats(test) {
     else { t.attempted++; t.wrong++; t.net -= neg; }
     by.set(k, t);
   });
-  return Array.from(by.values()).map(t => {
+  // questions you did not attempt are left out of the analysis (a topic with none attempted is not shown)
+  return Array.from(by.values()).filter(t => t.attempted > 0).map(t => {
+    t.max = t.attempted * pos;
+    t.idx = t.idx.filter(i => test.answers[i]);
     const accuracy = t.attempted ? Math.round(t.correct / t.attempted * 1000) / 10 : 0;
     const scorePct = t.max ? t.net / t.max * 100 : 0;
     let level = "strong";
-    if (t.attempted === 0 || accuracy < 50 || scorePct < 30) level = "weak";
+    if (accuracy < 50 || scorePct < 30) level = "weak";
     else if (accuracy < 75 || scorePct < 60) level = "fair";
     return Object.assign(t, { accuracy, net: Math.round(t.net * 100) / 100, scorePct: Math.round(scorePct * 10) / 10, avgTime: t.total ? Math.round(t.time / t.total) : 0, level });
   }).sort((a, b) => (a.scorePct - b.scorePct) || (b.total - a.total));
@@ -338,17 +341,18 @@ function p1AnalysisPrompt(test, stats) {
   L.push(`Marking: +${test.positiveMarks || 1} correct, -${test.negativeMarks || 0.25} wrong. Score ${test.score} / ${test.maxScore}, accuracy ${test.accuracy}%.`);
   L.push("");
   L.push("TOPIC-WISE RESULT (weakest first):");
-  stats.forEach(t => L.push(`- ${t.topic}: ${t.correct} correct, ${t.wrong} wrong, ${t.skipped} not attempted of ${t.total} (accuracy ${t.accuracy}%, net ${t.net}/${t.max})`));
+  stats.forEach(t => L.push(`- ${t.topic}: ${t.correct} correct, ${t.wrong} wrong of ${t.attempted} attempted (accuracy ${t.accuracy}%, net ${t.net}/${t.max})`));
+  L.push("Questions the candidate did not attempt are left out on purpose: do not analyse or mention them.");
   L.push("");
-  L.push("QUESTIONS THE CANDIDATE GOT WRONG OR LEFT (grouped by topic):");
+  L.push("QUESTIONS THE CANDIDATE ANSWERED WRONGLY (grouped by topic):");
   let count = 0;
-  stats.filter(t => t.wrong + t.skipped > 0).forEach(t => {
+  stats.filter(t => t.wrong > 0).forEach(t => {
     L.push("");
     L.push(`### Topic: ${t.topic}`);
     t.idx.forEach(i => {
       const q = test.questions[i];
       const a = test.answers[i];
-      if (mcqIsCorrect(a, q.correctAnswer) || count >= 40) return;
+      if (!a || mcqIsCorrect(a, q.correctAnswer) || count >= 40) return;
       count++;
       L.push(`[Q${i + 1}] ${q.passage ? "Passage / data: " + String(q.passage).slice(0, 1500) + "\nQuestion: " : ""}${String(q.text).slice(0, 900)}`);
       (q.options || []).forEach(o => L.push(`(${o.label}) ${String(o.text).slice(0, 300)}`));
@@ -403,8 +407,8 @@ async function p1RunAnalysis(test) {
   const job = p1AnalysisJobs.get(test.id);
   if (job && job.status === "running") return;
   const stats = p1TopicStats(test);
-  if (!stats.some(t => t.wrong + t.skipped > 0)) {
-    p1SaveAnalysis(test.id, { at: Date.now(), overall: "Every question was answered correctly - no weak topic in this test.", topics: [], strong: stats.map(t => t.topic), next: [], strategy: "", provider: "", model: "" });
+  if (!stats.some(t => t.wrong > 0)) {
+    p1SaveAnalysis(test.id, { at: Date.now(), overall: stats.length ? "Every question you answered was correct - no weak topic in this test." : "You did not answer any question, so there is nothing to analyse.", topics: [], strong: stats.map(t => t.topic), next: [], strategy: "", provider: "", model: "" });
     p1RenderAnalysis(test);
     return;
   }
@@ -460,7 +464,7 @@ function p1RenderAnalysis(test) {
   const rows = stats.map(t => `
     <tr class="lvl-${t.level}">
       <td><strong>${escapeHTML(t.topic)}</strong> <span class="p1-lvl p1-lvl-${t.level}">${P1_LEVEL_LABEL[t.level]}</span></td>
-      <td class="num">${t.correct}</td><td class="num">${t.wrong}</td><td class="num">${t.skipped}</td>
+      <td class="num">${t.correct}</td><td class="num">${t.wrong}</td>
       <td class="num">${t.attempted ? t.accuracy + "%" : "-"}</td>
       <td class="num">${t.net.toFixed(2)} / ${t.max.toFixed(2)}</td>
       <td class="num">${t.avgTime ? t.avgTime + " s" : "-"}</td>
@@ -478,11 +482,11 @@ function p1RenderAnalysis(test) {
   } else if (analysis) {
     ai = p1AnalysisHTML(analysis, test);
   } else if (ready) {
-    ai = `<div class="p1-ai-cta"><p>Get every weak topic explained: what your mistakes show, the concepts to revise, the traps, and why each wrong answer was wrong.</p>
-      <button type="button" class="ai-btn-primary" data-p1-action="run-analysis">Explain my weak topics</button></div>`;
+    ai = `<div class="p1-ai-cta"><p>Press AI Analysis to get every weak topic explained: what your mistakes show, the concepts to revise, the traps, and why each wrong answer was wrong. Questions you did not attempt are left out.</p>
+      <button type="button" class="ai-btn-primary" data-p1-action="run-analysis">AI Analysis</button></div>`;
   } else {
-    ai = `<div class="p1-ai-cta"><p>Add an AI key to get each weak topic explained, with the reason behind every wrong answer.</p>
-      <button type="button" class="btn-soft" data-ai-action="open-settings" data-engine="verify">Add API key</button></div>`;
+    ai = `<div class="p1-ai-cta"><p>Add your API key, then press AI Analysis to get each weak topic explained, with the reason behind every wrong answer.</p>
+      <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="verify">AI Analysis</button></div>`;
   }
 
   box.innerHTML = `
@@ -501,7 +505,7 @@ function p1RenderAnalysis(test) {
     </div>
     <div class="table-scroll">
       <table class="p1-topic-table">
-        <thead><tr><th>Topic</th><th>Correct</th><th>Wrong</th><th>Left</th><th>Accuracy</th><th>Net marks</th><th>Avg time</th><th>Score</th></tr></thead>
+        <thead><tr><th>Topic</th><th>Correct</th><th>Wrong</th><th>Accuracy</th><th>Net marks</th><th>Avg time</th><th>Score</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -562,10 +566,9 @@ function p1WhyNote(testId, qIndex) {
   return "";
 }
 
-// Run right after an objective test is submitted
+// The analysis never starts by itself: the "AI Analysis" button runs it (kept for app.js)
 function p1AutoAnalysis(test) {
-  if (!test || !window.AIEval || !AIEval.isReady("analysis")) return;
-  p1RunAnalysis(test);
+  void test;
 }
 
 // Clicks inside the analysis box

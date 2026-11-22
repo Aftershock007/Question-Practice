@@ -5,8 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Subjective Typing &amp; Answer Practice</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Sign-in gate: the app stays hidden until you sign in (auth.js). Runs first, so nothing flashes. -->
+  <script>
+    try { if (sessionStorage.getItem("rbi_signed_in") !== "1") document.documentElement.classList.add("auth-locked"); }
+    catch (e) { document.documentElement.classList.add("auth-locked"); }
+  </script>
+  <style>
+    #auth-gate { display: none; }
+    html.auth-locked body > *:not(#auth-gate) { display: none !important; }
+    html.auth-locked #auth-gate { display: flex; min-height: 100vh; align-items: center; justify-content: center; background: #f5f5f7; font-family: Arial, Helvetica, sans-serif; }
+    .auth-box { width: 280px; padding: 24px; background: #fff; border: 1px solid #ccc; border-radius: 6px; display: flex; flex-direction: column; gap: 12px; }
+    .auth-box label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: #222; }
+    .auth-box input { padding: 8px; font-size: 14px; border: 1px solid #bbb; border-radius: 4px; }
+    .auth-box button { padding: 9px; font-size: 14px; border: 1px solid #333; border-radius: 4px; background: #333; color: #fff; cursor: pointer; }
+    .auth-error { margin: 0; min-height: 1em; font-size: 13px; color: #c00; }
+  </style>
 </head>
 <body>
+  <div id="auth-gate">
+    <form id="auth-form" class="auth-box" autocomplete="on" novalidate>
+      <label>Username <input id="auth-user" name="username" type="text" autocomplete="username" required></label>
+      <label>Password <input id="auth-pass" name="password" type="password" autocomplete="current-password" required></label>
+      <p id="auth-error" class="auth-error" role="alert"></p>
+      <button type="submit">Sign in</button>
+    </form>
+  </div>
   <header id="app-header">
     <div class="header-main-bar">
       <h1 class="brand"><span class="brand-mark" aria-hidden="true">RBI</span><span class="brand-name">Grade B <span>Practice Console</span></span></h1>
@@ -456,9 +479,6 @@
             <label>Total time (minutes) <input id="setup-minutes" type="number" min="1" value="30"></label>
             <p id="setup-suggested-time"></p>
           </div>
-          <div style="display: flex; align-items: center; padding-top: 10px;">
-            <p class="setup-note">Copy and paste are always disabled in the answer box, as in the real exam.</p>
-          </div>
         </div>
       </div>
 
@@ -713,10 +733,7 @@
           <h4 class="ai-models-title">Models</h4>
           <div id="ai-engines" class="ai-engines"></div>
 
-          <label class="ai-check" for="ai-auto">
-            <input type="checkbox" id="ai-auto">
-            <span>Grade my answers automatically when I submit a subjective test</span>
-          </label>
+          <p class="ai-field-note">Analysis never starts by itself: press <strong>AI Analysis</strong> on a result to get marks and the detailed report.</p>
 
           <p class="ai-privacy">When AI is used, the questions (and for grading, your answer and its reference answer) are sent directly from this page to the provider of that model.</p>
           <p id="ai-save-status" class="ai-field-status" role="status" aria-live="polite"></p>
@@ -732,6 +749,7 @@
     </div>
   </main>
 
+  <script src="auth.js"></script>
   <script src="prompt.js"></script>
   <script src="schedule_data.js"></script>
   <script src="app.js"></script>

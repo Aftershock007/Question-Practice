@@ -12,6 +12,7 @@
     "skipLibCheck": true
   },
   "include": [
+    "auth.js",
     "prompt.js",
     "schedule_data.js",
     "app.js",

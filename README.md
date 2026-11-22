@@ -6,6 +6,10 @@ A personal, offline typing test and descriptive answer practice website designed
 
 ## Features
 
+- **Sign in:** the site opens with a simple sign-in box (username `root`, password `root`). A wrong username or password keeps the site locked. Signing in lasts until the browser is closed. (It is a lock screen for a static site, not server-side security.)
+- **AI Analysis on request:** after a test nothing is analysed automatically; press **AI Analysis** on the result to get the objective topic analysis or the subjective marks and report. Questions you did not attempt are left out of the analysis.
+- **History overview:** instead of averages, History opens with **Performance by subject**: a bar for every subject (score as a share of the marks possible); open a subject to see a bar per chapter (with full / partial chapter scores) and for mix tests; hover a bar for best and latest scores. Test cards show a score dial, the date and times as hh:mm.
+
 - **Objective (MCQ) / Subjective (Phase-2) switch:** The header switch toggles between the MCQ console (Phase-1 and Phase-2 objective papers) and descriptive answer writing.
 - **Phase-1 Objective Practice (Real TCS iON Simulation):**
   - Real exam interface with countdown timer, candidate profile bar, and question options `[A]` through `[E]`.

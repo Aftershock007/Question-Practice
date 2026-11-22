@@ -1400,8 +1400,9 @@ has no error of that kind, but do not skip real ones.
     const sorted = scores.slice().sort((a, b) => a - b);
     let final = sorted.length === 3 ? sorted[1] : sum(sorted) / sorted.length;
     const method = sorted.length === 1 ? "single grading" : sorted.length === 2 ? "average of 2 independent gradings" : "median of 3 independent gradings (the first two disagreed)";
-    const covs = runs.map(checklistCoverage).filter(c => c !== null);
-    const coverage = covs.length ? sum(covs) / covs.length : null;
+    // the median coverage too: one stray grading (e.g. "everything missing") cannot drag it down
+    const covs = runs.map(checklistCoverage).filter(c => c !== null).sort((a, b) => a - b);
+    const coverage = !covs.length ? null : covs.length % 2 ? covs[(covs.length - 1) / 2] : (covs[covs.length / 2 - 1] + covs[covs.length / 2]) / 2;
     let anchored = "";
     if (coverage !== null) {
       const anchor = coverage * max;
@@ -1778,6 +1779,7 @@ has no error of that kind, but do not skip real ones.
     if (!test || !Array.isArray(test.questions)) return 0;
     if (!activeProvider("grading").ready) {
       openSettings(test.id);
+      if (draft) draft.wantsGrading = true;
       return 0;
     }
     let started = 0;
@@ -1815,9 +1817,10 @@ has no error of that kind, but do not skip real ones.
   }
 
   // Called by app.js right after a subjective test is submitted
+  // Grading never starts by itself: the "AI Analysis" button starts it (kept for app.js, does nothing)
   function autoEvaluate(test) {
-    if (!test || !Array.isArray(test.questions) || !test.questions.length) return;
-    if (getSettings().autoEvaluate && activeProvider("grading").ready) evaluateTest(test, { onlyMissing: true });
+    void test;
+    return;
   }
 
   // --------------------------------------------------------------------------
@@ -1904,12 +1907,12 @@ has no error of that kind, but do not skip real ones.
     const host = def.keyUrl ? def.keyUrl.replace(/^https?:\/\//, "").split("/")[0] : "";
     return '<div class="ai-setup">' +
       '<div class="ai-setup-text">' +
-        "<h3>Get every answer graded by AI</h3>" +
-        "<p>Add an API key once, and every subjective test is graded the moment you submit it: marks for each answer, exactly where you lost them, your own sentences rewritten, and an exam-ready model answer.</p>" +
+        "<h3>AI Analysis of your answers</h3>" +
+        "<p>Add your API key, then press AI Analysis: marks for each answer, exactly where you lost them, your own sentences rewritten, and an exam-ready model answer. Questions you did not answer are left out of the analysis.</p>" +
         '<p class="ai-muted">' + esc(def.label) + (host ? ' key: <a href="' + esc(def.keyUrl) + '" target="_blank" rel="noopener noreferrer">' + esc(host) + "</a>" : "") +
         ". Your key stays in this browser. You can still copy the prompts below into any chatbot.</p>" +
       "</div>" +
-      btn("open-settings", "Add API key", test, "", "ai-btn-primary") +
+      btn("evaluate-all", "AI Analysis", test, "", "ai-btn-primary") +
       "</div>";
   }
 
@@ -1998,7 +2001,7 @@ has no error of that kind, but do not skip real ones.
     let actions = "";
     if (!pc.ready) actions += btn("open-settings", "Add API key", test, "", "ai-btn-primary");
     else if (busy) actions += btn("stop", "Stop grading", test);
-    else if (st.missing > 0) actions += btn("evaluate-all", st.graded.length ? "Grade remaining (" + st.missing + ")" : "Grade all answers", test, "", "ai-btn-primary");
+    else if (st.missing > 0) actions += btn("evaluate-all", st.graded.length ? "AI Analysis (" + st.missing + " left)" : "AI Analysis", test, "", "ai-btn-primary");
     else actions += btn("reevaluate-all", "Re-grade all", test);
     if (st.graded.length) {
       actions += btn("download-test-report", "Download report", test);
@@ -2060,18 +2063,20 @@ has no error of that kind, but do not skip real ones.
           "<td>" + status + "</td></tr>";
       }).join("");
 
-      const leaks = leaksAcross(reports);
+      // the analysis covers only the answers you wrote (blank questions just count as 0)
+      const analysed = reports.filter(r => !r.notAttempted);
+      const leaks = leaksAcross(analysed);
       const leaksHTML = leaks.length
         ? "<ul>" + leaks.map(l => "<li><strong>" + esc(l.code) + " " + esc(PENALTY_LABELS[l.code] || "") + "</strong> · −" + fmt(l.total) + " marks (" + l.count + "×)</li>").join("") + "</ul>"
         : '<p class="ai-muted">No red-pen penalties.</p>';
       const drills = [];
-      reports.forEach(r => { if (r.actions && r.actions[0] && !drills.includes(r.actions[0])) drills.push(r.actions[0]); });
-      const fatigue = fatigueNote(st.rows);
+      analysed.forEach(r => { if (r.actions && r.actions[0] && !drills.includes(r.actions[0])) drills.push(r.actions[0]); });
+      const fatigue = fatigueNote(st.rows.filter(r => r.ans.wordCount > 0));
 
       const topicRows = topicStats(st.rows.filter(r => r.report && !r.report.notAttempted).map(r => ({ topic: r.report.topic || r.q.topic || r.q.paper || "Other", score: r.report.score, max: r.report.max, gaps: r.report.conceptGaps || [] })));
-      const wTotals = reports.reduce((a, r) => { const c = writingCounts(r.writing); a.grammar += c.grammar; a.spelling += c.spelling; a.facts += c.facts; if (r.writing && r.writing.style.verdict) a.verdicts.push(r.writing.style.verdict); return a; }, { grammar: 0, spelling: 0, facts: 0, verdicts: [] });
+      const wTotals = analysed.reduce((a, r) => { const c = writingCounts(r.writing); a.grammar += c.grammar; a.spelling += c.spelling; a.facts += c.facts; if (r.writing && r.writing.style.verdict) a.verdicts.push(r.writing.style.verdict); return a; }, { grammar: 0, spelling: 0, facts: 0, verdicts: [] });
       const plans = [];
-      reports.forEach(r => { (r.writing ? r.writing.plan : []).slice(0, 2).forEach(x => { if (plans.length < 5 && !plans.includes(x)) plans.push(x); }); });
+      analysed.forEach(r => { (r.writing ? r.writing.plan : []).slice(0, 2).forEach(x => { if (plans.length < 5 && !plans.includes(x)) plans.push(x); }); });
       const allTopics = topicStats(allGradedRows());
       html += '<div class="ai-overall">' +
         '<div class="ai-overall-score">' + ringHTML(total, max, g.cls, true) +
@@ -2089,7 +2094,7 @@ has no error of that kind, but do not skip real ones.
           (drills.length ? '<div class="ai-insight"><h5>Next drills</h5><ol>' + drills.slice(0, 4).map(d => "<li>" + inline(d) + "</li>").join("") + "</ol></div>" : "") +
         "</div>" +
         (topicRows.length ? '<div class="ai-topic-block"><h4>Topic-wise performance in this test</h4>' + topicTableHTML(topicRows) + "</div>" : "") +
-        (reports.some(r => r.writing) ? '<div class="ai-topic-block"><h4>Your writing across this test</h4>' +
+        (analysed.some(r => r.writing) ? '<div class="ai-topic-block"><h4>Your writing across this test</h4>' +
           '<div class="ai-wchips"><span class="ai-wchip' + (wTotals.grammar ? " has" : "") + '"><strong>' + wTotals.grammar + "</strong> grammar / punctuation</span>" +
           '<span class="ai-wchip' + (wTotals.spelling ? " has" : "") + '"><strong>' + wTotals.spelling + "</strong> spelling</span>" +
           '<span class="ai-wchip' + (wTotals.facts ? " has" : "") + '"><strong>' + wTotals.facts + "</strong> factual</span>" +
@@ -2600,7 +2605,7 @@ has no error of that kind, but do not skip real ones.
     draft = { autoEvaluate: getSettings().autoEvaluate, testId: testId || "", engines: {}, keys: Object.assign({}, readSessionKeys()) };
     Object.keys(ENGINES).forEach(id => { draft.engines[id] = Object.assign({}, engineSettings(id)); });
     renderEngineCards();
-    el("ai-auto").checked = !!draft.autoEvaluate;
+    if (el("ai-auto")) el("ai-auto").checked = !!draft.autoEvaluate;
     modal.hidden = false;
     requestAnimationFrame(() => modal.classList.add("is-open"));
     void focusEngine;
@@ -2701,7 +2706,7 @@ has no error of that kind, but do not skip real ones.
     if (!draft) return;
     readKeys();
     Object.keys(ENGINES).forEach(readEngine);
-    draft.autoEvaluate = el("ai-auto").checked;
+    draft.autoEvaluate = false;
   }
 
   // The engine as the form describes it (for "Test" / "Load models" before saving)
@@ -2741,6 +2746,8 @@ has no error of that kind, but do not skip real ones.
     }
     void local;
     const reopenTestId = draft.testId;
+    // opened from an "AI Analysis" button: run the analysis that was asked for
+    const draftWantsGrading = !!draft.wantsGrading;
     closeSettings();
     updateNavDot();
     const t = currentResultTest();
@@ -2748,7 +2755,7 @@ has no error of that kind, but do not skip real ones.
     if (t && resultVisible) {
       renderResultScreen(t);
       // Opened from "Add API key" on a result: start grading straight away.
-      if (reopenTestId === t.id && activeProvider("grading").ready && getSettings().autoEvaluate && testState(t).missing > 0) {
+      if (reopenTestId === t.id && activeProvider("grading").ready && draftWantsGrading && testState(t).missing > 0) {
         evaluateTest(t, { onlyMissing: true });
       }
     }
