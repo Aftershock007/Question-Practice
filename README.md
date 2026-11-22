@@ -23,14 +23,16 @@ A personal, offline typing test and descriptive answer practice website designed
   - The answer key is never shown on the setup screen. Instead you see how many questions have a key and which ones do not.
   - Every imported question is checked: text and options read completely, answer key found, no duplicate numbers. With an AI key, the AI also solves each question and confirms the key (about 1 minute per 20 questions, 4 minutes for 192).
   - Questions that fail go to a separate **Needs attention** section with the reason, and are kept out of the exam: edit them, use the AI's answer, keep them after checking yourself, or remove them. Question numbers missing from the file and answer keys without a question are listed there too.
-  - The check starts by itself after every upload; the **AI Check** button runs it (again) for every question at any time.
+  - The AI check runs only when you press **AI Check** (never by itself after an upload). Questions not checked by AI can still go into the exam after a confirm; questions with a missing key or unreadable options stay out.
+  - **Questions from the middle of a file** (e.g. Q22 to Q33) are numbered Q1, Q2... in the test; their number in the file is kept (shown as "file Q22") and used to match answers.
+  - **Answers in a separate file:** **Upload answer key & explanations** reads a key file (an answer grid and / or "Answers with Explanations", DOCX or PDF) and fills in the answer, explanation and level of only the questions in this test, matched by their file number. All other entries are ignored, and an answer that disagrees with one already in the question file is flagged.
   - The exam can start only when the check has finished, and it contains only the questions that passed. If the AI cannot be reached (for example the free daily limit is used up), the affected questions are marked **AI check failed**: press **AI Check** again later, or start with them after a clear warning.
   - A question with fewer options than the rest of the file (a real 4-option question among 5-option ones) waits for the AI to confirm it, instead of being rejected outright.
 - **Subject and chapter folders:** every DOCX/PDF upload asks which subject it is (Economics (ESI), Finance, Management, English, General Awareness, Quantitative Aptitude, Reasoning or your own), whether it is a **chapter test** (which chapter, **full** or **partial** chapter) or a **mix test**, and optionally a topic. The subject and chapter are guessed from the file name ("CH-1-National_Income-Questions.docx" = Chapter 1: National Income). **History** is a file explorer (Back / Up, a path bar, a folder tree and folder icons): *Subject > Chapter tests > Chapter 1: ... > Full chapter / Partial chapter* and *Subject > Mix tests*. The subject you choose is also the subject shown in the exam and the review. Older tests sit in **Not sorted yet**; **Move to folder** on any test changes its folder.
 - **Phase-2 Descriptive Typing Practice:**
   - Four dedicated papers: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
   - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support. Copy, cut and paste are always blocked in the answer box, with a warning when you try.
-  - **AI check of descriptive questions** after every upload (model 1): the question is complete, the model answer belongs to it, is complete and has no clear factual error, and the marks look right. Problems are listed under **Needs attention**; **AI Check** runs it again.
+  - **AI check of descriptive questions** when you press **AI Check** (model 1): the question is complete, the model answer belongs to it, is complete and has no clear factual error, and the marks look right. Problems are listed under **Needs attention**; **AI Check** runs it again.
   - **Built-in AI evaluation:** press **AI Analysis** on the result and every answer you wrote is graded by AI with the RBI rubric in `prompt.js` (see [AI evaluation](#ai-evaluation) below), including a line-by-line **writing analysis** (grammar, spelling, factual errors, RBI writing style) and **topic-wise performance**.
   - The full evaluation prompt can still be copied or downloaded for grading in any chatbot (Gemini, Claude, ChatGPT).
 - **Calendar & TODO (your daily routine):**
@@ -84,8 +86,10 @@ The app uses **two AI models**, both from Google Gemini and both with **one Gemi
 
 | Model | Default | Used for |
 | --- | --- | --- |
-| Model 1 | `gemini-4-hydrogen`, medium thinking tier | Checking every uploaded DOCX/PDF question (objective answer keys and descriptive questions with their model answers), the marking checklist, and the objective topic-wise analysis |
+| Model 1 | `gemini-4-hydrogen`, low thinking tier | Everything except subjective grading: the AI Check of uploaded questions (objective answer keys, descriptive questions), the marking checklist, and the objective topic analysis |
 | Model 2 | `gemini-4-neon`, high thinking tier | Marks and the full analysis of every subjective answer |
+
+You decide the thinking tier: pick low, medium or high for each model under "Model" in the **API keys** dialog, and that model uses it from then on.
 
 1. Get a key at **[aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)**.
 2. Click **API keys** in the top bar, paste the key once, optionally press **Test this model**, then **Save for this session**.

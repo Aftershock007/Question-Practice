@@ -249,15 +249,17 @@
   // --------------------------------------------------------------------------
   // 3. Settings: ai_config.js defaults + what you saved in API keys (top bar)
   // --------------------------------------------------------------------------
-  // Two AI "engines" (model set-ups); every AI task runs on one of them:
-  //   verify: DOCX/PDF question checks (objective + descriptive) and the objective topic analysis
-  //   grade:  marks and the full analysis of every subjective answer
+  // Two AI "engines" (model set-ups, sharing one key per provider); every AI task runs on one:
+  //   check: Hydrogen - the AI Check of uploaded questions, the marking checklist and the
+  //          objective topic analysis (everything except subjective grading)
+  //   grade: Neon - marks and the full analysis of every subjective answer
+  // The thinking tier picked for each in the API keys dialog is the one that engine uses.
   // "thinking" is Gemini's thinking level (the model tier): low / medium / high, or "default".
   const ENGINES = {
-    verify: {
-      id: "verify", n: 1, label: "Question checks and objective analysis",
-      uses: "Checks every uploaded DOCX/PDF question (objective and descriptive) and writes the topic-wise analysis after objective tests.",
-      provider: "gemini", model: "gemini-4-hydrogen", thinking: "medium"
+    check: {
+      id: "check", n: 1, label: "AI Check and objective analysis",
+      uses: "Used when you press AI Check (verifies uploaded questions and answer keys, builds the marking checklist) and AI Analysis after an objective test.",
+      provider: "gemini", model: "gemini-4-hydrogen", thinking: "low"
     },
     grade: {
       id: "grade", n: 2, label: "Subjective marks and analysis",
@@ -265,7 +267,7 @@
       provider: "gemini", model: "gemini-4-neon", thinking: "high"
     }
   };
-  const ROLE_ENGINE = { check: "verify", analysis: "verify", grading: "grade" };
+  const ROLE_ENGINE = { check: "check", analysis: "check", grading: "grade" };
   const THINKING_LEVELS = ["low", "medium", "high"];
   // API keys live only in this browser session: kept across refreshes, gone when the browser closes.
   // One key per provider: both engines on Gemini share the same Gemini key.
@@ -2643,7 +2645,8 @@ has no error of that kind, but do not skip real ones.
     const used = providersInUse(draft.engines);
     return used.map(pid => {
       const def = PROVIDERS[pid];
-      const who = Object.values(ENGINES).filter(e => draft.engines[e.id].provider === pid).map(e => "model " + e.n);
+      const ns = Object.values(ENGINES).filter(e => draft.engines[e.id].provider === pid).map(e => e.n);
+      const who = [ns.length === 1 ? "model " + ns[0] : "models " + ns.slice(0, -1).join(", ") + " and " + ns[ns.length - 1]];
       if (def.keyOptional) return "";
       const v = pickStr(draft.keys, pid);
       return '<div class="ai-key-block" data-key-provider="' + pid + '">' +

@@ -6451,3 +6451,10 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 }
 .perf-subject > summary { border-radius: 8px; }
 .perf-subject > summary:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* Objective upload card: questions + a separate answer-key file */
+.upload-buttons { display: flex; flex-direction: column; gap: 8px; align-items: stretch; flex-shrink: 0; }
+.upload-buttons label { text-align: center; justify-content: center; }
+@media (max-width: 640px) { .upload-buttons { width: 100%; } }
+.upload-buttons label.btn-minimal-secondary { background: var(--card) !important; color: var(--brand) !important; border: 1px solid var(--line-strong); box-shadow: none; }
+.upload-buttons label.btn-minimal-secondary:hover { background: var(--accent-soft) !important; color: var(--accent-hover) !important; border-color: var(--accent-line); }

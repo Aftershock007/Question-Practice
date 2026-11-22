@@ -329,6 +329,7 @@ const state = {
   p1_questionShownAt: 0,
   p1_lastAutoSave: 0,
   p1_lastResultTest: null,
+  wantAICheck: "",        // "p1" / "p2": AI Check was pressed before a key was set
   p1_resultFilter: "all",
   p1_resultPage: 1,      // page of the result / history question review
   p1_setup_page: 1     // current page for Phase 1 setup questions list
@@ -2876,8 +2877,7 @@ async function handleDocImport(event) {
     });
     saveSetup();
     renderSetupList();
-    // every imported question and model answer is checked by AI (model 1)
-    if (typeof descVerifyQuestions === "function" && window.AIEval && AIEval.isReady("check")) descVerifyQuestions();
+    // the AI Check runs only when you press "AI Check"
 
     if (statusElem) {
       statusElem.textContent = `Added ${parsedQuestions.length} question(s) from ${file.name}.`;
@@ -3013,6 +3013,39 @@ function mcqSplitOptions(line, allowed, expected) {
 }
 
 // Parse the answer-key part of an MCQ document into entries keyed by "set:number"
+// Split a document's lines into the questions and its answer-key section ("Answer Key",
+// "Answers", "Answers & Explanations"...). keyOnly: a file that is only an answer key.
+function mcqSplitKeySection(allLines, keyOnly) {
+  const NOTE_RE = /^(?:Note|N\.\s?B\.|Hint)\s*[:.\-]/i;
+  const ANSWER_SECTION_RE = /^(?:answer\s*keys?|answers|solutions|answers?\s*(?:&|and|with)\s*(?:explanations?|solutions?|reasons?)|answer\s*keys?\s*(?:&|and|with)\s*(?:explanations?|solutions?|reasons?))\s*:?$/i;
+  let ansKeyIdx = -1;
+  let ansKeyRest = "";
+  for (let i = 0; i < allLines.length; i++) {
+    const inline = allLines[i].match(/^(?:answer\s*keys?|answers)\s*:\s*(.+)$/i);   // "Answers: 1-a, 2-c, ..."
+    if (ANSWER_SECTION_RE.test(allLines[i]) || inline) {
+      ansKeyIdx = i;
+      ansKeyRest = inline ? inline[1] : "";
+      break;
+    }
+  }
+  // an answer-key file without such a heading is all key
+  const qLines = ansKeyIdx !== -1 ? allLines.slice(0, ansKeyIdx) : (keyOnly ? [] : allLines);
+  const keyPart = ansKeyIdx !== -1 ? (ansKeyRest ? [ansKeyRest] : []).concat(allLines.slice(ansKeyIdx + 1)) : (keyOnly ? allLines : []);
+  const aLines = keyPart
+    // a bare number is a page number - unless an answer follows it ("158" / "a, b, d, e" from a wrapped table cell)
+    .filter((l, i, arr) => !isHeaderOrFooterLine(l) || /^(?:practice\s*set|set|section|part|exercise)\b/i.test(l) || NOTE_RE.test(l) ||
+      (/^\d{1,4}$/.test(l) && /^[\(\[]?[a-eA-E][\)\]]?(?:[\s,&\/]+[\(\[]?[a-eA-E][\)\]]?)*,?$|^[a-e]{2,5}$/.test(arr[i + 1] || "")));
+  return { qLines, aLines };
+}
+
+// A separate answer-key file ("Answer Key" grid and / or "Answers with Explanations"):
+// the key of every question number it lists, as parseMCQAnswerKey returns it
+function parseAnswerKeyFile(rawText) {
+  const allLines = String(rawText || "").replace(/\r\n?/g, "\n").split("\n").map(l => l.trim()).filter(Boolean);
+  const { aLines } = mcqSplitKeySection(allLines, true);
+  return parseMCQAnswerKey(aLines, false);
+}
+
 function parseMCQAnswerKey(lines, multiSection) {
   lines = lines.slice();   // a flattened header line is split in place below
   const entries = new Map();
@@ -3294,22 +3327,7 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   const NOTE_RE = /^(?:Note|N\.\s?B\.|Hint)\s*[:.\-]/i;
 
   // 1. The answer key section ("Answer Key", "Answers", "Answers & Explanations"...)
-  const ANSWER_SECTION_RE = /^(?:answer\s*keys?|answers|solutions|answers?\s*(?:&|and|with)\s*(?:explanations?|solutions?|reasons?)|answer\s*keys?\s*(?:&|and|with)\s*(?:explanations?|solutions?|reasons?))\s*:?$/i;
-  let ansKeyIdx = -1;
-  let ansKeyRest = "";
-  for (let i = 0; i < allLines.length; i++) {
-    const inline = allLines[i].match(/^(?:answer\s*keys?|answers)\s*:\s*(.+)$/i);   // "Answers: 1-a, 2-c, ..."
-    if (ANSWER_SECTION_RE.test(allLines[i]) || inline) {
-      ansKeyIdx = i;
-      ansKeyRest = inline ? inline[1] : "";
-      break;
-    }
-  }
-  const qLines = ansKeyIdx !== -1 ? allLines.slice(0, ansKeyIdx) : allLines;
-  const aLines = (ansKeyIdx !== -1 ? (ansKeyRest ? [ansKeyRest] : []).concat(allLines.slice(ansKeyIdx + 1)) : [])
-    // a bare number is a page number - unless an answer follows it ("158" / "a, b, d, e" from a wrapped table cell)
-    .filter((l, i, arr) => !isHeaderOrFooterLine(l) || /^(?:practice\s*set|set|section|part|exercise)\b/i.test(l) || NOTE_RE.test(l) ||
-      (/^\d{1,4}$/.test(l) && /^[\(\[]?[a-eA-E][\)\]]?(?:[\s,&\/]+[\(\[]?[a-eA-E][\)\]]?)*,?$|^[a-e]{2,5}$/.test(arr[i + 1] || "")));
+  const { qLines, aLines } = mcqSplitKeySection(allLines);
 
   // 2. How questions are numbered: "Q1" / "Q.1)" / "Question 1:" or plain "1." / "1)"
   // (a PDF can drop the tab after the number: "Q100India's GDP ...")
@@ -3652,9 +3670,17 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     const nums = questions.filter(q => q.section === s && q.number !== null).map(q => q.number);
     if (!nums.length) continue;
     const have = new Set(nums);
-    for (let n = 1; n <= Math.max(...nums); n++) if (!have.has(n)) missingNumbers.push({ section: s, number: n });
+    // a file that starts in the middle (Q22 to Q36) is a slice: count from its first question
+    const first = Math.min(...nums);
+    for (let n = first <= 3 ? 1 : first; n <= Math.max(...nums); n++) if (!have.has(n)) missingNumbers.push({ section: s, number: n });
   }
+  // keys for numbers outside a slice belong to questions that are not in this file: drop them quietly
+  const sliceRange = (sec) => {
+    const nums = questions.filter(q => q.section === sec && q.number !== null).map(q => q.number);
+    return nums.length ? [Math.min(...nums) <= 3 ? 1 : Math.min(...nums), Math.max(...nums)] : null;
+  };
   const orphanKeys = key.order.filter(e => !used.has(e.section + ":" + e.number) && (sections > 1 || e.section === 0))
+    .filter(e => { const r = sliceRange(sections > 1 ? e.section : 0); return !r || r[0] === 1 || (e.number >= r[0] && e.number <= r[1]); })
     .map(e => ({ section: e.section, number: e.number, answer: e.answer }));
 
   Object.defineProperty(questions, "meta", {
@@ -3740,6 +3766,84 @@ async function handleP1DocImport(event) {
   }
 }
 
+// Read a DOCX / PDF file into plain text lines (same readers as the question import)
+async function readDocumentText(file) {
+  const arrayBuffer = file.arrayBuffer ? await file.arrayBuffer() : await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsArrayBuffer(file);
+  });
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".docx")) return extractDocxText(arrayBuffer);
+  if (name.endsWith(".pdf")) return extractPdfText(arrayBuffer);
+  throw new Error("Unsupported format. Please upload a .docx or .pdf file.");
+}
+
+// "Upload answer key & explanations": a separate key file (e.g. the answers of all 100 questions)
+// fills in the answer, explanation and level of only the questions in this test, matched by the
+// question's number in its file (Q22...). Every other entry of the key file is ignored.
+async function handleP1KeyImport(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const statusElem = $("setup-p1-doc-status");
+  const setStatus = (text, isError) => {
+    if (!statusElem) return;
+    statusElem.classList.toggle("is-error", !!isError);
+    statusElem.textContent = text;
+  };
+  try {
+    const questions = state.p1_setup.questions || [];
+    if (!questions.length) throw new Error("Upload the questions first, then their answer key.");
+    setStatus("Reading " + file.name + "...");
+    const rawText = await readDocumentText(file);
+    const key = parseAnswerKeyFile(rawText);
+    if (!key.entries.size) throw new Error("No answer key was found in " + file.name + ". It needs lines such as \"22 d\" or a Q / Answer table.");
+    let matched = 0, filledKeys = 0, filledExpl = 0, conflicts = 0;
+    const used = new Set();
+    questions.forEach(q => {
+      if (q.number == null) return;
+      const e = key.entries.get("0:" + q.number);
+      if (!e || !e.answer) return;
+      matched++;
+      used.add(q.number);
+      q.check = q.check || { local: [], ai: null, user: "" };
+      const old = q.check.local || [];
+      const extra = [];
+      if (!q.correctAnswer) { q.correctAnswer = e.answer; filledKeys++; }
+      else if (q.correctAnswer !== e.answer) {
+        conflicts++;
+        extra.push({ code: "key-conflict", msg: `The question file says ${formatMCQAnswer(q.correctAnswer)}, the answer-key file says ${formatMCQAnswer(e.answer)}.` });
+      }
+      const expl = (e.explanation || []).join("\n").trim();
+      if (expl && !q.explanation) { q.explanation = expl; filledExpl++; }
+      if (e.level && !q.level) q.level = e.level;
+      if (e.topic && !q.topic) q.topic = sanitizeDashes(e.topic);
+      // redo the checks that depend on the key; keep the others (duplicate number, skipped option...)
+      const keyCodes = ["no-key", "key-not-in-options", "empty-text", "few-options", "empty-option"];
+      const fresh = mcqLocalIssues(Object.assign({}, q, { parseIssues: [] }), null);
+      const seen = new Set();
+      q.check.local = old.filter(i => !keyCodes.includes(i.code)).concat(fresh, extra)
+        .filter(i => (seen.has(i.code + i.msg) ? false : seen.add(i.code + i.msg)));
+      // the AI checks the question again, now with its key
+      if (q.check.user !== "ok") q.check.ai = null;
+    });
+    const stillMissing = questions.filter(q => !q.correctAnswer).length;
+    const ignored = key.entries.size - used.size;
+    saveP1Setup();
+    renderP1SetupList();
+    if (!matched) throw new Error("None of the question numbers in " + file.name + " match the questions in this test.");
+    setStatus(`${file.name}: answers for ${matched} question${matched === 1 ? "" : "s"} (${filledKeys} filled, ${filledExpl} explanation${filledExpl === 1 ? "" : "s"})` +
+      (conflicts ? `, ${conflicts} disagree with the question file` : "") + (stillMissing ? `, ${stillMissing} still without a key` : "") +
+      (ignored > 0 ? `. ${ignored} other entr${ignored === 1 ? "y" : "ies"} ignored.` : "."));
+  } catch (err) {
+    setStatus("Error: " + err.message, true);
+    alert(err.message);
+  } finally {
+    event.target.value = "";
+  }
+}
+
 // Guess the MCQ subject from the document heading (e.g. "Ch-2: Antonyms & Synonyms" -> English)
 function inferMCQSubject(rawText) {
   // Only the title lines: question / option text must not influence the subject
@@ -3793,7 +3897,7 @@ function addImportedMCQs(parsedQuestions, fileName, meta) {
     setTimeout(() => { statusElem.textContent = ""; }, 8000);
   }
   // Check the answer keys with AI straight away
-  if (fresh.length && window.AIEval && AIEval.isReady()) mcqVerifyQuestions();
+  // the AI Check runs only when you press "AI Check" (no automatic check on import)
 }
 
 // Render the Phase-1 setup: check summary, "Needs attention" and the questions that are ready
@@ -3899,7 +4003,8 @@ function renderP1CheckPanel() {
     return;
   }
   box.hidden = false;
-  const label = q => (q.number != null ? `Q${q.number}` : `#${questions.indexOf(q) + 1}`);
+  // the question's place in this test, plus its number in the file when that differs (Q1 = file Q22)
+  const label = q => { const pos = questions.indexOf(q) + 1; return q.number != null && q.number !== pos ? `Q${pos} (file Q${q.number})` : `Q${pos}`; };
   const noKey = questions.filter(q => !q.correctAnswer);
   const issues = questions.filter(q => mcqStatus(q) === "issue");
   const pending = questions.filter(q => mcqStatus(q) === "pending");
@@ -3915,8 +4020,8 @@ function renderP1CheckPanel() {
         <div class="ai-progress-track"><div class="ai-progress-fill" style="width:${Math.max(4, pct)}%"></div></div></div>
         <button type="button" class="btn-soft" data-p1-check="stop">Stop</button></div>`;
   } else if (!ready) {
-    ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>AI check is off.</strong> <span class="ai-muted">No API key is set up in this browser, so questions and answer keys cannot be verified.</span></div>
-        <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="verify">AI Check</button></div>`;
+    ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>Not checked by AI.</strong> <span class="ai-muted">Press AI Check to have the AI verify every question and answer key (an API key is needed).</span></div>
+        <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="check" data-want-check="p1">AI Check</button></div>`;
   } else if (unchecked.length) {
     ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>${unchecked.length + failed.length} question${unchecked.length + failed.length === 1 ? " is" : "s are"} not checked by AI yet.</strong> <span class="ai-muted">The AI solves each question and confirms the answer key.</span></div>
         <button type="button" class="ai-btn-primary" data-p1-check="run">AI Check</button></div>`;
@@ -3934,7 +4039,7 @@ function renderP1CheckPanel() {
   if (mcqVerify.error && !mcqVerify.running) ai += `<p class="ai-warning">${escapeHTML(mcqVerify.error)}</p>`;
 
   const keyLine = noKey.length
-    ? `<span class="p1-warn">Answer key missing for ${noKey.length}: ${noKey.slice(0, 30).map(label).join(", ")}${noKey.length > 30 ? "…" : ""}</span>`
+    ? `<span class="p1-warn">Answer key missing for ${noKey.length}: ${noKey.slice(0, 30).map(label).join(", ")}${noKey.length > 30 ? "…" : ""}.</span> <span class="ai-muted">If the answers are in another file, use <strong>Upload answer key &amp; explanations</strong> above.</span>`
     : `<span class="p1-good">Every question has an answer key.</span>`;
 
   const noteHTML = notes.map(n => [
@@ -3971,7 +4076,7 @@ function renderP1CheckPanel() {
     <div class="p1-check-card">
       <div class="p1-check-summary">
         <span><strong>${questions.length}</strong> imported</span>
-        <span><strong>${questions.filter(q => mcqStatus(q) === "ok" || (!ready && mcqStatus(q) === "unchecked")).length}</strong> ready for the exam</span>
+        <span><strong>${questions.filter(q => mcqStatus(q) === "ok" || mcqStatus(q) === "unchecked").length}</strong> ready for the exam</span>
         ${pending.length ? `<span><strong>${pending.length}</strong> being checked</span>` : ""}
         ${failed.length ? `<span class="p1-warn"><strong>${failed.length}</strong> not verified</span>` : ""}
         ${issues.length ? `<span class="p1-warn"><strong>${issues.length}</strong> need attention</span>` : ""}
@@ -3997,9 +4102,8 @@ function updateP1StartButton() {
   const btn = $("btn-start-p1-test");
   if (!btn) return;
   const questions = state.p1_setup.questions || [];
-  const aiOn = window.AIEval && AIEval.isReady();
-  // with AI on, unchecked questions must be checked first; failed ones can join after a warning
-  const n = questions.filter(q => { const st = mcqStatus(q); return st === "ok" || st === "failed" || (!aiOn && st === "unchecked"); }).length;
+  // questions not checked by AI (the check is optional) and failed checks can join after a warning
+  const n = questions.filter(q => { const st = mcqStatus(q); return st === "ok" || st === "failed" || st === "unchecked"; }).length;
   btn.disabled = mcqVerify.running || questions.some(q => mcqStatus(q) === "pending");
   btn.textContent = mcqVerify.running ? "Checking questions with AI…" : (n ? `Start Objective Test (${n} question${n === 1 ? "" : "s"})` : "Start Objective Test");
 }
@@ -4010,10 +4114,12 @@ function onAISettingsSaved() {
   if (setup && !setup.hidden) renderP1SetupList();
   const setup2 = $("screen-setup");
   if (setup2 && !setup2.hidden) renderSetupList();
-  // a key was just added: check what is waiting, automatically
-  if (window.AIEval && AIEval.isReady("check")) {
-    if ((state.p1_setup.questions || []).some(q => mcqStatus(q) === "unchecked" || mcqStatus(q) === "failed")) mcqVerifyQuestions();
-    if (typeof descVerifyQuestions === "function" && (state.setup.questions || []).some(q => ["unchecked", "failed"].includes(descStatus(q)) && !(q.check && q.check.user))) descVerifyQuestions();
+  // "AI Check" was pressed before a key was set: run that check now
+  if (window.AIEval && AIEval.isReady("check") && state.wantAICheck) {
+    const which = state.wantAICheck;
+    state.wantAICheck = "";
+    if (which === "p1") mcqVerifyQuestions();
+    else if (which === "p2" && typeof descVerifyQuestions === "function") descVerifyQuestions();
   }
   if (state.p1_lastResultTest && typeof p1RenderAnalysis === "function") {
     if (!(typeof p1AnalysisAfterKeySaved === "function" && p1AnalysisAfterKeySaved())) p1RenderAnalysis(state.p1_lastResultTest);
@@ -4253,11 +4359,7 @@ async function startP1Exam() {
   const issues = all.filter(q => mcqStatus(q) === "issue");
   const allow = new Set(["ok"]);
   if (unchecked.length) {
-    if (window.AIEval && AIEval.isReady()) {
-      say(`${unchecked.length} question(s) have not been checked by AI yet. Press "Check with AI" above first.`);
-      return;
-    }
-    if (!confirm(`AI check is off, so ${unchecked.length} question(s) were only checked for a missing answer key and missing options - not whether the key is right.\n\nStart the exam with them anyway?`)) return;
+    if (!confirm(`${unchecked.length} question(s) were not checked by AI, so only a missing answer key and missing options were checked - not whether the key is right.\n\nOK: start the exam with them.\nCancel: go back and press "AI Check" first.`)) return;
     allow.add("unchecked");
   }
   if (failed.length) {
@@ -5783,6 +5885,15 @@ document.addEventListener("DOMContentLoaded", () => {
   if (p1Form) {
     p1Form.addEventListener("submit", handleP1QuestionFormSubmit);
   }
+
+  // AI Check pressed without a key: remember it, so it runs once the key is saved
+  document.addEventListener("click", (e) => {
+    const want = e.target.closest("[data-want-check]");
+    if (want) state.wantAICheck = want.dataset.wantCheck;
+  });
+
+  const p1KeyImport = $("setup-p1-key-import");
+  if (p1KeyImport) p1KeyImport.addEventListener("change", handleP1KeyImport);
 
   const p1DocImport = $("setup-p1-doc-import");
   if (p1DocImport) {

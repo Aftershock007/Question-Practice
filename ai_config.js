@@ -1,15 +1,18 @@
 // ============================================================================
 // AI - MODELS & DEFAULTS (no real keys in this file: the repository is public)
 // ----------------------------------------------------------------------------
-// The app uses two AI models ("engines"):
+// The app uses two AI set-ups ("engines"), both with ONE Gemini key:
 //
-//   verify  Model 1 - checks every uploaded DOCX/PDF question (objective and
-//           descriptive) and writes the objective topic-wise analysis.
-//           Default: Google Gemini "gemini-4-hydrogen", medium thinking tier.
+//   check   Model 1 - everything except subjective grading: the AI Check of
+//           uploaded questions (only when you press AI Check), the marking
+//           checklist and the objective topic analysis (AI Analysis button).
+//           Default: Google Gemini "gemini-4-hydrogen", low thinking tier.
 //
-//   grade   Model 2 - gives the marks and the full analysis of every
-//           subjective answer.
-//           Default: Google Gemini "gemini-4-neon", high thinking tier.
+//   grade   Model 2 - marks and the full analysis of every subjective answer
+//           (AI Analysis button). Default: "gemini-4-neon", high thinking tier.
+//
+// The thinking tier you pick for each model in the API keys dialog (low /
+// medium / high) is the one that model uses.
 //
 // API KEY: press "API keys" in the top bar of the app and paste your Gemini
 // key once - both models use it. The key is kept only for the browser session: it
@@ -22,16 +25,16 @@
 // ============================================================================
 
 window.AI_CONFIG = {
-  // Grade every answer automatically as soon as a subjective test is submitted.
-  autoEvaluate: true,
+  // Not used any more: AI analysis and grading start only from the "AI Analysis" button.
+  autoEvaluate: false,
 
   engines: {
-    verify: {
+    check: {                        // AI Check, marking checklist, objective analysis
       provider: "gemini",           // "gemini" | "openai" | "anthropic" | "groq" | "openrouter" | "deepseek" | "mistral" | "custom"
       model: "gemini-4-hydrogen",
-      thinking: "medium"            // Gemini thinking level: "low" | "medium" | "high" | "default"
+      thinking: "low"               // Gemini thinking level: "low" | "medium" | "high" | "default"
     },
-    grade: {
+    grade: {                        // subjective marks and analysis (AI Analysis button)
       provider: "gemini",
       model: "gemini-4-neon",
       thinking: "high"

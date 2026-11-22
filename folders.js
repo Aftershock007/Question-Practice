@@ -167,7 +167,9 @@ function askFolder(opts) {
 function askFileFolder(fileName, rawText, guessSubject, count) {
   const title = String(rawText || "").split("\n").map(l => l.trim()).find(Boolean) || "";
   const chapter = folderChapterFromName(fileName, title);
-  const subject = folderSubjectFromGuess(guessSubject) || folderSubjectFromGuess(title) || folderSubjectFromGuess(fileName);
+  // the file name and title are better clues than the parser's guess (which falls back to General Awareness)
+  const cleanName = String(fileName || "").replace(/[_]+/g, " ");
+  const subject = folderSubjectFromGuess(cleanName) || folderSubjectFromGuess(title) || folderSubjectFromGuess(guessSubject);
   return askFolder({
     title: "Which subject and chapter is this file?",
     sub: `${fileName}${count ? " · " + count + " question" + (count === 1 ? "" : "s") : ""}`,

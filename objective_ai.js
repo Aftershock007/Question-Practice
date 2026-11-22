@@ -478,7 +478,7 @@ function p1RenderAnalysis(test) {
   } else if (job && job.status === "error") {
     const ex = AIEval.explain(job.error, "analysis");
     ai = `<div class="ai-error-box"><div class="ai-error-text"><strong>${escapeHTML(ex.title)}</strong><p>${escapeHTML(ex.body)}</p></div>
-      <div class="ai-error-actions"><button type="button" class="ai-btn-primary" data-p1-action="run-analysis">Retry</button>${ex.settings ? `<button type="button" class="btn-soft" data-ai-action="open-settings" data-engine="verify">API keys</button>` : ""}</div></div>`;
+      <div class="ai-error-actions"><button type="button" class="ai-btn-primary" data-p1-action="run-analysis">Retry</button>${ex.settings ? `<button type="button" class="btn-soft" data-ai-action="open-settings" data-engine="check">API keys</button>` : ""}</div></div>`;
   } else if (analysis) {
     ai = p1AnalysisHTML(analysis, test);
   } else if (ready) {
@@ -486,7 +486,7 @@ function p1RenderAnalysis(test) {
       <button type="button" class="ai-btn-primary" data-p1-action="run-analysis">AI Analysis</button></div>`;
   } else {
     ai = `<div class="p1-ai-cta"><p>Add your API key, then press AI Analysis to get each weak topic explained, with the reason behind every wrong answer.</p>
-      <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="verify" data-p1-want-analysis="1">AI Analysis</button></div>`;
+      <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="check" data-p1-want-analysis="1">AI Analysis</button></div>`;
   }
 
   box.innerHTML = `

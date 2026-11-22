@@ -73,10 +73,16 @@
             <strong>Upload questions from DOCX or PDF</strong>
             <span>Extracts questions, 5 options (A-E), explanations, and answer keys automatically</span>
           </div>
-          <label class="btn-minimal-primary">
-            Browse Document
-            <input id="setup-p1-doc-import" type="file" accept=".docx,.pdf" hidden>
-          </label>
+          <div class="upload-buttons">
+            <label class="btn-minimal-primary">
+              Browse Document
+              <input id="setup-p1-doc-import" type="file" accept=".docx,.pdf" hidden>
+            </label>
+            <label class="btn-minimal-secondary" title="For questions whose answers are in a separate file: only the questions in this test get their answer, explanation and level">
+              Upload answer key &amp; explanations
+              <input id="setup-p1-key-import" type="file" accept=".docx,.pdf" hidden>
+            </label>
+          </div>
         </div>
         <span id="setup-p1-doc-status" class="upload-status-badge"></span>
       </div>

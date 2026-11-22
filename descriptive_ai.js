@@ -2,7 +2,7 @@
 // ============================================================================
 // AI check of imported DESCRIPTIVE (subjective) questions
 // ----------------------------------------------------------------------------
-// After a DOCX/PDF upload (or on "AI Check") model 1 ("verify" engine) reads
+// After a DOCX/PDF upload, when you press "AI Check", model 1 ("check" engine) reads
 // every subjective question with its model answer and confirms that the
 // question is complete, the model answer belongs to it and is complete, and
 // that the model answer has no clear factual error. Problems are listed under
@@ -181,8 +181,8 @@ function renderDescCheckPanel() {
       <div class="ai-progress-track"><div class="ai-progress-fill" style="width:${Math.max(4, pct)}%"></div></div></div>
       <button type="button" class="btn-soft" data-desc-check="stop">Stop</button></div>`;
   } else if (!ready) {
-    row = `<div class="p1-check-row"><div class="p1-check-grow"><strong>AI check is off.</strong> <span class="ai-muted">Add your API key to check every question and model answer.</span></div>
-      <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="verify">AI Check</button></div>`;
+    row = `<div class="p1-check-row"><div class="p1-check-grow"><strong>Not checked by AI.</strong> <span class="ai-muted">Press AI Check to have the AI verify every question and model answer (an API key is needed).</span></div>
+      <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="check" data-want-check="p2">AI Check</button></div>`;
   } else if (notChecked) {
     row = `<div class="p1-check-row"><div class="p1-check-grow"><strong>${notChecked} question${notChecked === 1 ? " is" : "s are"} not checked by AI yet.</strong> <span class="ai-muted">The AI confirms each question is complete and its model answer belongs to it and is correct.</span></div>
       <button type="button" class="ai-btn-primary" data-desc-check="run">AI Check</button></div>`;
