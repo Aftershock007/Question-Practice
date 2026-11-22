@@ -163,6 +163,13 @@ function mcqApplyVerdict(q, r, meta) {
   if (!q.topic && !q.aiTopic && q.check.ai.topic) q.aiTopic = sanitizeDashes(q.check.ai.topic);
 }
 
+// Add up the tokens of several AI replies
+function mcqAddUsage(a, b) {
+  if (!b) return a || null;
+  if (!a) return Object.assign({}, b);
+  return { input: a.input + b.input, cached: a.cached + b.cached, output: a.output + b.output, thinking: a.thinking + b.thinking };
+}
+
 async function mcqVerifyBatch(batch, topics, signal) {
   const res = await AIEval.runJSON({
     system: MCQ_VERIFY_SYSTEM,
@@ -171,6 +178,7 @@ async function mcqVerifyBatch(batch, topics, signal) {
     validate: o => Array.isArray(o.results)
   });
   const results = res.data.results;
+  if (res.usage) mcqVerify.usage = mcqAddUsage(mcqVerify.usage, res.usage);
   const missing = [];
   batch.forEach((q, i) => {
     const r = results.find(x => Number(x && x.n) === i + 1) || (results.length === batch.length ? results[i] : null);
@@ -194,7 +202,7 @@ async function mcqVerifyQuestions(only) {
   const topics = (state.p1_setup.topics || []).slice(0, 40);
   const batches = [];
   for (let i = 0; i < todo.length; i += MCQ_VERIFY_BATCH) batches.push(todo.slice(i, i + MCQ_VERIFY_BATCH));
-  Object.assign(mcqVerify, { running: true, total: todo.length, done: 0, failed: 0, controller: new AbortController(), message: "", error: "" });
+  Object.assign(mcqVerify, { running: true, total: todo.length, done: 0, failed: 0, controller: new AbortController(), message: "", error: "", usage: null });
   renderP1SetupList();
 
   let next = 0;
@@ -397,7 +405,8 @@ function p1NormalizeAnalysis(o, stats, meta) {
     next: list(o.next_steps, 8, 500),
     strategy: s(o.test_strategy, 1000),
     provider: meta.provider,
-    model: meta.model
+    model: meta.model + (meta.thinking ? " (" + meta.thinking + ")" : ""),
+    usage: meta.usage || null
   };
 }
 
@@ -543,7 +552,7 @@ function p1AnalysisHTML(a, test) {
         ${a.strategy ? `<div class="ai-insight"><h5>Attempt strategy</h5><p>${escapeHTML(a.strategy)}</p></div>` : ""}
         ${a.strong.length ? `<div class="ai-insight"><h5>Went well</h5>${list(a.strong)}</div>` : ""}
       </div>
-      ${a.model ? `<p class="ai-meta">Explained by ${escapeHTML(a.provider)} · ${escapeHTML(a.model)} · ${escapeHTML(new Date(a.at).toLocaleString())}</p>` : ""}
+      ${a.model ? `<p class="ai-meta">Explained by ${escapeHTML(a.provider)} · ${escapeHTML(a.model)} · ${escapeHTML(new Date(a.at).toLocaleString())}${a.usage && AIEval.tokensText ? ` · tokens: ${escapeHTML(AIEval.tokensText(a.usage))}` : ""}</p>` : ""}
     </div>`;
 }
 

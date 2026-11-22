@@ -438,6 +438,7 @@ function saveSetup() {
 // Reset the question input form to its initial blank state
 function resetQuestionForm() {
   $("question-form").reset();
+  if ($("q-model")) $("q-model").style.height = "";
   $("q-wordlimit").value = 400;
   $("q-edit-id").value = "";
   delete $("q-edit-id").dataset.origin;
@@ -575,6 +576,7 @@ function renderSetupList() {
           </div>
           ${q.passage ? `<details class="q-passage-peek"><summary>Based on a ${escapeHTML(passageKind(q.passage))}</summary><div class="q-passage-body">${richTextHTML(q.passage)}</div></details>` : ""}
           <div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.5; font-weight: 500;">${escapeHTML(q.text)}</div>
+          ${typeof descNotesHTML === "function" ? descNotesHTML(q) : ""}
         </div>
         <div class="q-actions">
           <button type="button" class="q-act" data-action="move-up" data-id="${escapeHTML(q.id)}" title="Move up" aria-label="Move up" ${globalIdx === 0 ? "disabled" : ""}>▲</button>
@@ -620,6 +622,7 @@ function fillQuestionForm(q) {
   selectValueEnsuringOption("q-marks", q.marks || 10, " marks");
   $("q-wordlimit").value = q.wordLimit || defaultWordLimit(q.marks || 10);
   $("q-model").value = q.modelAnswer || "";
+  autoGrowTextarea($("q-model"));
   $("q-edit-id").value = q.id;
   $("btn-add-question").textContent = "Update question";
   const cancel = $("btn-cancel-edit");
@@ -2807,6 +2810,33 @@ function parseQuestionsAndAnswers(rawText) {
   return results;
 }
 
+// A textarea that grows to show all of its text, so a long model answer never needs its own scrollbar
+function autoGrowTextarea(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = (el.scrollHeight + 4) + "px";
+}
+
+// The app's own extraction check, before any AI: is the question and its model answer word for
+// word in the file, and what follows the answer there (normally the next question)? The AI
+// Check uses this to tell a faithful extraction (whose text simply ends where the file's does)
+// from a broken one (cut off or merged with another question).
+function descMarkSource(questions, rawText) {
+  const norm = v => String(v || "").replace(/\s+/g, " ").trim();
+  const R = norm(rawText);
+  let from = 0;
+  (questions || []).forEach(q => {
+    const qt = norm(q.text);
+    const ma = norm(q.modelAnswer);
+    let qi = qt ? R.indexOf(qt, from) : -1;
+    if (qi < 0 && qt) qi = R.indexOf(qt);
+    const ai = ma ? R.indexOf(ma, Math.max(0, qi)) : -1;
+    const end = ma ? (ai >= 0 ? ai + ma.length : -1) : (qi >= 0 ? qi + qt.length : -1);
+    if (end > 0) from = end;
+    q.src = { verbatim: qi >= 0 && (!ma || ai >= 0), after: end >= 0 ? R.slice(end, end + 160).trim() : "" };
+  });
+}
+
 // Read an uploaded DOCX or PDF file, extract its questions, and insert them into the target list
 async function handleDocImport(event) {
   const file = event.target.files && event.target.files[0];
@@ -2858,6 +2888,9 @@ async function handleDocImport(event) {
     if (!parsedQuestions || parsedQuestions.length === 0) {
       throw new Error("Could not detect any questions in the file.");
     }
+
+    // before any AI looks at them: is each question and model answer word for word in the file?
+    descMarkSource(parsedQuestions, rawText);
 
     // which subject / chapter the file belongs to (History is sorted into these folders)
     if (typeof askFileFolder === "function") {
@@ -4033,7 +4066,7 @@ function renderP1CheckPanel() {
   } else {
     const passed = questions.filter(q => mcqStatus(q) === "ok").length;
     const again = questions.some(q => q.check && !q.check.user && (q.options || []).length >= 2);
-    ai = `<div class="p1-check-row"><div class="p1-check-grow"><span><strong>AI check finished:</strong> ${passed} question${passed === 1 ? "" : "s"} passed${issues.length ? ` · <span class="p1-warn">${issues.length} need${issues.length === 1 ? "s" : ""} attention</span>` : ""}.</span></div>
+    ai = `<div class="p1-check-row"><div class="p1-check-grow"><span><strong>AI check finished:</strong> ${passed} question${passed === 1 ? "" : "s"} passed${issues.length ? ` · <span class="p1-warn">${issues.length} need${issues.length === 1 ? "s" : ""} attention</span>` : ""}.</span>${mcqVerify.usage && AIEval.tokensText ? ` <span class="ai-muted">Tokens: ${escapeHTML(AIEval.tokensText(mcqVerify.usage))}</span>` : ""}</div>
         ${again ? `<button type="button" class="btn-soft" data-p1-check="run-all" title="Check every question and answer key again">AI Check again</button>` : ""}</div>`;
   }
   if (mcqVerify.error && !mcqVerify.running) ai += `<p class="ai-warning">${escapeHTML(mcqVerify.error)}</p>`;
@@ -5885,6 +5918,10 @@ document.addEventListener("DOMContentLoaded", () => {
   if (p1Form) {
     p1Form.addEventListener("submit", handleP1QuestionFormSubmit);
   }
+
+  // the model answer box grows with the text you type or paste
+  const qModel = $("q-model");
+  if (qModel) qModel.addEventListener("input", () => autoGrowTextarea(qModel));
 
   // AI Check pressed without a key: remember it, so it runs once the key is saved
   document.addEventListener("click", (e) => {

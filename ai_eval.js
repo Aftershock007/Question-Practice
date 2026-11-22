@@ -351,7 +351,8 @@
     const local = readOverrides();
     const autoEvaluate = typeof local.autoEvaluate === "boolean" ? local.autoEvaluate
       : (typeof file.autoEvaluate === "boolean" ? file.autoEvaluate : true);
-    return { autoEvaluate };
+    const passes = local.passes === "two" || local.passes === "smart" ? local.passes : (file.passes === "two" ? "two" : "smart");
+    return { autoEvaluate, passes };
   }
 
   // An engine's set-up from ai_config.js (falling back to the built-in defaults above)
@@ -562,9 +563,10 @@ has no error of that kind, but do not skip real ones.
   const S = { type: "string" };
   const N = { type: "number" };
   const SL = { type: "array", items: S };
+  const CHECKLIST_SCHEMA = { type: "array", items: objSchema({ id: S, coverage: { type: "string", enum: ["full", "partial", "missing"] }, quote: S }) };
   const REPORT_SCHEMA = objSchema({
     track: { type: "string", enum: ["A", "B", "C", "D"] },
-    checklist: { type: "array", items: objSchema({ id: S, coverage: { type: "string", enum: ["full", "partial", "missing"] }, quote: S }) },
+    checklist: CHECKLIST_SCHEMA,
     subparts: { type: "array", items: objSchema({ part: S, coverage: { type: "string", enum: Object.keys(COVERAGE) }, comment: S }) },
     caps_triggered: SL,
     pacing_audit: S,
@@ -600,13 +602,50 @@ has no error of that kind, but do not skip real ones.
     })
   });
 
-  function buildPrompt(test, q, idx) {
+  // scoreOnly: a cross-check pass that returns only the marking (no feedback text), which
+  // costs far fewer output tokens. The "QUESTION 1 OF 3" line of the copy-paste prompt is
+  // left out so every grading prompt starts with the same text (providers cache that prefix).
+  const SCORE_SCHEMA = objSchema({
+    track: { type: "string", enum: ["A", "B", "C", "D"] },
+    checklist: CHECKLIST_SCHEMA,
+    parameters: { type: "array", items: objSchema({ name: S, max_marks: N, cap_applied: S, awarded: N, justification: S }) },
+    penalties: { type: "array", items: objSchema({ code: S, trigger: S, deduction: N }) },
+    stage1_raw_sum: N,
+    total_penalties: N,
+    final_score: N
+  });
+
+  function buildPrompt(test, q, idx, scoreOnly) {
     if (typeof buildQuestionText !== "function") {
       throw new AIError("internal", "The evaluation prompt (prompt.js / app.js) is not loaded.");
     }
-    const base = buildQuestionText(test, q, idx);
-    return base + "\n\n" + schemePromptBlock(schemeOf(q)) + JSON_CONTRACT.replace(/\{\{MARKS\}\}/g, String(q.marks));
+    const base = buildQuestionText(test, q, idx).replace(/^QUESTION \d+ OF \d+\n/, "");
+    return base + "\n\n" + schemePromptBlock(schemeOf(q)) + (scoreOnly ? SCORE_CONTRACT : JSON_CONTRACT).replace(/\{\{MARKS\}\}/g, String(q.marks));
   }
+
+  // The cross-check output: the same marking, without any feedback text
+  const SCORE_CONTRACT = `################################################################################
+#  OUTPUT CONTRACT - SCORE-ONLY CROSS-CHECK (overrides the presentation format above)
+################################################################################
+This is an independent cross-check of the mark only; the feedback was written
+separately. Carry out the full evaluation exactly as written above (tracks,
+evidence gates, caps, red-pen penalties, calibration bands, arithmetic lock),
+then return ONE JSON object with ONLY these keys and nothing else:
+- "track": "A", "B", "C" or "D".
+- "checklist": one entry per key point of the FIXED MARKING CHECKLIST, in its
+  order: {"id": "K1", "coverage": "full" | "partial" | "missing", "quote": the
+  candidate's exact words that cover it (at most 12 words), or ""}. [] when there
+  is no checklist.
+- "parameters": one item per parameter of the chosen track, each {"name",
+  "max_marks", "cap_applied" ("" if none), "awarded", "justification": at most
+  12 words}. The max_marks must add up to exactly {{MARKS}} (RULE 5).
+- "penalties": every Stage-2 deduction, each {"code": "RP-1" to "RP-8",
+  "trigger": at most 10 words, "deduction": a positive number from the column
+  for {{MARKS}} marks}.
+- "stage1_raw_sum", "total_penalties", "final_score": numbers, where
+  final_score = max(0, stage1_raw_sum - total_penalties), never above {{MARKS}}.
+All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
+################################################################################`;
 
   // --------------------------------------------------------------------------
   // 4b. Consistency: a FIXED marking checklist per question, built once from the
@@ -614,7 +653,8 @@ has no error of that kind, but do not skip real ones.
   //     independent gradings combined into one mark.
   // --------------------------------------------------------------------------
   const SCHEMES_KEY = "rbi_ai_schemes";       // { [hash]: { points: [{id, point, weight}], createdAt } }
-  const GRADE_RUNS = 2;                       // independent gradings per answer
+  // Gradings per answer: "smart" = one full grading, plus a score-only cross-check only when it
+  // looks unreliable (or a third when two disagree); "two" = full grading + cross-check always
   const RUN_SPREAD = 0.12;                    // runs further apart than 12% of the marks get a third, deciding run
   const ANCHOR_BELOW = 0.25;                  // the mark may fall at most 25% of the marks below the checklist coverage...
   const ANCHOR_ABOVE = 0.15;                  // ...and rise at most 15% above it
@@ -682,7 +722,7 @@ has no error of that kind, but do not skip real ones.
       "Paper: " + (q.paper || "Other") + " · " + q.marks + " marks · word limit " + (q.wordLimit || ""),
       q.passage ? "Passage / data:\n" + String(q.passage).slice(0, 3000) : "",
       "Question: " + q.text,
-      q.modelAnswer ? "REFERENCE ANSWER:\n" + String(q.modelAnswer).slice(0, 6000) : ""
+      q.modelAnswer ? "REFERENCE ANSWER:\n" + String(q.modelAnswer).slice(0, 14000) : ""
     ].filter(Boolean).join("\n");
   }
 
@@ -938,6 +978,36 @@ has no error of that kind, but do not skip real ones.
   // --------------------------------------------------------------------------
   // 6. Provider adapters: Gemini, OpenAI-compatible, Anthropic
   // --------------------------------------------------------------------------
+  // Tokens a reply used, as the provider reports them: { input, cached, output, thinking }
+  function usageFrom(data, kind) {
+    const n = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
+    if (!data || typeof data !== "object") return null;
+    if (kind === "gemini") {
+      const u = data.usageMetadata;
+      return u ? { input: n(u.promptTokenCount), cached: n(u.cachedContentTokenCount), output: n(u.candidatesTokenCount), thinking: n(u.thoughtsTokenCount) } : null;
+    }
+    const u = data.usage;
+    if (!u) return null;
+    if (kind === "anthropic") {
+      return { input: n(u.input_tokens) + n(u.cache_read_input_tokens) + n(u.cache_creation_input_tokens), cached: n(u.cache_read_input_tokens), output: n(u.output_tokens), thinking: 0 };
+    }
+    const reasoning = n(u.completion_tokens_details && u.completion_tokens_details.reasoning_tokens);
+    return { input: n(u.prompt_tokens), cached: n(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens), output: Math.max(0, n(u.completion_tokens) - reasoning), thinking: reasoning };
+  }
+
+  function addUsage(a, b) {
+    if (!b) return a || null;
+    if (!a) return Object.assign({}, b);
+    return { input: a.input + b.input, cached: a.cached + b.cached, output: a.output + b.output, thinking: a.thinking + b.thinking };
+  }
+
+  // "13.1k in · 5.2k out · 17.3k thinking"
+  function tokensText(u) {
+    if (!u) return "";
+    const k = v => (v >= 1000 ? (Math.round(v / 100) / 10) + "k" : String(v));
+    return k(u.input) + " in" + (u.cached ? " (" + k(u.cached) + " cached)" : "") + " · " + k(u.output) + " out" + (u.thinking ? " · " + k(u.thinking) + " thinking" : "");
+  }
+
   function geminiParse(data) {
     const cand = data && Array.isArray(data.candidates) ? data.candidates[0] : null;
     if (!cand) {
@@ -957,7 +1027,7 @@ has no error of that kind, but do not skip real ones.
       if (finish === "length") throw new AIError("truncated", "The reply hit the output limit.");
       throw new AIError("bad_response", "Empty reply" + (reason ? " (" + reason + ")" : "") + ".");
     }
-    return { text, finish, modelUsed: (data && data.modelVersion) || "" };
+    return { text, finish, modelUsed: (data && data.modelVersion) || "", usage: usageFrom(data, "gemini") };
   }
 
   async function geminiGenerate(pc, req, opts) {
@@ -1024,7 +1094,7 @@ has no error of that kind, but do not skip real ones.
       if (finish === "length") throw new AIError("truncated", "The reply hit the output limit.");
       throw new AIError("bad_response", "Empty reply.");
     }
-    return { text, finish, modelUsed: (data && data.model) || "" };
+    return { text, finish, modelUsed: (data && data.model) || "", usage: usageFrom(data, "openai") };
   }
 
   async function openaiGenerate(pc, req, opts) {
@@ -1077,7 +1147,7 @@ has no error of that kind, but do not skip real ones.
           if (stop === "max_tokens") throw new AIError("truncated", "The reply hit the output limit.");
           throw new AIError("bad_response", "Empty reply.");
         }
-        return { text, finish: stop === "max_tokens" ? "length" : (stop === "refusal" ? "blocked" : "stop"), modelUsed: data.model || "" };
+        return { text, finish: stop === "max_tokens" ? "length" : (stop === "refusal" ? "blocked" : "stop"), modelUsed: data.model || "", usage: usageFrom(data, "anthropic") };
       }
       const err = httpError(pc, r.status, r.data, r.text);
       // Older models have a lower output cap: use the cap the API reports.
@@ -1367,7 +1437,7 @@ has no error of that kind, but do not skip real ones.
     };
   }
 
-  // Grade one answer: the fixed checklist first, then GRADE_RUNS independent gradings
+  // Grade one answer: the fixed checklist first, then one full grading (plus score-only cross-checks when needed)
   // (a third when they disagree), combined into one consistent mark
   async function gradeAnswer(test, idx, opts) {
     const q = test.questions[idx];
@@ -1382,26 +1452,101 @@ has no error of that kind, but do not skip real ones.
       }
     }
     const max = maxMarksOf(q);
-    const status = (n) => (m) => onStatus("Grading " + n + " of " + GRADE_RUNS + ": " + m);
-    const settled = await Promise.allSettled(Array.from({ length: GRADE_RUNS }, (_, i) => gradeOnce(test, idx, Object.assign({}, opts, { onStatus: status(i + 1) }))));
-    const runs = settled.filter(x => x.status === "fulfilled").map(x => x.value);
-    if (!runs.length) throw settled[0].reason;
-    if (runs.length === 2 && Math.abs(runs[0].score - runs[1].score) > RUN_SPREAD * max) {
-      onStatus("The two gradings differ by " + fmt(Math.abs(runs[0].score - runs[1].score)) + " marks - a third, deciding grading…");
-      try { runs.push(await gradeOnce(test, idx, Object.assign({}, opts, { onStatus: m => onStatus("Deciding grading: " + m) }))); } catch (err) {
-        if (err.kind === "cancelled") throw err;
+    const ans = answerOf(test, q);
+    const pass = (label, scoreOnly) => gradeOnce(test, idx, Object.assign({}, opts, { scoreOnly, onStatus: m => onStatus(label + ": " + m) }));
+    const extra = async (label) => {
+      try { return await pass(label, true); } catch (err) { if (err.kind === "cancelled") throw err; return null; }
+    };
+    const runs = [];
+    let reason = "";
+    if (getSettings().passes === "two") {
+      // every answer: the full grading plus a score-only cross-check, side by side
+      const [full, check] = await Promise.allSettled([pass("Grading", false), pass("Cross-check", true)]);
+      if (full.status === "fulfilled") runs.push(full.value);
+      else if (full.reason && full.reason.kind === "cancelled") throw full.reason;
+      else runs.push(await pass("Grading again", false));   // the feedback needs one full grading
+      if (check.status === "fulfilled") runs.push(check.value);
+      reason = "set to two gradings for every answer";
+    } else {
+      // smart: one full grading; a score-only cross-check only when it looks unreliable
+      runs.push(await pass("Grading", false));
+      reason = crossCheckReason(runs[0], q, ans);
+      if (reason) {
+        onStatus("Cross-checking the mark (" + reason + ")…");
+        const r = await extra("Cross-check");
+        if (r) runs.push(r);
       }
     }
-    return combineRuns(runs, q, max, started);
+    if (runs.length === 2 && Math.abs(runs[0].score - runs[1].score) > RUN_SPREAD * max) {
+      onStatus("The two gradings differ by " + fmt(Math.abs(runs[0].score - runs[1].score)) + " marks - a third, deciding grading…");
+      const r = await extra("Deciding grading");
+      if (r) runs.push(r);
+    }
+    // the full grading (which writes the feedback) was the odd one out: write fresh feedback
+    const fullRun = runs.find(r => !r.scoreOnly);
+    if (runs.length >= 2 && fullRun && Math.abs(fullRun.score - combinedMark(runs.map(r => r.score))) > RUN_SPREAD * max) {
+      onStatus("Writing fresh feedback (the first grading disagreed with the others)…");
+      try { runs.push(await pass("Feedback", false)); } catch (err) { if (err.kind === "cancelled") throw err; }
+    }
+    return combineRuns(runs, q, max, started, reason);
+  }
+
+  // One mark from several gradings: the average of two, the median of three or more
+  function combinedMark(scores) {
+    const s = scores.slice().sort((a, b) => a - b);
+    const n = s.length;
+    if (!n) return 0;
+    if (n < 3) return sum(s) / n;
+    return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  }
+
+  // Words that carry meaning (for the free, local check of the AI's checklist verdict)
+  const LEX_STOP = new Set("that this with from have been were their there which what when where while also into than then them they these those such only more most very much many some other over under about after before between because would could should shall will must each every both either neither does doing done make made using used uses being upon onto your yours itself shows show shown gives given give take taken takes like just even still well same different within without across along among around through during against towards toward".split(" "));
+  function lexWords(text) {
+    return (String(text || "").toLowerCase().match(/[a-z][a-z0-9-]*/g) || [])
+      .filter(w => w.length >= 4 && !LEX_STOP.has(w))
+      .map(w => (w.length > 5 ? w.replace(/(ational|ations|ation|ities|ity|ings|ing|ments|ment|ness|ies|ied|ed|es|s|ly|al)$/, "") : w.replace(/s$/, "")));
+  }
+
+  // How much of the checklist the script covers by its words alone (0-1): rough, but it costs
+  // nothing and catches a grading that says "nothing covered" for a full answer (or the reverse)
+  function lexicalCoverage(points, answerText) {
+    const have = new Set(lexWords(answerText));
+    let total = 0;
+    let got = 0;
+    (points || []).forEach(p => {
+      const ws = [...new Set(lexWords(p.point))];
+      if (!ws.length) return;
+      const hit = ws.filter(w => have.has(w)).length / ws.length;
+      total += p.weight || 1;
+      got += (p.weight || 1) * (hit >= 0.5 ? 1 : hit >= 0.25 ? 0.5 : 0);
+    });
+    return total ? got / total : null;
+  }
+
+  // Why a single grading should be cross-checked ("" = it looks reliable)
+  function crossCheckReason(r, q, ans) {
+    const scheme = schemeOf(q);
+    const max = maxMarksOf(q);
+    const words = (ans && ans.wordCount) || 0;
+    const substantial = words >= Math.max(60, 0.3 * wordLimitOf(q));
+    const modelCov = checklistCoverage(r);
+    const lex = scheme ? lexicalCoverage(scheme.points, ans && ans.text) : null;
+    if (scheme && modelCov === null && substantial) return "the marking checklist was missing from the reply";
+    if (modelCov !== null && lex !== null && Math.abs(modelCov - lex) >= 0.45) return "its checklist verdict does not match the text of your answer";
+    if (r.score === 0 && substantial && (lex === null || lex >= 0.3)) return "a zero for a full, on-topic answer";
+    if (r.score >= 0.8 * max && lex !== null && lex < 0.2) return "a very high mark for an answer that covers little of the reference";
+    return "";
   }
 
   // One mark from several gradings: the average of two close runs, else the median;
   // then kept within a band around the reference-checklist coverage
-  function combineRuns(runs, q, max, started) {
+  function combineRuns(runs, q, max, started, reason) {
     const scores = runs.map(r => r.score);
     const sorted = scores.slice().sort((a, b) => a - b);
-    let final = sorted.length === 3 ? sorted[1] : sum(sorted) / sorted.length;
-    const method = sorted.length === 1 ? "single grading" : sorted.length === 2 ? "average of 2 independent gradings" : "median of 3 independent gradings (the first two disagreed)";
+    let final = combinedMark(scores);
+    const combined = final;   // before the checklist band
+    const method = sorted.length === 1 ? "one full grading" : sorted.length === 2 ? "average of 2 independent gradings" : "median of " + sorted.length + " independent gradings (the first two disagreed)";
     // the median coverage too: one stray grading (e.g. "everything missing") cannot drag it down
     const covs = runs.map(checklistCoverage).filter(c => c !== null).sort((a, b) => a - b);
     const coverage = !covs.length ? null : covs.length % 2 ? covs[(covs.length - 1) / 2] : (covs[covs.length / 2 - 1] + covs[covs.length / 2]) / 2;
@@ -1414,8 +1559,11 @@ has no error of that kind, but do not skip real ones.
       else if (final > hi) { anchored = "lowered"; final = hi; }
     }
     final = clamp(Math.round(final * 4) / 4, 0, max);
-    // the run closest to the final mark supplies the detailed feedback
-    const base = runs.slice().sort((a, b) => Math.abs(a.score - final) - Math.abs(b.score - final))[0];
+    // the full grading supplies the detailed feedback (cross-checks carry marks only); without
+    // one (older callers), the run closest to the final mark does
+    const fulls = runs.filter(r => !r.scoreOnly);
+    const base = (fulls.length ? fulls : runs).slice().sort((a, b) => Math.abs(a.score - combined) - Math.abs(b.score - combined))[0];
+    const usage = runs.reduce((u, r) => addUsage(u, r.usage), null);
     // the checklist shown is the one most runs agree on per point
     if (base.checklist && base.checklist.length) {
       base.checklist = base.checklist.map((c, i) => {
@@ -1437,8 +1585,12 @@ has no error of that kind, but do not skip real ones.
         method,
         coverage: coverage === null ? null : round1(coverage * 100),
         anchored,
-        spread: round2(sorted[sorted.length - 1] - sorted[0])
+        spread: round2(sorted[sorted.length - 1] - sorted[0]),
+        reason: runs.length > 1 ? (reason || "") : "",
+        // the feedback was written by a grading whose own mark ended up far from the final one
+        feedbackOff: runs.length > 1 && Math.abs(base.score - combined) > RUN_SPREAD * max
       },
+      usage,
       durationMs: Date.now() - started
     });
   }
@@ -1450,9 +1602,11 @@ has no error of that kind, but do not skip real ones.
     const ref = { pc: activeProvider("grading"), fallbackFrom: "" };
     if (!ref.pc.ready) throw new AIError("not_configured", "No API key set up.");
     const onStatus = (opts && opts.onStatus) || function () {};
-    const req = { system: SYSTEM_INSTRUCTION, prompt: buildPrompt(test, q, idx), json: true };
+    const scoreOnly = !!(opts && opts.scoreOnly);
+    const req = { system: SYSTEM_INSTRUCTION, prompt: buildPrompt(test, q, idx, scoreOnly), json: true, schema: scoreOnly ? SCORE_SCHEMA : undefined };
     const netOpts = { timeoutMs: GENERATE_TIMEOUT_MS, signal: opts && opts.signal };
     const started = Date.now();
+    let usage = null;
 
     const call = async () => {
       onStatus("Grading with " + ref.pc.def.label + " · " + ref.pc.model + "…");
@@ -1484,11 +1638,14 @@ has no error of that kind, but do not skip real ones.
         }
         throw err;
       }
+      usage = addUsage(usage, res.usage);
       lastRaw = res.text;
       const obj = extractJSON(res.text);
       if (obj) {
         try {
           const report = normalizeReport(obj, q, ans.text);
+          report.scoreOnly = scoreOnly;
+          report.usage = usage;
           if (!report.projection && ans.wordCount >= 60) report.projection = projectionFor(report.score, report.max, true);
           return Object.assign(report, {
             v: REPORT_VERSION,
@@ -1530,6 +1687,7 @@ has no error of that kind, but do not skip real ones.
     const call = { system: req.system, prompt: req.prompt, json: true, schema: req.schema === undefined ? null : req.schema };
     let lastErr = null;
     let lastRaw = "";
+    let usage = null;
     for (let round = 1; round <= 2; round++) {
       let res;
       try {
@@ -1538,9 +1696,10 @@ has no error of that kind, but do not skip real ones.
         if (round === 1 && (err.kind === "bad_response" || err.kind === "truncated")) { lastErr = err; onStatus("The reply was incomplete - asking again…"); continue; }
         throw err;
       }
+      usage = addUsage(usage, res.usage);
       lastRaw = res.text;
       const obj = extractJSON(res.text);
-      if (obj && (!req.validate || req.validate(obj))) return { data: obj, provider: pc.def.label, model: pc.model, thinking: pc.thinking, modelUsed: res.modelUsed || "" };
+      if (obj && (!req.validate || req.validate(obj))) return { data: obj, provider: pc.def.label, model: pc.model, thinking: pc.thinking, modelUsed: res.modelUsed || "", usage };
       lastErr = new AIError(res.finish === "length" ? "truncated" : "format", "The reply was not in the expected format.");
       if (round === 1) onStatus("The reply was not complete - asking again…");
     }
@@ -2087,6 +2246,7 @@ has no error of that kind, but do not skip real ones.
             '<span class="ai-grade-badge ai-g-' + g.cls + '">Grade ' + g.grade + " · " + esc(g.label) + "</span> <span class=\"ai-pct\">" + fmt(pct) + "%</span>" +
             '<div class="ai-projection">Likely in the real RBI exam: <strong>' + fmt(projLo) + "–" + fmt(projHi) + " / " + fmt(max) + "</strong></div>" +
             '<p class="ai-muted">This grader is deliberately about 2–3 marks stricter per answer than the real RBI panel.</p>' +
+            (function () { const u = reports.reduce((a, r) => addUsage(a, r.usage), null); return u ? '<p class="ai-muted">AI tokens for this test: ' + esc(tokensText(u)) + "</p>" : ""; })() +
           "</div></div>" +
         '<div class="table-scroll"><table class="ai-table ai-q-table"><thead><tr><th>Q</th><th>Paper</th><th>Words</th><th>Score</th><th>Grade</th></tr></thead><tbody>' + rowsHTML + "</tbody></table></div>" +
         "</div>" +
@@ -2329,6 +2489,7 @@ has no error of that kind, but do not skip real ones.
         (r.meritCheck ? "<h6>Merit-list reality check</h6><p>" + inline(r.meritCheck) + "</p>" : "")) : "") +
       '<div class="ai-report-foot"><span class="ai-meta">Graded by ' + esc(r.providerLabel) + " · " + esc(r.model) +
         (r.modelUsed ? " (" + esc(r.modelUsed) + ")" : "") + " · " + esc(when) + (r.durationMs ? " · " + Math.round(r.durationMs / 1000) + " s" : "") +
+        (r.usage ? " · tokens: " + esc(tokensText(r.usage)) : "") +
         (r.fallbackFrom ? ' · <span class="ai-warn-text">\u201c' + esc(r.fallbackFrom) + "\u201d was unavailable - pick a model in API keys (top bar)</span>" : "") + "</span>" +
         '<div class="ai-foot-actions">' + footBtns + "</div></div>" +
       "</div>";
@@ -2342,9 +2503,13 @@ has no error of that kind, but do not skip real ones.
     const label = { full: "Covered", partial: "Partly", missing: "Missing" };
     const covered = list.filter(x => x.coverage === "full").length;
     const partly = list.filter(x => x.coverage === "partial").length;
-    const head = c ? (c.runs.length > 1 ? "Marked " + c.runs.length + " times independently: " + c.runs.map(fmt).join(", ") + " → " + fmt(r.score) : "Marked once: " + fmt(r.score)) : "";
+    const head = c ? (c.runs.length > 1 ? "Marked " + c.runs.length + " times independently: " + c.runs.map(fmt).join(", ") + " → " + fmt(r.score) : "Marked once") : "";
     const body =
-      (c ? "<p>" + esc(head) + " (" + esc(c.method) + ")." + (c.anchored ? " The mark was " + esc(c.anchored) + " to stay in line with how much of your reference answer the script covers." : "") + "</p>" : "") +
+      (c ? "<p>" + esc(head) + " (" + esc(c.method) + ")." +
+        (c.runs.length > 1 && c.reason ? " Cross-checked because " + esc(c.reason) + "." : "") +
+        (c.runs.length === 1 && list.length ? " The checklist verdict matched the text of your answer, so no cross-check was needed." : "") +
+        (c.anchored ? " The mark was " + esc(c.anchored) + " to stay in line with how much of your reference answer the script covers." : "") +
+        (c.feedbackOff ? " The written feedback below comes from a grading whose own mark differed from the final one; press Re-grade for fresh feedback." : "") + "</p>" : "") +
       (list.length
         ? "<p>Your reference answer gives " + list.length + " key points: <strong>" + covered + " covered</strong>, " + partly + " partly, " + (list.length - covered - partly) + " missing" + (c && c.coverage !== null ? " (" + fmt(c.coverage) + "% of the weighted checklist)" : "") + ".</p>" +
           '<table class="ai-table ai-checklist"><thead><tr><th>Key point from your reference answer</th><th>Weight</th><th>In your script</th></tr></thead><tbody>' +
@@ -2604,7 +2769,7 @@ has no error of that kind, but do not skip real ones.
   function openSettings(testId, focusEngine) {
     const modal = el("ai-settings-modal");
     if (!modal) return;
-    draft = { autoEvaluate: getSettings().autoEvaluate, testId: testId || "", engines: {}, keys: Object.assign({}, readSessionKeys()) };
+    draft = { autoEvaluate: getSettings().autoEvaluate, passes: getSettings().passes, testId: testId || "", engines: {}, keys: Object.assign({}, readSessionKeys()) };
     Object.keys(ENGINES).forEach(id => { draft.engines[id] = Object.assign({}, engineSettings(id)); });
     // start from what is saved: drop the fields of an earlier, cancelled visit
     if (el("ai-keys")) el("ai-keys").innerHTML = "";
@@ -2671,6 +2836,9 @@ has no error of that kind, but do not skip real ones.
           ["low", "medium", "high"].map(t => '<label class="ai-tier-opt"><input type="radio" name="tier-' + id + '" value="' + t + '"' + (t === s.thinking ? " checked" : "") + '><span>' + t[0].toUpperCase() + t.slice(1) + "</span></label>").join("") +
         "</div>" +
         (def.kind === "gemini" ? "" : '<p class="ai-field-note">This provider has no reasoning tiers; its model decides.</p>') +
+        (id === "grade" ? '<div class="ai-tier" role="radiogroup" aria-label="Gradings per answer"><span class="ai-tier-label">Gradings</span>' +
+          [["smart", "Smart"], ["two", "Always 2"]].map(([v, t]) => '<label class="ai-tier-opt"><input type="radio" name="passes" value="' + v + '"' + (draft.passes === v ? " checked" : "") + "><span>" + t + "</span></label>").join("") + "</div>" +
+          '<p class="ai-field-note">Smart: one full grading per answer, plus a short score-only cross-check only when the mark looks unreliable (about half the tokens). Always 2: a cross-check for every answer.</p>' : "") +
         '<details class="ai-engine-adv"><summary>Model: <span data-f="summary">' + esc(s.model) + "</span></summary>" +
           '<div class="ai-engine-grid">' +
             '<label>Provider<select data-f="provider">' + Object.values(PROVIDERS).map(p => '<option value="' + p.id + '"' + (p.id === s.provider ? " selected" : "") + ">" + esc(p.label) + "</option>").join("") + "</select></label>" +
@@ -2718,6 +2886,8 @@ has no error of that kind, but do not skip real ones.
     readKeys();
     Object.keys(ENGINES).forEach(readEngine);
     draft.autoEvaluate = false;
+    const passes = document.querySelector('#ai-engines input[name="passes"]:checked');
+    if (passes) draft.passes = passes.value;
   }
 
   // The engine as the form describes it (for "Test" / "Load models" before saving)
@@ -2750,7 +2920,7 @@ has no error of that kind, but do not skip real ones.
       if (Object.keys(out).length) engines[id] = out;
     });
     providersInUse(draft.engines).forEach(pid => { const k = pickStr(draft.keys, pid); if (k && !isPlaceholderKey(k)) keys[pid] = k; });
-    const ok = writeOverrides({ autoEvaluate: draft.autoEvaluate, engines }) && writeSessionKeys(keys);
+    const ok = writeOverrides({ autoEvaluate: draft.autoEvaluate, passes: draft.passes, engines }) && writeSessionKeys(keys);
     if (!ok) {
       setStatusNode(el("ai-save-status"), "Could not save - this browser is blocking storage for this page.", "error");
       return;
@@ -2903,6 +3073,7 @@ has no error of that kind, but do not skip real ones.
     isReady: (role) => activeProvider(role || "check").ready,
     storeScheme,
     schemeOf,
+    tokensText,
     providerLabel: (role) => engineLabel(activeProvider(role || "check")),
     explain: (err, role) => explainError(err, activeProvider(role || "check")),
     evaluateTest: (test) => evaluateTest(test, { onlyMissing: true }),
@@ -2911,7 +3082,8 @@ has no error of that kind, but do not skip real ones.
       PROVIDERS, REPORT_SCHEMA, JSON_CONTRACT, extractJSON, normalizeReport, httpError, explainError,
       isPlaceholderKey, resolveEngine, getSettings, projectionFor, gradeFor, buildPrompt, generate,
       listModels, testConnection, gradeAnswer, questionMarkdown, testMarkdown, reportHTML, panelHTML,
-      AIError, normalizeWriting, topicStats, quoteInScript, isBritishVariant, combineRuns, checklistCoverage, schemeHash
+      AIError, normalizeWriting, topicStats, quoteInScript, isBritishVariant, combineRuns, checklistCoverage, schemeHash,
+      lexicalCoverage, crossCheckReason, usageFrom
     }
   };
 })();

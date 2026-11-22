@@ -6478,3 +6478,10 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 }
 .ai-tier-opt input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ai-tier-opt input:focus-visible + span { box-shadow: var(--ring); }
+
+/* Model answers: shown in full (no small inner scroll box) */
+.ai-model-answer { max-height: none; overflow: visible; }
+#q-model { min-height: 240px; resize: vertical; }
+.p1-chk-note { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
+.desc-ai-notes { margin: 6px 0 0; padding: 6px 10px 6px 26px; font-size: 12.5px; color: var(--ink-3); background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: 8px; }
+.desc-ai-notes li { margin: 2px 0; }
