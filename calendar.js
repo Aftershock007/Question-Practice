@@ -33,13 +33,13 @@ const CAL_KEYS = {
 };
 
 const TODO_TYPES = [
-  { value: "Descriptive writing", icon: "✍️" },
-  { value: "MCQ practice", icon: "🎯" },
-  { value: "Mock test", icon: "📝" },
-  { value: "Study", icon: "📖" },
-  { value: "Revision", icon: "🔄" },
-  { value: "Current affairs", icon: "📰" },
-  { value: "Other", icon: "📌" }
+  { value: "Descriptive writing", kind: "writing" },
+  { value: "MCQ practice", kind: "mcq" },
+  { value: "Mock test", kind: "mock" },
+  { value: "Study", kind: "study" },
+  { value: "Revision", kind: "revision" },
+  { value: "Current affairs", kind: "ca" },
+  { value: "Other", kind: "other" }
 ];
 
 // The daily routine: id suffix, chip label, phase tag
@@ -103,8 +103,9 @@ function calShortDate(dateStr) {
 }
 
 function calTypeIcon(type) {
+  // a small colour dot per TODO type (styled in style.css)
   const t = TODO_TYPES.find(x => x.value === type);
-  return t ? t.icon : "📌";
+  return `<i class="type-dot type-${t ? t.kind : "other"}" aria-hidden="true"></i>`;
 }
 
 function calPracticeForType(type) {
@@ -618,7 +619,7 @@ function calRoot() {
 
 function calTypeOptions(selected) {
   return TODO_TYPES.map(t =>
-    `<option value="${escapeHTML(t.value)}" ${t.value === selected ? "selected" : ""}>${t.icon} ${escapeHTML(t.value)}</option>`
+    `<option value="${escapeHTML(t.value)}" ${t.value === selected ? "selected" : ""}>${escapeHTML(t.value)}</option>`
   ).join("");
 }
 
@@ -627,7 +628,8 @@ function calShellHTML() {
   return `
     <div class="setup-header cal-page-head">
       <div class="setup-title-group">
-        <h2>📅 Calendar &amp; TODO</h2>
+        <span class="eyebrow">Your 415-day plan</span>
+        <h2>Calendar &amp; TODO</h2>
         <p class="setup-subtitle">Daily routine from your study plan: 1 Phase-2 subjective exam, 1 Phase-2 objective exam and 1 Phase-1 objective exam. Test days are tagged on the calendar.</p>
       </div>
     </div>
@@ -663,7 +665,7 @@ function calShellHTML() {
 
     <details class="cal-settings">
       <summary>
-        <span class="cal-settings-title">⚙️ Study plan settings</span>
+        <span class="cal-settings-title">Study plan settings</span>
         <span class="cal-settings-sub" data-role="plan-summary"></span>
       </summary>
       <div class="cal-settings-body">
@@ -678,12 +680,12 @@ function calShellHTML() {
           <button type="button" data-action="apply-config">Apply</button>
         </div>
         <div class="cal-settings-actions">
-          <button type="button" class="btn-soft" data-action="load-official">⚡ Use built-in 415-day plan</button>
-          <label class="btn-soft">📂 Upload timetable (.xlsx / .csv)<input type="file" accept=".xlsx,.csv" data-role="import" hidden></label>
-          <button type="button" class="btn-soft" data-action="template">⬇️ Template (.csv)</button>
-          <button type="button" class="btn-soft" data-action="export-plan">📤 Export plan (.csv)</button>
-          <button type="button" class="btn-soft" data-action="export-todos">📤 Export my TODOs (.csv)</button>
-          <button type="button" class="btn-soft btn-soft-danger" data-action="clear-plan">🗑️ Remove plan</button>
+          <button type="button" class="btn-soft" data-action="load-official">Use built-in 415-day plan</button>
+          <label class="btn-soft">Upload timetable (.xlsx / .csv)<input type="file" accept=".xlsx,.csv" data-role="import" hidden></label>
+          <button type="button" class="btn-soft" data-action="template">Download template (.csv)</button>
+          <button type="button" class="btn-soft" data-action="export-plan">Export plan (.csv)</button>
+          <button type="button" class="btn-soft" data-action="export-todos">Export my TODOs (.csv)</button>
+          <button type="button" class="btn-soft btn-soft-danger" data-action="clear-plan">Remove plan</button>
         </div>
         <p class="cal-settings-status" data-role="status" aria-live="polite"></p>
       </div>
@@ -718,11 +720,11 @@ function calRenderStats(root, ctx) {
   const todayExamsDone = todayExams.filter(t => t.done).length;
   let streakNote;
   if (streak.current === 0) streakNote = "Finish all of today's TODOs to start";
-  else streakNote = streak.todayDone ? "Today is done 🎉" : "Finish today to keep it";
+  else streakNote = streak.todayDone ? "Today is done" : "Finish today to keep it";
 
   box.innerHTML = `
     <div class="cal-stat cal-stat-streak">
-      <div class="cal-stat-label">🔥 Streak</div>
+      <div class="cal-stat-label">Streak</div>
       <div class="cal-stat-value">${streak.current} <small>day${streak.current === 1 ? "" : "s"}</small></div>
       <div class="cal-stat-sub">Best ${streak.best} · ${escapeHTML(streakNote)}</div>
     </div>
@@ -759,7 +761,7 @@ function calRenderUpcoming(root, ctx) {
   box.hidden = false;
   box.innerHTML = `
     <div class="cal-upcoming-head">
-      <h3>📝 Upcoming tests</h3>
+      <h3>Upcoming tests</h3>
       <span>From your study plan</span>
     </div>
     <div class="cal-upcoming-list">
@@ -802,12 +804,12 @@ function calCellHTML(date, ctx, monthIndex) {
   const manualTodos = info.todos.filter(t => t.source === "manual");
   const maxManual = 2;
   const manualLines = manualTodos.slice(0, maxManual).map(t =>
-    `<span class="cal-mine ${t.done ? "done" : ""}">${t.done ? "✓" : "•"} ${escapeHTML(t.title)}</span>`
+    `<span class="cal-mine ${t.done ? "done" : ""}">${escapeHTML(t.title)}</span>`
   ).join("");
   const more = manualTodos.length > maxManual ? `<span class="cal-more">+${manualTodos.length - maxManual} more</span>` : "";
   const dots = info.todos.slice(0, 6).map(t => `<i class="${t.done ? "done" : ""}"></i>`).join("");
   const examHTML = info.exams.length > 0
-    ? `<span class="cal-exam">🏆 ${info.exams.length} submitted</span>`
+    ? `<span class="cal-exam">${info.exams.length} submitted</span>`
     : "";
   const pct = info.total > 0 ? Math.round((info.done / info.total) * 100) : 0;
   const testsText = info.tests.length ? `, tests: ${info.tests.map(t => `${t.tag} ${t.label}`).join(", ")}` : "";
@@ -858,8 +860,8 @@ function calExamCardHTML(item) {
     return `
       <div class="dp-exam">
         <div class="dp-exam-main">
-          <strong>🎯 Objective test · ${score} / ${max}</strong>
-          <span>${exam.accuracy || 0}% accuracy · ✅ ${exam.correctCount || 0} · ❌ ${exam.incorrectCount || 0} · ⏱ ${formatDuration(exam.timeSpent || 0)}</span>
+          <strong>Objective test · ${score} / ${max}</strong>
+          <span>${exam.accuracy || 0}% accuracy · ${exam.correctCount || 0} correct · ${exam.incorrectCount || 0} wrong · ${formatDuration(exam.timeSpent || 0)}</span>
         </div>
         <button type="button" class="btn-soft" data-action="review-exam" data-kind="mcq" data-id="${escapeHTML(exam.id)}">Review</button>
       </div>`;
@@ -872,8 +874,8 @@ function calExamCardHTML(item) {
   return `
     <div class="dp-exam write">
       <div class="dp-exam-main">
-        <strong>✍️ Subjective test · ${escapeHTML(scoreText)}</strong>
-        <span>${(exam.questions || []).length} question(s) · ${words} words · ⏱ ${formatDuration(exam.usedSeconds || 0)}</span>
+        <strong>Subjective test · ${escapeHTML(scoreText)}</strong>
+        <span>${(exam.questions || []).length} question(s) · ${words} words · ${formatDuration(exam.usedSeconds || 0)}</span>
       </div>
       <button type="button" class="btn-soft" data-action="review-exam" data-kind="write" data-id="${escapeHTML(exam.id)}">Review</button>
     </div>`;
@@ -882,14 +884,14 @@ function calExamCardHTML(item) {
 function calTodoItemHTML(t) {
   let practiceBtn = "";
   if (t.practice === "write") {
-    practiceBtn = `<button type="button" class="todo-go" data-action="practice" data-target="write" data-id="${escapeHTML(t.id)}" title="Open the descriptive (subjective) test setup">▶ Start subjective</button>`;
+    practiceBtn = `<button type="button" class="todo-go" data-action="practice" data-target="write" data-id="${escapeHTML(t.id)}" title="Open the descriptive (subjective) test setup">Start subjective</button>`;
   } else if (t.practice === "mcq") {
-    practiceBtn = `<button type="button" class="todo-go" data-action="practice" data-target="mcq" data-id="${escapeHTML(t.id)}" title="Open the objective (MCQ) test setup">▶ Start objective</button>`;
+    practiceBtn = `<button type="button" class="todo-go" data-action="practice" data-target="mcq" data-id="${escapeHTML(t.id)}" title="Open the objective (MCQ) test setup">Start objective</button>`;
   }
   const meta = t.source === "plan"
     ? [
       t.tag ? `<span class="todo-tag tag-${t.tag.toLowerCase()}">${t.tag}</span>` : "",
-      t.test ? `<span class="todo-testflag kind-${t.test}">📝 Test</span>` : "",
+      t.test ? `<span class="todo-testflag kind-${t.test}">Test</span>` : "",
       t.subject ? `<span class="todo-subject">${escapeHTML(t.subject)}</span>` : ""
     ].join("")
     : [
@@ -909,8 +911,8 @@ function calTodoItemHTML(t) {
         ${practiceBtn && !t.done ? `<div class="todo-go-row">${practiceBtn}</div>` : ""}
       </div>
       <div class="todo-actions">
-        <button type="button" class="todo-icon-btn" data-action="edit" data-id="${escapeHTML(t.id)}" title="Edit TODO" aria-label="Edit TODO">✎</button>
-        <button type="button" class="todo-icon-btn danger-icon" data-action="delete" data-id="${escapeHTML(t.id)}" title="${t.source === "plan" ? "Hide plan TODO" : "Delete TODO"}" aria-label="${t.source === "plan" ? "Hide plan TODO" : "Delete TODO"}">✕</button>
+        <button type="button" class="todo-icon-btn" data-action="edit" data-id="${escapeHTML(t.id)}" title="Edit TODO" aria-label="Edit TODO"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M11.3 2.3a1.5 1.5 0 0 1 2.1 2.1L5.6 12.2 2.5 13l.8-3.1 8-7.6z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
+        <button type="button" class="todo-icon-btn danger-icon" data-action="delete" data-id="${escapeHTML(t.id)}" title="${t.source === "plan" ? "Hide plan TODO" : "Delete TODO"}" aria-label="${t.source === "plan" ? "Hide plan TODO" : "Delete TODO"}"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
       </div>
     </li>`;
 }
@@ -919,7 +921,7 @@ function calFocusRow(tag, subject, topic) {
   if (!topic) return "";
   const isTest = calIsTestKind(topic.kind);
   const pill = isTest
-    ? `<span class="cal-test-pill kind-${topic.kind}">📝 ${escapeHTML(topic.label)}</span>`
+    ? `<span class="cal-test-pill kind-${topic.kind}">${escapeHTML(topic.label)}</span>`
     : (topic.label ? `<span class="dp-focus-kind">${escapeHTML(topic.label)}</span>` : "");
   return `
     <div class="dp-focus-row ${isTest ? `is-test kind-${topic.kind}` : ""}">
@@ -946,7 +948,7 @@ function calRenderDayPanel(root, ctx) {
   if (info.dayNum) badges.push(`<span class="dp-badge">Day ${info.dayNum} of ${ctx.plan.totalDays}</span>`);
   info.tests.forEach(t => badges.push(calTestPill(t, false)));
   if (!info.tests.length && info.category === "buffer") badges.push(`<span class="cal-test-pill kind-buffer">Buffer day</span>`);
-  if (info.finished) badges.push(`<span class="dp-badge done">✓ Day complete</span>`);
+  if (info.finished) badges.push(`<span class="dp-badge done">Day complete</span>`);
   else if (info.missed) badges.push(`<span class="dp-badge missed">Missed</span>`);
 
   let focusHTML = "";
@@ -1167,7 +1169,7 @@ function calReviewExam(kind, id) {
   if (container) {
     container.style.display = "block";
     const btn = document.querySelector(`.btn-toggle-answer-review[data-test-id="${CSS.escape(id)}"]`);
-    if (btn) btn.textContent = "📖 Hide Answers & Marks";
+    if (btn) btn.textContent = "Hide answers";
     setTimeout(() => container.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   }
 }
@@ -1209,7 +1211,7 @@ function calApplyConfig(root) {
   const marked = calMarkDaysFinished(days);
   calSelectDate(calToday());
   renderCalendar();
-  calSetStatus(root, `✓ Day 1 of the plan is ${start}.${days > 0 ? ` Days 1-${days} marked done (${marked} TODOs).` : ""}`);
+  calSetStatus(root, `Day 1 of the plan is ${start}.${days > 0 ? ` Days 1-${days} marked done (${marked} TODOs).` : ""}`);
 }
 
 function calLoadOfficial(root) {
@@ -1225,7 +1227,7 @@ function calLoadOfficial(root) {
   calInvalidatePlan();
   calMarkDaysFinished(days);
   renderCalendar();
-  calSetStatus(root, `✓ Built-in ${RBI_OFFICIAL_SCHEDULE_DATA.length}-day plan loaded, Day 1 = ${start}.`);
+  calSetStatus(root, `Built-in ${RBI_OFFICIAL_SCHEDULE_DATA.length}-day plan loaded, Day 1 = ${start}.`);
 }
 
 function calClearPlan(root) {
@@ -1337,7 +1339,7 @@ async function calImportFile(root, input) {
       calMarkDaysFinished(days);
       renderCalendar();
       const tests = plan.reduce((n, r) => n + calPlanTests(r).length, 0);
-      calSetStatus(root, `✓ Imported a ${plan.length}-day plan (${tests} tests), Day 1 = ${start}.`);
+      calSetStatus(root, `Imported a ${plan.length}-day plan (${tests} tests), Day 1 = ${start}.`);
       return;
     }
 
@@ -1368,7 +1370,7 @@ async function calImportFile(root, input) {
     }
     calSaveTodos();
     renderCalendar();
-    calSetStatus(root, added > 0 ? `✓ Added ${added} TODO(s) from ${file.name}.` : "No TODO rows found in the file.", added === 0);
+    calSetStatus(root, added > 0 ? `Added ${added} TODO(s) from ${file.name}.` : "No TODO rows found in the file.", added === 0);
   } catch (err) {
     console.error("Calendar import error:", err);
     calSetStatus(root, `Import failed: ${err.message}`, true);

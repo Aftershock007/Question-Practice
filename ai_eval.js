@@ -1,0 +1,2201 @@
+"use strict";
+
+// ============================================================================
+// AI EVALUATION OF SUBJECTIVE (PHASE-2 DESCRIPTIVE) ANSWERS
+// ----------------------------------------------------------------------------
+// When a subjective test is submitted, every answer is sent - together with the
+// RBI evaluation prompt from prompt.js - to the AI provider set up in
+// "AI Settings" (or ai_config.js). The model replies with structured JSON that
+// is checked, re-added and shown as an easy-to-read assessment on the Result
+// screen and in History. The score is written into History automatically.
+//
+// Providers: Google Gemini (native API), OpenAI, Anthropic Claude, Groq,
+// OpenRouter, DeepSeek, Mistral, and any OpenAI-compatible server (Ollama,
+// LM Studio, vLLM...). Requests go straight from this page to the provider;
+// nothing passes through any other server.
+//
+// Public API: window.AIEval (used by app.js).
+// ============================================================================
+
+(function () {
+  // --------------------------------------------------------------------------
+  // 1. Providers & constants
+  // --------------------------------------------------------------------------
+  const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta";
+  const GEMINI_FALLBACK_MODEL = "gemini-flash-latest"; // Google's alias that always points to the newest Flash
+  const ANTHROPIC_API = "https://api.anthropic.com/v1";
+
+  const PROVIDERS = {
+    gemini: {
+      id: "gemini", label: "Google Gemini", kind: "gemini",
+      defaultModel: "gemini-3.8-flash",
+      suggestions: ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"],
+      keyUrl: "https://aistudio.google.com/app/apikey", keyHint: "starts with AIza",
+      note: "Has a free tier: create a key in Google AI Studio (takes a minute)."
+    },
+    openai: {
+      id: "openai", label: "OpenAI", kind: "openai", baseUrl: "https://api.openai.com/v1",
+      defaultModel: "gpt-6.2-sol",
+      suggestions: ["gpt-6.2-sol", "gpt-6.2-astra", "gpt-6.1-terra", "gpt-5.4-mini"],
+      keyUrl: "https://platform.openai.com/api-keys", keyHint: "starts with sk-",
+      note: "Paid API (separate from a ChatGPT subscription).",
+      modelFilter: id => /^(gpt|o\d|chatgpt)/i.test(id) &&
+        !/audio|realtime|tts|transcribe|image|embedding|search|moderation|whisper|dall-e|davinci|babbage|instruct/i.test(id)
+    },
+    anthropic: {
+      id: "anthropic", label: "Anthropic Claude", kind: "anthropic",
+      defaultModel: "claude-opus-5-5",
+      suggestions: ["claude-opus-5-5", "claude-fable-5-2", "claude-sonnet-5-5", "claude-haiku-5-5"],
+      keyUrl: "https://console.anthropic.com/settings/keys", keyHint: "starts with sk-ant-",
+      note: "Paid API. Sonnet and Haiku cost less than Opus."
+    },
+    groq: {
+      id: "groq", label: "Groq", kind: "openai", baseUrl: "https://api.groq.com/openai/v1",
+      defaultModel: "openai/gpt-oss-120b",
+      suggestions: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"],
+      keyUrl: "https://console.groq.com/keys", keyHint: "starts with gsk_",
+      note: "Very fast open models, with a free tier.",
+      modelFilter: id => !/whisper|tts|guard|orpheus|playai|distil/i.test(id)
+    },
+    openrouter: {
+      id: "openrouter", label: "OpenRouter", kind: "openai", baseUrl: "https://openrouter.ai/api/v1",
+      defaultModel: "nvidia/nemotron-3.5-super-vl:free",
+      suggestions: ["nvidia/nemotron-3.5-super-vl:free", "nvidia/nemotron-3.5-super-vl", "openrouter/auto"],
+      keyUrl: "https://openrouter.ai/settings/keys", keyHint: "starts with sk-or-",
+      note: "One key for hundreds of models. Models ending in :free cost nothing but have a daily request cap; Load models lists free ones first.",
+      headers: { "X-Title": "RBI Practice Console" },
+      // only models that can answer in text; free variants listed first
+      modelFilter: (id, m) => !(m && m.architecture && Array.isArray(m.architecture.output_modalities)) || m.architecture.output_modalities.includes("text"),
+      modelRank: id => (/:free$/.test(id) ? 0 : 1)
+    },
+    deepseek: {
+      id: "deepseek", label: "DeepSeek", kind: "openai", baseUrl: "https://api.deepseek.com",
+      defaultModel: "deepseek-chat",
+      suggestions: ["deepseek-chat", "deepseek-reasoner"],
+      keyUrl: "https://platform.deepseek.com/api_keys", keyHint: "starts with sk-",
+      note: "Low-cost API.",
+      // deepseek-chat stops at 4K output tokens unless asked for more; a full assessment needs more.
+      maxTokens: model => (model === "deepseek-chat" ? 8192 : 0)
+    },
+    mistral: {
+      id: "mistral", label: "Mistral", kind: "openai", baseUrl: "https://api.mistral.ai/v1",
+      defaultModel: "mistral-medium-latest",
+      suggestions: ["mistral-medium-latest", "mistral-large-latest", "mistral-small-latest"],
+      keyUrl: "https://console.mistral.ai/api-keys", keyHint: "",
+      note: "European provider with a free experiment plan."
+    },
+    custom: {
+      id: "custom", label: "Custom (OpenAI-compatible)", kind: "openai", baseUrl: "http://localhost:11434/v1",
+      defaultModel: "llama3.1",
+      suggestions: [],
+      keyUrl: "", keyHint: "optional", keyOptional: true, customBaseUrl: true,
+      note: "Ollama, LM Studio, vLLM, LiteLLM or any /chat/completions server. For Ollama, start it with OLLAMA_ORIGINS=* so the browser may call it."
+    }
+  };
+
+  const SETTINGS_KEY = "rbi_ai_settings";   // what you saved in AI Settings (overrides ai_config.js)
+  const REPORTS_KEY = "rbi_ai_reports";     // { [testId]: { [questionId]: report } }
+  // Detailed reports are big (~10-15 KB per answer). Keep them inside a budget so
+  // they can never crowd out your test history; the oldest reports are dropped
+  // first and their scores stay in History.
+  const REPORTS_MAX_CHARS = 1500000;
+  const REPORT_VERSION = 1;
+  const MAX_PARALLEL = 4;                    // answers graded at the same time (a full Phase-2 paper has 4)
+  const GENERATE_TIMEOUT_MS = 420000;        // per attempt; free reasoning models can take 2-4 minutes
+  const QUICK_TIMEOUT_MS = 45000;            // model list / connection test
+  // A timed-out request may still be running upstream (and counted against a free quota): never re-send it automatically.
+  const MAX_ATTEMPTS = { rate: 4, overloaded: 4, network: 3 };
+
+  const PENALTY_LABELS = {
+    "RP-1": "Missing sub-part",
+    "RP-2": "Platitude / fluff",
+    "RP-3": "Bare name-drop",
+    "RP-4": "Structure problem",
+    "RP-5": "Word limit / pacing",
+    "RP-6": "Factual or logic error",
+    "RP-7": "Lifting / outside info",
+    "RP-8": "Language / register",
+    "TYPO": "Typing slip (no penalty)"
+  };
+
+  const COVERAGE = {
+    "DEEP & BALANCED": { label: "Covered well", cls: "good" },
+    "TEXTBOOK ONLY": { label: "Textbook only", cls: "ok" },
+    "SUPERFICIAL": { label: "Superficial", cls: "weak" },
+    "MISSED": { label: "Missed", cls: "miss" }
+  };
+
+  const TRACKS = {
+    A: "ESI / Finance & Management answer",
+    B: "English essay",
+    C: "English precis",
+    D: "Reading comprehension"
+  };
+
+  // Grade brackets from the prompt's STRICT SIMULATOR GRADE BRACKETS
+  const GRADES = [
+    { grade: "A", min: 52, label: "AIR Top-10 ready", cls: "a" },
+    { grade: "B", min: 42, label: "Strong selection zone", cls: "b" },
+    { grade: "C", min: 32, label: "Borderline / cutoff zone", cls: "c" },
+    { grade: "D", min: 20, label: "Below cutoff", cls: "d" },
+    { grade: "F", min: 0, label: "Fail zone", cls: "f" }
+  ];
+
+  // --------------------------------------------------------------------------
+  // 2. Small helpers (local, so this file does not depend on script order)
+  // --------------------------------------------------------------------------
+  function esc(v) {
+    return String(v == null ? "" : v)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  // Escaped text with **bold** markers and line breaks kept
+  function inline(v) {
+    return esc(v).replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>");
+  }
+
+  function num(v) {
+    if (typeof v === "number") return Number.isFinite(v) ? v : null;
+    if (typeof v === "string") {
+      const m = v.replace(/,(?=\d)/g, ".").match(/-?\d+(?:\.\d+)?/);
+      return m ? Number(m[0]) : null;
+    }
+    return null;
+  }
+
+  function str(v, maxLen = 4000) {
+    if (v == null) return "";
+    let s = "";
+    if (typeof v === "string") s = v;
+    else if (typeof v === "number" || typeof v === "boolean") s = String(v);
+    else if (typeof v === "object") s = v.text || v.name || v.value || v.point || "";
+    s = String(s).replace(/\r\n?/g, "\n").trim();
+    return s.length > maxLen ? s.slice(0, maxLen - 1) + "…" : s;
+  }
+
+  function strList(v, maxItems = 10, maxLen = 600) {
+    const arr = Array.isArray(v) ? v : (typeof v === "string" && v.trim() ? v.split(/\n+/) : []);
+    return arr
+      .map(x => str(x, maxLen).replace(/^(?:[-*•]\s+|\d{1,2}[.)]\s+)/, ""))
+      .filter(Boolean)
+      .slice(0, maxItems);
+  }
+
+  function objList(v, maxItems) {
+    return (Array.isArray(v) ? v : []).filter(x => x && typeof x === "object" && !Array.isArray(x)).slice(0, maxItems);
+  }
+
+  function clamp(n, lo, hi) { return Math.min(hi, Math.max(lo, n)); }
+  function round2(n) { return Math.round(n * 100) / 100; }
+  function round1(n) { return Math.round(n * 10) / 10; }
+  function sum(list) { return list.reduce((s, x) => s + (Number(x) || 0), 0); }
+  function fmt(n) { const v = Number(n); return Number.isFinite(v) ? String(round2(v)) : "–"; }
+  function wordsIn(text) { const t = String(text || "").trim(); return t ? t.split(/\s+/).length : 0; }
+
+  function answerOf(test, q) {
+    const a = (test && test.answers && test.answers[q.id]) || {};
+    const text = typeof a.text === "string" ? a.text : "";
+    const wordCount = Number.isFinite(a.wordCount) ? a.wordCount : wordsIn(text);
+    return { text, wordCount, secondsSpent: a.secondsSpent || 0 };
+  }
+
+  function wordLimitOf(q) {
+    const w = Number(q.wordLimit);
+    if (w > 0) return w;
+    return Number(q.marks) === 15 ? 600 : 400;
+  }
+
+  function maxMarksOf(q) {
+    const m = Number(q.marks);
+    return m > 0 ? m : 10;
+  }
+
+  function gradeFor(percent) {
+    return GRADES.find(g => percent >= g.min) || GRADES[GRADES.length - 1];
+  }
+
+  function gradeInfo(letter) {
+    return GRADES.find(g => g.grade === letter) || GRADES[GRADES.length - 1];
+  }
+
+  // The prompt is deliberately ~2-3 marks stricter per question than the real RBI
+  // panel ("Score X here -> X + 2.0 to X + 3.0 in RBI"; +3.5 to +5.5 on 30/40-mark
+  // English). This turns a strict score into the likely real-exam range.
+  // attempted = the answer has at least 60 words (below that the rubric itself says 0)
+  function projectionFor(score, max, attempted) {
+    if (!(score > 0) && !attempted) return null;
+    let lo, hi;
+    if (max >= 25) { lo = 3.5; hi = 5.5; }
+    else if (max >= 10) { lo = 2.0; hi = 3.0; }
+    else { lo = 2.0 * max / 10; hi = 3.0 * max / 10; }
+    return [round2(Math.min(max, score + lo)), round2(Math.min(max, score + hi))];
+  }
+
+  function sleep(ms, signal) {
+    return new Promise((resolve, reject) => {
+      if (signal && signal.aborted) { reject(new AIError("cancelled", "Stopped.")); return; }
+      const t = setTimeout(done, ms);
+      function done() { if (signal) signal.removeEventListener("abort", onAbort); resolve(); }
+      function onAbort() { clearTimeout(t); reject(new AIError("cancelled", "Stopped.")); }
+      if (signal) signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  function cssEsc(v) {
+    return (typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(String(v)) : String(v).replace(/["\\]/g, "\\$&");
+  }
+
+  // --------------------------------------------------------------------------
+  // 3. Settings: ai_config.js defaults + what you saved in AI Settings
+  // --------------------------------------------------------------------------
+  function fileConfig() {
+    const c = typeof window !== "undefined" ? window.AI_CONFIG : null;
+    return c && typeof c === "object" ? c : {};
+  }
+
+  function readOverrides() {
+    try {
+      const o = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+      return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeOverrides(o) {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(o));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Empty keys and DEMO_ placeholders mean "not set up" - they are never sent anywhere.
+  function isPlaceholderKey(key) {
+    const k = String(key == null ? "" : key).trim();
+    if (!k) return true;
+    return /^DEMO[_-]/i.test(k) || /CHANGE[_-]?ME|YOUR[_-]?(API[_-]?)?KEY|PASTE[_-]?(YOUR[_-]?)?KEY/i.test(k);
+  }
+
+  function pickStr(obj, key) {
+    return obj && typeof obj === "object" && typeof obj[key] === "string" ? obj[key].trim() : "";
+  }
+
+  function cleanModel(def, model) {
+    let m = String(model || "").trim();
+    if (def.kind === "gemini") m = m.replace(/^models\//, "");
+    return m;
+  }
+
+  function getSettings() {
+    const file = fileConfig();
+    const local = readOverrides();
+    const provider = PROVIDERS[local.provider] ? local.provider : (PROVIDERS[file.provider] ? file.provider : "gemini");
+    const autoEvaluate = typeof local.autoEvaluate === "boolean" ? local.autoEvaluate
+      : (typeof file.autoEvaluate === "boolean" ? file.autoEvaluate : true);
+    return { provider, autoEvaluate };
+  }
+
+  // Values used when nothing was saved in AI Settings
+  function defaultsFor(def) {
+    const file = fileConfig();
+    return {
+      key: pickStr(file.keys, def.id),
+      model: cleanModel(def, pickStr(file.models, def.id)) || def.defaultModel,
+      baseUrl: ((def.customBaseUrl && pickStr(file, "customBaseUrl")) || def.baseUrl || "").replace(/\/+$/, "")
+    };
+  }
+
+  function makeConfig(def, apiKey, model, baseUrl) {
+    const key = isPlaceholderKey(apiKey) ? "" : String(apiKey).trim();
+    const base = String(baseUrl || def.baseUrl || "").trim().replace(/\/+$/, "");
+    return {
+      id: def.id,
+      def,
+      apiKey: key,
+      model: cleanModel(def, model) || def.defaultModel,
+      baseUrl: base,
+      ready: def.keyOptional ? !!base : !!key
+    };
+  }
+
+  function resolveProvider(id) {
+    const def = PROVIDERS[id] || PROVIDERS.gemini;
+    const local = readOverrides();
+    const d = defaultsFor(def);
+    const savedKey = pickStr(local.keys, def.id);
+    let apiKey = "";
+    let keySource = "none";
+    if (!isPlaceholderKey(savedKey)) { apiKey = savedKey; keySource = "browser"; }
+    else if (!isPlaceholderKey(d.key)) { apiKey = d.key; keySource = "file"; }
+    const model = cleanModel(def, pickStr(local.models, def.id)) || d.model;
+    const baseUrl = (def.customBaseUrl && pickStr(local.baseUrls, def.id)) || d.baseUrl;
+    const pc = makeConfig(def, apiKey, model, baseUrl);
+    pc.keySource = keySource;
+    return pc;
+  }
+
+  function activeProvider() {
+    return resolveProvider(getSettings().provider);
+  }
+
+  // --------------------------------------------------------------------------
+  // 4. Prompt: the exact copy-paste prompt from prompt.js + a JSON output contract
+  // --------------------------------------------------------------------------
+  const SYSTEM_INSTRUCTION =
+    "You grade RBI Grade B Phase-2 descriptive answers inside a candidate's practice app. " +
+    "Apply the user's rubric, gates, penalties and calibration exactly as written. " +
+    "Reply with exactly one valid JSON object containing the keys listed in the OUTPUT CONTRACT - " +
+    "no markdown, no code fences, no text before or after the JSON.";
+
+  const JSON_CONTRACT = `################################################################################
+#  OUTPUT CONTRACT - AUTOMATED GRADING (overrides the presentation format above)
+################################################################################
+This evaluation is read by the candidate's practice app, not pasted into a chat.
+Carry out EVERY step of the REQUIRED EVALUATION OUTPUT FORMAT above, in the same
+order (audit first, marks after), with the same tracks, evidence gates, red-pen
+penalties and calibration bands. Then, instead of markdown, return ONE JSON
+object and nothing else (no code fences, no text before or after it).
+
+Keys, in this exact order (section numbers refer to the format above):
+- "track": "A", "B", "C" or "D".                                       [Section 1]
+- "subparts": every explicit and implicit sub-part of the question, each
+  {"part": short name, "coverage": "DEEP & BALANCED" | "TEXTBOOK ONLY" |
+  "SUPERFICIAL" | "MISSED", "comment": one line on how it was handled}.
+- "caps_triggered": evidence-gate caps applied, e.g. "P3 capped at 20% - no
+  data" ([] if none).
+- "pacing_audit": word count %, time used, WPM and any speed risk (1-3 sentences).
+- "anchors_used": high-value data, reports, committees or theorists actually
+  used.                                                                 [Section 2]
+- "bare_name_drops": items mentioned without their function, target or link.
+- "missing_anchors": exactly 5 specific reports, committees, schemes, datasets
+  or theories to add.
+- "verify_flags": recent figures you tagged [VERIFY LATEST FIGURE] ([] if none).
+- "error_log": up to 8 items {"quote": the candidate's exact words, "code":
+  "RP-1" to "RP-8" (or "TYPO" for a no-penalty slip), "problem": what is wrong,
+  "correction": the corrected wording or fact}.                         [Section 3]
+- "parameters": one item per parameter of the chosen track, each {"name",
+  "max_marks", "cap_applied" ("" if none, else e.g. "45% - sub-part missed"),
+  "awarded", "justification": the evidence for the mark}.             [Section 4A]
+- "penalties": every Stage-2 deduction, each {"code": "RP-1" to "RP-8",
+  "trigger": the exact trigger found in the script, "deduction": a positive
+  number such as 0.25}.                                                [Section 4B]
+- "stage1_raw_sum", "total_penalties", "final_score": numbers, where
+  final_score = max(0, stage1_raw_sum - total_penalties), never above {{MARKS}}.
+- "grade": "A", "B", "C", "D" or "F" (STRICT SIMULATOR GRADE BRACKETS). [Section 5]
+- "merit_check": the blunt two-line merit-list reality check.
+- "summary": 3-4 short sentences written to the candidate as "you", in plain
+  English with no rubric codes (no "RP-3", no "P2"): what this mark means, the
+  1-2 biggest reasons marks were lost, and the single most important fix.
+- "strengths": 2-4 specific things this answer genuinely did well ([] if none).
+- "rewrites": 3 items {"before": the candidate's exact sentence(s), "after":
+  the Grade-A upgrade, "why": what the upgrade fixes}.                 [Section 6]
+- "model_answer": the complete benchmark answer as plain text in exam-portal
+  format, with \\n for line breaks, ending with [EXACT WORD COUNT: N words].
+                                                                        [Section 7]
+- "action_plan": exactly 3 revision directives for tomorrow's drill.   [Section 8]
+
+Rules: all marks are JSON numbers (not strings) in 0.25 steps. Strings are plain
+text (no markdown tables, no ** markers). Quote the candidate exactly in "quote"
+and "before". Skip Section 9 (SCORE_LOG): the app logs the score itself. If the
+script is blank, off-topic or under 60 words, still return every key, with
+final_score 0, "rewrites" as [] if there is nothing to rewrite, and a full model
+answer.
+################################################################################`;
+
+  // JSON Schema handed to Gemini (generationConfig.responseJsonSchema) so the
+  // reply always has this shape. Key order = generation order: audit before marks.
+  function objSchema(props) {
+    return { type: "object", properties: props, required: Object.keys(props) };
+  }
+  const S = { type: "string" };
+  const N = { type: "number" };
+  const SL = { type: "array", items: S };
+  const REPORT_SCHEMA = objSchema({
+    track: { type: "string", enum: ["A", "B", "C", "D"] },
+    subparts: { type: "array", items: objSchema({ part: S, coverage: { type: "string", enum: Object.keys(COVERAGE) }, comment: S }) },
+    caps_triggered: SL,
+    pacing_audit: S,
+    anchors_used: SL,
+    bare_name_drops: SL,
+    missing_anchors: SL,
+    verify_flags: SL,
+    error_log: { type: "array", items: objSchema({ quote: S, code: S, problem: S, correction: S }) },
+    parameters: { type: "array", items: objSchema({ name: S, max_marks: N, cap_applied: S, awarded: N, justification: S }) },
+    penalties: { type: "array", items: objSchema({ code: S, trigger: S, deduction: N }) },
+    stage1_raw_sum: N,
+    total_penalties: N,
+    final_score: N,
+    grade: { type: "string", enum: ["A", "B", "C", "D", "F"] },
+    merit_check: S,
+    summary: S,
+    strengths: SL,
+    rewrites: { type: "array", items: objSchema({ before: S, after: S, why: S }) },
+    model_answer: S,
+    action_plan: SL
+  });
+
+  function buildPrompt(test, q, idx) {
+    if (typeof buildQuestionText !== "function") {
+      throw new AIError("internal", "The evaluation prompt (prompt.js / app.js) is not loaded.");
+    }
+    const base = buildQuestionText(test, q, idx);
+    return base + "\n\n" + JSON_CONTRACT.replace(/\{\{MARKS\}\}/g, String(q.marks));
+  }
+
+  // --------------------------------------------------------------------------
+  // 5. Network layer: errors you can act on, timeouts, retries
+  // --------------------------------------------------------------------------
+  class AIError extends Error {
+    constructor(kind, message, extra) {
+      super(message);
+      this.name = "AIError";
+      this.kind = kind;
+      if (extra) Object.assign(this, extra);
+    }
+  }
+
+  function providerMessage(data, text, status) {
+    if (data && typeof data === "object") {
+      const e = data.error;
+      if (e && typeof e === "object") {
+        if (typeof e.message === "string" && e.message.trim()) {
+          // OpenRouter wraps the upstream provider's error in metadata.raw
+          const raw = e.metadata && typeof e.metadata.raw === "string" ? e.metadata.raw : "";
+          return raw && raw.length < 400 ? e.message + " - " + raw : e.message;
+        }
+      }
+      if (typeof e === "string" && e.trim()) return e;
+      if (typeof data.message === "string" && data.message.trim()) return data.message;
+      if (typeof data.detail === "string" && data.detail.trim()) return data.detail;
+      if (Array.isArray(data.detail) && data.detail[0] && data.detail[0].msg) return String(data.detail[0].msg);
+    }
+    const t = String(text || "").trim();
+    if (t && t.length < 300 && !t.startsWith("<")) return t;
+    return "HTTP " + status;
+  }
+
+  function retryDelayMs(data, message) {
+    const details = data && data.error && Array.isArray(data.error.details) ? data.error.details : [];
+    for (const d of details) {
+      if (d && typeof d.retryDelay === "string") {
+        const s = parseFloat(d.retryDelay);
+        if (Number.isFinite(s)) return s * 1000;
+      }
+    }
+    const m = String(message || "").match(/(?:try again|retry)(?:\s+after|\s+in)?\s+(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|secs?|seconds?)\b/i);
+    if (m) {
+      const v = parseFloat(m[1]);
+      return /^m/i.test(m[2]) ? v : v * 1000;
+    }
+    return null;
+  }
+
+  // Gemini returns 429 both for "too many requests this minute" (wait and retry)
+  // and "daily free-tier quota used up" (retrying is pointless) - tell them apart.
+  function isGeminiDailyQuota(data, message) {
+    const details = data && data.error && Array.isArray(data.error.details) ? data.error.details : [];
+    let sawViolation = false;
+    for (const d of details) {
+      for (const v of (d && Array.isArray(d.violations) ? d.violations : [])) {
+        sawViolation = true;
+        if (/per\s*day/i.test(String(v.quotaId || "") + " " + String(v.quotaMetric || ""))) return true;
+      }
+    }
+    if (sawViolation) return false;
+    return /per day|daily/i.test(String(message || ""));
+  }
+
+  function httpError(pc, status, data, text) {
+    const detail = providerMessage(data, text, status);
+    const e = data && data.error && typeof data.error === "object" ? data.error : {};
+    const code = String(e.code || e.type || e.status || "").toLowerCase();
+    const reasons = (Array.isArray(e.details) ? e.details : []).map(d => d && d.reason).filter(Boolean);
+    const extra = { status, detail, code };
+    const kindIs = k => new AIError(k, detail, extra);
+
+    if (status === 429) {
+      if (pc.def.kind === "gemini") return isGeminiDailyQuota(data, detail) ? kindIs("quota") : new AIError("rate", detail, Object.assign({ retryAfterMs: retryDelayMs(data, detail) }, extra));
+      if (code === "insufficient_quota" || /insufficient[_ ]quota|billing|credit/i.test(detail)) return kindIs("quota");
+      return new AIError("rate", detail, Object.assign({ retryAfterMs: retryDelayMs(data, detail) }, extra));
+    }
+    if (status === 402) return kindIs("quota");
+    // OpenRouter: the account's privacy settings exclude every provider of this (usually free) model
+    if (/data policy|privacy settings|settings\/privacy/i.test(detail)) return kindIs("privacy");
+    if (status === 401 || reasons.includes("API_KEY_INVALID") || /api key not valid|api key expired|invalid api key|incorrect api key|invalid x-api-key/i.test(detail)) return kindIs("auth");
+    if (status === 403) return kindIs("permission");
+    if (status === 404) return kindIs("model");
+    if (status === 408) return kindIs("timeout");
+    if (status === 413) return kindIs("too_large");
+    if (status >= 500) return kindIs("overloaded");
+    if (/credit balance|insufficient (balance|credits?|funds)/i.test(detail)) return kindIs("quota");
+    if (/\bmodels?\b/i.test(detail) && /(not\s+(be\s+)?found|not\s+exist|does\s?n[o']t\s+exist|not\s+supported|not\s+available|no\s+such|unknown|invalid|not\s+a\s+valid|decommissioned|deprecated|retired|no longer)/i.test(detail)) return kindIs("model");
+    if (/location is not supported|not available in your (country|region)/i.test(detail)) return kindIs("permission");
+    return kindIs("bad_request");
+  }
+
+  async function requestJSON(url, init, opts) {
+    const timeoutMs = (opts && opts.timeoutMs) || GENERATE_TIMEOUT_MS;
+    const signal = opts && opts.signal;
+    if (signal && signal.aborted) throw new AIError("cancelled", "Stopped.");
+    const ctrl = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs);
+    const relay = () => ctrl.abort();
+    if (signal) signal.addEventListener("abort", relay, { once: true });
+    const failed = (err) => {
+      if (timedOut) return new AIError("timeout", "No reply within " + Math.round(timeoutMs / 1000) + " seconds.", { timeoutMs });
+      if (signal && signal.aborted) return new AIError("cancelled", "Stopped.");
+      return new AIError("network", (err && err.message) || "Network error", { offline: typeof navigator !== "undefined" && navigator.onLine === false });
+    };
+    try {
+      let res;
+      try {
+        res = await fetch(url, Object.assign({}, init, { signal: ctrl.signal }));
+      } catch (err) {
+        throw failed(err);
+      }
+      let text = "";
+      try {
+        text = await res.text();
+      } catch (err) {
+        throw failed(err);
+      }
+      let data = null;
+      if (text) {
+        try { data = JSON.parse(text); } catch (_) { data = null; }
+      }
+      return { ok: res.ok, status: res.status, data, text };
+    } finally {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", relay);
+    }
+  }
+
+  async function withRetries(fn, opts) {
+    const signal = opts && opts.signal;
+    const onStatus = (opts && opts.onStatus) || function () {};
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await fn(attempt);
+      } catch (err) {
+        const limit = err instanceof AIError ? MAX_ATTEMPTS[err.kind] : 0;
+        if (!limit || attempt >= limit) {
+          if (err instanceof AIError) err.attempts = attempt;
+          throw err;
+        }
+        let wait = err.retryAfterMs != null ? err.retryAfterMs + 500 : [3000, 8000, 20000][attempt - 1] || 20000;
+        if (wait > 65000) { err.attempts = attempt; throw err; } // a long wait means "come back later"
+        wait = Math.max(wait, 1000);
+        const why = { rate: "Rate limited", overloaded: "Provider busy", network: "Connection problem", timeout: "No reply yet" }[err.kind];
+        const until = Date.now() + wait;
+        while (Date.now() < until) {
+          onStatus(why + " - retrying in " + Math.ceil((until - Date.now()) / 1000) + " s (attempt " + (attempt + 1) + " of " + limit + ")…");
+          await sleep(Math.min(1000, until - Date.now()), signal);
+        }
+      }
+    }
+  }
+
+  // Plain-English explanation of an error, plus whether AI Settings can fix it
+  function explainError(err, pc) {
+    const label = pc ? pc.def.label : "The AI provider";
+    const model = pc ? pc.model : "";
+    const detail = err && err.detail ? " (" + err.detail + ")" : "";
+    const kind = err && err.kind;
+    switch (kind) {
+      case "not_configured":
+        return { title: "AI grading is not set up", body: "Add your API key in AI Settings to switch on AI grading.", settings: true };
+      case "auth":
+        return { title: "API key rejected", body: label + " did not accept the API key" + detail + ". Open AI Settings and paste a valid key.", settings: true };
+      case "permission":
+        return { title: "Access denied", body: label + " refused this request" + detail + ". The key may be restricted, the API not enabled for its project, or the service unavailable in your region.", settings: true };
+      case "model":
+        return { title: "Model not available", body: "The model \u201c" + model + "\u201d is not available for your key - it may have been retired or renamed" + detail + ". Open AI Settings, press \u201cLoad models\u201d and pick one.", settings: true };
+      case "quota":
+        if (pc && pc.id === "openrouter" && /:free$/.test(model)) {
+          return { title: "Free daily limit reached", body: "OpenRouter allows only a limited number of free-model requests per day" + detail + ". It resets daily; adding a few credits to your OpenRouter account raises the limit, or pick another model in AI Settings.", settings: true };
+        }
+        return { title: "Quota used up", body: label + " says this key has no quota left" + detail + ". Free-tier limits reset daily; you can also choose another model or provider in AI Settings.", settings: true };
+      case "privacy":
+        return { title: "Blocked by your OpenRouter privacy settings", body: "No provider of “" + model + "” matches your account's data policy" + detail + ". Free models need “free endpoints that may train on inputs” (or similar) allowed at openrouter.ai/settings/privacy - or pick a paid model.", settings: true };
+      case "rate":
+        return { title: "Too many requests", body: label + " is rate-limiting this key. The app already retried; wait a minute and press Retry" + detail + ".", settings: false };
+      case "overloaded":
+        return { title: "Provider busy", body: label + " is overloaded or having a problem" + detail + ". Press Retry in a minute.", settings: false };
+      case "network": {
+        let body = "Could not reach " + label + ".";
+        if (err.offline) body += " You appear to be offline.";
+        else if (pc && pc.def.customBaseUrl) body += " Check that the server is running at " + pc.baseUrl + " and allows browser requests (CORS; for Ollama set OLLAMA_ORIGINS=*).";
+        else body += " Check your internet connection (or an ad-blocker / firewall blocking the API).";
+        return { title: "Connection failed", body, settings: !!(pc && pc.def.customBaseUrl) };
+      }
+      case "timeout":
+        return { title: "No reply in time", body: label + " did not reply in time. Press Retry, or pick a faster model in AI Settings.", settings: false };
+      case "blocked":
+        return { title: "Grading blocked", body: label + " refused to grade this answer" + detail + ".", settings: false };
+      case "truncated":
+        return { title: "Reply cut off", body: "The model stopped before finishing the assessment. Press Retry; if it keeps happening, choose another model in AI Settings.", settings: false };
+      case "format":
+      case "bad_response":
+        return { title: "Unreadable reply", body: "The model did not return the assessment in the expected format, even after asking twice. Press Retry, or choose a stronger model in AI Settings.", settings: false };
+      case "too_large":
+        return { title: "Answer too long for this model", body: label + " rejected the request as too large" + detail + ". Choose a model with a bigger context window.", settings: true };
+      case "bad_request":
+        return { title: "Request rejected", body: label + " rejected the request" + detail + ".", settings: true };
+      case "cancelled":
+        return { title: "Stopped", body: "Grading was stopped.", settings: false };
+      default:
+        return { title: "Something went wrong", body: (err && err.message) || String(err), settings: false };
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 6. Provider adapters: Gemini, OpenAI-compatible, Anthropic
+  // --------------------------------------------------------------------------
+  function geminiParse(data) {
+    const cand = data && Array.isArray(data.candidates) ? data.candidates[0] : null;
+    if (!cand) {
+      const block = data && data.promptFeedback && data.promptFeedback.blockReason;
+      if (block) throw new AIError("blocked", "Blocked: " + block, { detail: "blocked: " + block });
+      throw new AIError("bad_response", "Empty reply (no candidates).");
+    }
+    const parts = cand.content && Array.isArray(cand.content.parts) ? cand.content.parts : [];
+    // Thinking models can return "thought" parts - only the answer text counts.
+    const text = parts.filter(p => p && typeof p.text === "string" && !p.thought).map(p => p.text).join("");
+    const reason = String(cand.finishReason || "");
+    let finish = "stop";
+    if (reason === "MAX_TOKENS") finish = "length";
+    else if (/SAFETY|PROHIBITED|BLOCKLIST|SPII|RECITATION/.test(reason)) finish = "blocked";
+    if (!text.trim()) {
+      if (finish === "blocked") throw new AIError("blocked", "Blocked (" + reason + ").", { detail: "safety filter: " + reason });
+      if (finish === "length") throw new AIError("truncated", "The reply hit the output limit.");
+      throw new AIError("bad_response", "Empty reply" + (reason ? " (" + reason + ")" : "") + ".");
+    }
+    return { text, finish, modelUsed: (data && data.modelVersion) || "" };
+  }
+
+  async function geminiGenerate(pc, req, opts) {
+    const url = GEMINI_API + "/models/" + encodeURIComponent(pc.model) + ":generateContent";
+    // Try structured JSON first; if this model/API version rejects a field, step down.
+    const variants = req.json ? ["schema", "mime", "plain"] : ["plain"];
+    let lastErr = null;
+    for (const v of variants) {
+      const body = {};
+      if (v === "plain") {
+        // Some models (e.g. Gemma) reject system instructions: fold it into the prompt.
+        body.contents = [{ role: "user", parts: [{ text: (req.system ? req.system + "\n\n" : "") + req.prompt }] }];
+      } else {
+        body.contents = [{ role: "user", parts: [{ text: req.prompt }] }];
+        if (req.system) body.systemInstruction = { parts: [{ text: req.system }] };
+        body.generationConfig = v === "schema"
+          ? { responseMimeType: "application/json", responseJsonSchema: REPORT_SCHEMA }
+          : { responseMimeType: "application/json" };
+      }
+      // No temperature / maxOutputTokens: Gemini 3.x docs say keep sampling defaults,
+      // and the default output limit is the model's maximum (thinking included).
+      const r = await requestJSON(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": pc.apiKey },
+        body: JSON.stringify(body)
+      }, opts);
+      if (r.ok) return geminiParse(r.data);
+      const err = httpError(pc, r.status, r.data, r.text);
+      if (err.kind === "bad_request" && v !== "plain" &&
+          /schema|mime|json|unknown name|invalid json payload|generation_?config|instruction|not supported|unsupported/i.test(err.detail || "")) {
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+    throw lastErr || new AIError("bad_request", "Request rejected.");
+  }
+
+  function chatCompletionsUrl(baseUrl) {
+    const b = String(baseUrl || "").replace(/\/+$/, "");
+    return /\/chat\/completions$/i.test(b) ? b : b + "/chat/completions";
+  }
+
+  function openaiParse(data, pc) {
+    if (data && data.error) throw httpError(pc, 400, data, ""); // OpenRouter can send errors with HTTP 200
+    const choice = data && Array.isArray(data.choices) ? data.choices[0] : null;
+    if (!choice) throw new AIError("bad_response", "Empty reply (no choices).");
+    const msg = choice.message || {};
+    let text = "";
+    if (typeof msg.content === "string") text = msg.content;
+    else if (Array.isArray(msg.content)) text = msg.content.map(p => (p && typeof p.text === "string" ? p.text : "")).join("");
+    const reason = String(choice.finish_reason || "");
+    const finish = reason === "length" ? "length" : (reason === "content_filter" ? "blocked" : "stop");
+    if (!text.trim()) {
+      if (typeof msg.refusal === "string" && msg.refusal) throw new AIError("blocked", msg.refusal, { detail: msg.refusal });
+      if (finish === "blocked") throw new AIError("blocked", "Blocked by the content filter.", { detail: "content filter" });
+      if (finish === "length") throw new AIError("truncated", "The reply hit the output limit.");
+      throw new AIError("bad_response", "Empty reply.");
+    }
+    return { text, finish, modelUsed: (data && data.model) || "" };
+  }
+
+  async function openaiGenerate(pc, req, opts) {
+    const headers = { "Content-Type": "application/json" };
+    if (pc.apiKey) headers.Authorization = "Bearer " + pc.apiKey;
+    Object.assign(headers, pc.def.headers || {});
+    const variants = req.json ? ["json", "plain"] : ["plain"];
+    let lastErr = null;
+    for (const v of variants) {
+      const messages = [];
+      if (req.system) messages.push({ role: "system", content: req.system });
+      messages.push({ role: "user", content: req.prompt });
+      // Deliberately minimal: no temperature / max_tokens, which current reasoning
+      // models reject. JSON mode is requested and dropped if a server refuses it.
+      const body = { model: pc.model, messages };
+      if (v === "json") body.response_format = { type: "json_object" };
+      const maxTokens = pc.def.maxTokens ? pc.def.maxTokens(pc.model) : 0;
+      if (maxTokens && req.json) body.max_tokens = maxTokens;
+      const r = await requestJSON(chatCompletionsUrl(pc.baseUrl), { method: "POST", headers, body: JSON.stringify(body) }, opts);
+      if (r.ok) return openaiParse(r.data, pc);
+      const err = httpError(pc, r.status, r.data, r.text);
+      if (v === "json" && err.kind === "bad_request" &&
+          /response_format|json_object|json mode|json_validate|failed to generate json|not supported|unsupported/i.test((err.detail || "") + " " + (err.code || ""))) {
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+    throw lastErr || new AIError("bad_request", "Request rejected.");
+  }
+
+  async function anthropicGenerate(pc, req, opts) {
+    const body = { model: pc.model, max_tokens: req.json ? 8192 : 64, messages: [{ role: "user", content: req.prompt }] };
+    if (req.system) body.system = req.system;
+    const headers = {
+      "Content-Type": "application/json",
+      "x-api-key": pc.apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true" // required for calls from a web page
+    };
+    for (let tries = 0; tries < 2; tries++) {
+      const r = await requestJSON(ANTHROPIC_API + "/messages", { method: "POST", headers, body: JSON.stringify(body) }, opts);
+      if (r.ok) {
+        const data = r.data || {};
+        const blocks = Array.isArray(data.content) ? data.content : [];
+        const text = blocks.filter(b => b && b.type === "text" && typeof b.text === "string").map(b => b.text).join("");
+        const stop = String(data.stop_reason || "");
+        if (!text.trim()) {
+          if (stop === "refusal") throw new AIError("blocked", "The model declined.", { detail: "refusal" });
+          if (stop === "max_tokens") throw new AIError("truncated", "The reply hit the output limit.");
+          throw new AIError("bad_response", "Empty reply.");
+        }
+        return { text, finish: stop === "max_tokens" ? "length" : (stop === "refusal" ? "blocked" : "stop"), modelUsed: data.model || "" };
+      }
+      const err = httpError(pc, r.status, r.data, r.text);
+      // Older models have a lower output cap: use the cap the API reports.
+      const m = /max_tokens[^0-9]*\d+\s*>\s*(\d+)/i.exec(err.detail || "");
+      if (err.kind === "bad_request" && m && tries === 0) { body.max_tokens = Number(m[1]); continue; }
+      throw err;
+    }
+    throw new AIError("bad_request", "Request rejected.");
+  }
+
+  function generate(pc, req, opts) {
+    if (pc.def.kind === "gemini") return geminiGenerate(pc, req, opts);
+    if (pc.def.kind === "anthropic") return anthropicGenerate(pc, req, opts);
+    return openaiGenerate(pc, req, opts);
+  }
+
+  function sortModels(list, def) {
+    const seen = new Set();
+    const uniq = list.filter(m => m.id && !seen.has(m.id) && seen.add(m.id));
+    const rank = id => { const i = def.suggestions.indexOf(id); return i < 0 ? 999 : i; };
+    const group = id => (def.modelRank ? def.modelRank(id) : 0);
+    return uniq.sort((a, b) => (rank(a.id) - rank(b.id)) || (group(a.id) - group(b.id)) ||
+      (def.modelRank ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id, undefined, { numeric: true })));
+  }
+
+  async function listModels(pc) {
+    const opts = { timeoutMs: QUICK_TIMEOUT_MS };
+    const out = [];
+    if (pc.def.kind === "gemini") {
+      let token = "";
+      for (let page = 0; page < 5; page++) {
+        const url = GEMINI_API + "/models?pageSize=1000" + (token ? "&pageToken=" + encodeURIComponent(token) : "");
+        const r = await requestJSON(url, { headers: { "x-goog-api-key": pc.apiKey } }, opts);
+        if (!r.ok) throw httpError(pc, r.status, r.data, r.text);
+        for (const m of (r.data && Array.isArray(r.data.models) ? r.data.models : [])) {
+          const id = String(m.name || "").replace(/^models\//, "");
+          const methods = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
+          if (!id || !methods.includes("generateContent")) continue;
+          if (/embed|aqa|imagen|veo|tts|audio|live|image|robotics|computer-use|gemma|learnlm|lyria|banana/i.test(id)) continue;
+          out.push({ id, label: m.displayName || id });
+        }
+        token = r.data && r.data.nextPageToken;
+        if (!token) break;
+      }
+    } else if (pc.def.kind === "anthropic") {
+      const r = await requestJSON(ANTHROPIC_API + "/models?limit=1000", {
+        headers: { "x-api-key": pc.apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }
+      }, opts);
+      if (!r.ok) throw httpError(pc, r.status, r.data, r.text);
+      for (const m of (r.data && Array.isArray(r.data.data) ? r.data.data : [])) out.push({ id: m.id, label: m.display_name || m.id });
+    } else {
+      const headers = {};
+      if (pc.apiKey) headers.Authorization = "Bearer " + pc.apiKey;
+      const r = await requestJSON(String(pc.baseUrl).replace(/\/chat\/completions$/i, "") + "/models", { headers }, opts);
+      if (!r.ok) throw httpError(pc, r.status, r.data, r.text);
+      const rows = Array.isArray(r.data) ? r.data : (r.data && (r.data.data || r.data.models)) || [];
+      for (const m of rows) {
+        const id = typeof m === "string" ? m : (m && (m.id || m.name)) || "";
+        if (id && (!pc.def.modelFilter || pc.def.modelFilter(id, typeof m === "object" ? m : null))) out.push({ id, label: (m && m.name) || id });
+      }
+    }
+    return sortModels(out, pc.def);
+  }
+
+  async function testConnection(pc) {
+    if (!pc.ready) throw new AIError("not_configured", "No API key.");
+    const t0 = Date.now();
+    const res = await generate(pc, { system: "", prompt: "Connection test. Reply with exactly: OK", json: false }, { timeoutMs: 60000 });
+    return { ms: Date.now() - t0, modelUsed: res.modelUsed || pc.model, reply: res.text.trim().slice(0, 60) };
+  }
+
+  // --------------------------------------------------------------------------
+  // 7. Turning the model's reply into a checked report
+  // --------------------------------------------------------------------------
+  function extractJSON(text) {
+    if (!text) return null;
+    let t = String(text).replace(/^\uFEFF/, "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const tries = [t];
+    if (fence) tries.push(fence[1].trim());
+    const start = t.indexOf("{");
+    const end = t.lastIndexOf("}");
+    if (start >= 0 && end > start) tries.push(t.slice(start, end + 1));
+    for (const candidate of tries) {
+      try {
+        const v = JSON.parse(candidate);
+        if (v && typeof v === "object" && !Array.isArray(v)) return v;
+      } catch (_) { /* try the next candidate */ }
+    }
+    return null;
+  }
+
+  function normCode(code) {
+    const s = String(code || "").toUpperCase();
+    const m = s.match(/RP\s*-?\s*([1-8])/);
+    if (m) return "RP-" + m[1];
+    if (/TYPO/.test(s)) return "TYPO";
+    return s.trim().slice(0, 12);
+  }
+
+  function normCoverage(v) {
+    const s = String(v || "").toUpperCase();
+    if (/DEEP|BALANCED|WELL/.test(s)) return "DEEP & BALANCED";
+    if (/TEXTBOOK/.test(s)) return "TEXTBOOK ONLY";
+    if (/SUPERFICIAL|PARTIAL|SHALLOW|WEAK/.test(s)) return "SUPERFICIAL";
+    if (/MISS|ABSENT|NOT/.test(s)) return "MISSED";
+    return "";
+  }
+
+  const KEEP_UPPER = /^(?:RBI|IBC|GDP|GVA|ESI|FM|F&M|MPC|SEBI|NITI|HDI|MPI|CPI|WPI|RP|IMF|NSO|UPSC|SDG|NPA|ECF|CRR|SLR)$/;
+  function criterionName(raw) {
+    let t = str(raw, 200);
+    const code = (t.match(/^(P\d)\b/i) || [])[1];
+    if (code) t = t.slice(code.length).replace(/^\s*[.:\-–—]?\s*/, "");
+    const letters = t.replace(/[^A-Za-z]/g, "");
+    if (letters && letters.replace(/[^A-Z]/g, "").length / letters.length > 0.7) {
+      t = t.toLowerCase().replace(/[a-z][a-z&]*/g, w => (KEEP_UPPER.test(w.toUpperCase()) ? w.toUpperCase() : w));
+      t = t.charAt(0).toUpperCase() + t.slice(1);
+    }
+    t = t.replace(/\s*[—–]\s*/g, " - ").replace(/"/g, "");
+    return code ? code.toUpperCase() + " · " + t : t;
+  }
+
+  // Validate and re-add the model's numbers so the breakdown you see always adds up.
+  function normalizeReport(o, q) {
+    const max = maxMarksOf(q);
+    const parameters = objList(o.parameters, 8).map(p => {
+      const pmax = num(p.max_marks != null ? p.max_marks : p.max);
+      let awarded = num(p.awarded != null ? p.awarded : (p.marks_awarded != null ? p.marks_awarded : p.score));
+      if (awarded !== null) awarded = Math.max(0, pmax !== null && pmax > 0 ? Math.min(awarded, pmax) : awarded);
+      return { name: criterionName(p.name || p.parameter || p.criterion), max: pmax, awarded, cap: str(p.cap_applied || p.cap, 300), why: str(p.justification || p.reason || p.comment, 1500) };
+    }).filter(p => p.name || p.why);
+    const penalties = objList(o.penalties, 15).map(p => ({
+      code: normCode(p.code),
+      trigger: str(p.trigger || p.reason || p.detail, 600),
+      deduction: Math.abs(num(p.deduction != null ? p.deduction : p.marks) || 0)
+    })).filter(p => p.deduction > 0);
+
+    const scored = parameters.filter(p => p.awarded !== null);
+    const rawSum = scored.length ? round2(sum(scored.map(p => p.awarded))) : num(o.stage1_raw_sum);
+    const penaltySum = penalties.length ? round2(sum(penalties.map(p => p.deduction))) : Math.abs(num(o.total_penalties) || 0);
+    const modelFinal = num(o.final_score != null ? o.final_score : o.score);
+    let score = rawSum !== null ? rawSum - penaltySum : modelFinal;
+    if (score === null || !Number.isFinite(score)) {
+      throw new AIError("format", "The reply contained no usable score.");
+    }
+    const unclamped = round2(score);
+    score = clamp(unclamped, 0, max);
+    const percent = round1(score / max * 100);
+    const g = gradeFor(percent);
+
+    return {
+      score,
+      max,
+      percent,
+      grade: g.grade,
+      projection: projectionFor(score, max),
+      rawSum: rawSum !== null ? rawSum : null,
+      penaltySum,
+      capped: unclamped !== score,
+      modelFinal,
+      adjusted: modelFinal !== null && Math.abs(clamp(modelFinal, 0, max) - score) >= 0.125,
+      track: /^[ABCD]$/.test(String(o.track || "").trim().toUpperCase().charAt(0)) ? String(o.track).trim().toUpperCase().charAt(0) : "",
+      subparts: objList(o.subparts, 10).map(s => ({ part: str(s.part || s.name, 300), coverage: normCoverage(s.coverage), comment: str(s.comment || s.note, 600) })).filter(s => s.part),
+      caps: strList(o.caps_triggered, 8, 300).filter(c => !/^none\.?$/i.test(c)),
+      pacing: str(o.pacing_audit, 1200),
+      anchorsUsed: strList(o.anchors_used, 10, 300).filter(c => !/^none\.?$/i.test(c)),
+      nameDrops: strList(o.bare_name_drops, 10, 300).filter(c => !/^none\.?$/i.test(c)),
+      missingAnchors: strList(o.missing_anchors, 8, 400),
+      verifyFlags: strList(o.verify_flags, 8, 300).filter(c => !/^none\.?$/i.test(c)),
+      errors: objList(o.error_log, 12).map(x => ({ quote: str(x.quote, 600), code: normCode(x.code), problem: str(x.problem || x.issue, 600), correction: str(x.correction || x.fix, 800) })).filter(x => x.quote || x.problem),
+      parameters,
+      penalties,
+      meritCheck: str(o.merit_check, 800),
+      summary: str(o.summary, 1500),
+      strengths: strList(o.strengths, 5, 400),
+      rewrites: objList(o.rewrites, 5).map(x => ({ before: str(x.before, 1200), after: str(x.after, 1600), why: str(x.why, 500) })).filter(x => x.before && x.after),
+      modelAnswer: str(o.model_answer, 14000).replace(/\\n/g, "\n"),
+      actions: strList(o.action_plan, 5, 500)
+    };
+  }
+
+  function notAttemptedReport(test, q) {
+    const max = maxMarksOf(q);
+    return {
+      v: REPORT_VERSION,
+      testId: test.id,
+      qid: q.id,
+      notAttempted: true,
+      score: 0, max, percent: 0, grade: "F", projection: null,
+      summary: "You did not write anything for this question, so it scores 0 - the same as in the real exam. Even a short structured attempt (a one-line definition, three numbered points and a one-line way forward) earns marks, so never leave a question blank.",
+      modelAnswer: str(q.modelAnswer, 14000),
+      modelAnswerFromQuestion: true,
+      parameters: [], penalties: [], subparts: [], caps: [], anchorsUsed: [], nameDrops: [],
+      missingAnchors: [], verifyFlags: [], errors: [], strengths: [], rewrites: [], actions: [],
+      wordCount: 0, wordLimit: wordLimitOf(q),
+      provider: "", providerLabel: "", model: "", modelUsed: "",
+      createdAt: Date.now(), durationMs: 0
+    };
+  }
+
+  async function gradeAnswer(test, idx, opts) {
+    const q = test.questions[idx];
+    const ans = answerOf(test, q);
+    const ref = { pc: activeProvider(), fallbackFrom: "" };
+    if (!ref.pc.ready) throw new AIError("not_configured", "No API key set up.");
+    const onStatus = (opts && opts.onStatus) || function () {};
+    const req = { system: SYSTEM_INSTRUCTION, prompt: buildPrompt(test, q, idx), json: true };
+    const netOpts = { timeoutMs: GENERATE_TIMEOUT_MS, signal: opts && opts.signal };
+    const started = Date.now();
+
+    const call = async () => {
+      onStatus("Grading with " + ref.pc.def.label + " · " + ref.pc.model + "…");
+      try {
+        return await withRetries(() => generate(ref.pc, req, netOpts), { signal: netOpts.signal, onStatus });
+      } catch (err) {
+        // A retired/renamed Gemini model: try Google's always-current Flash alias once.
+        if (err.kind === "model" && ref.pc.def.kind === "gemini" && ref.pc.model !== GEMINI_FALLBACK_MODEL) {
+          ref.fallbackFrom = ref.pc.model;
+          ref.pc = Object.assign({}, ref.pc, { model: GEMINI_FALLBACK_MODEL });
+          onStatus("\u201c" + ref.fallbackFrom + "\u201d is not available - trying " + GEMINI_FALLBACK_MODEL + "…");
+          return await withRetries(() => generate(ref.pc, req, netOpts), { signal: netOpts.signal, onStatus });
+        }
+        throw err;
+      }
+    };
+
+    let lastErr = null;
+    let lastRaw = "";
+    for (let round = 1; round <= 2; round++) {
+      let res;
+      try {
+        res = await call();
+      } catch (err) {
+        if (round === 1 && (err.kind === "bad_response" || err.kind === "truncated")) {
+          lastErr = err;
+          onStatus("The reply was incomplete - asking again…");
+          continue;
+        }
+        throw err;
+      }
+      lastRaw = res.text;
+      const obj = extractJSON(res.text);
+      if (obj) {
+        try {
+          const report = normalizeReport(obj, q);
+          if (!report.projection && ans.wordCount >= 60) report.projection = projectionFor(report.score, report.max, true);
+          return Object.assign(report, {
+            v: REPORT_VERSION,
+            testId: test.id,
+            qid: q.id,
+            wordCount: ans.wordCount,
+            wordLimit: wordLimitOf(q),
+            provider: ref.pc.id,
+            providerLabel: ref.pc.def.label,
+            model: ref.pc.model,
+            modelUsed: res.modelUsed && res.modelUsed !== ref.pc.model ? res.modelUsed : "",
+            fallbackFrom: ref.fallbackFrom,
+            createdAt: Date.now(),
+            durationMs: Date.now() - started
+          });
+        } catch (err) {
+          lastErr = err;
+        }
+      } else {
+        lastErr = new AIError(res.finish === "length" ? "truncated" : "format", "The reply was not a valid assessment.");
+      }
+      if (round === 1) onStatus("The reply was not a complete assessment - asking again…");
+    }
+    if (lastErr) {
+      lastErr.raw = lastRaw;
+      throw lastErr;
+    }
+    throw new AIError("format", "No assessment.", { raw: lastRaw });
+  }
+
+  // --------------------------------------------------------------------------
+  // 8. Storage: detailed reports (capped) + score write-back into History
+  // --------------------------------------------------------------------------
+  let reportsCache = null;
+  let storageProblem = "";  // shown once in the panel
+
+  function loadReports() {
+    if (reportsCache) return reportsCache;
+    try {
+      const o = JSON.parse(localStorage.getItem(REPORTS_KEY) || "{}");
+      reportsCache = o && typeof o === "object" && !Array.isArray(o) ? o : {};
+    } catch (_) {
+      reportsCache = {};
+    }
+    return reportsCache;
+  }
+
+  function newestTime(byQ) {
+    let t = 0;
+    for (const r of Object.values(byQ || {})) t = Math.max(t, (r && r.createdAt) || 0);
+    return t;
+  }
+
+  function dropOldestTest(all, keepTestId) {
+    let oldestId = null;
+    let oldest = Infinity;
+    for (const [tid, byQ] of Object.entries(all)) {
+      if (tid === keepTestId) continue;
+      const t = newestTime(byQ);
+      if (t < oldest) { oldest = t; oldestId = tid; }
+    }
+    if (oldestId === null) return false;
+    delete all[oldestId];
+    return true;
+  }
+
+  function persistReports(all, keepTestId) {
+    let pruned = 0;
+    while (JSON.stringify(all).length > REPORTS_MAX_CHARS && dropOldestTest(all, keepTestId)) pruned++;
+    for (;;) {
+      try {
+        localStorage.setItem(REPORTS_KEY, JSON.stringify(all));
+        reportsCache = all;
+        return { ok: true, pruned };
+      } catch (_) {
+        // Browser storage is full (other app data too): free space from old reports.
+        if (!dropOldestTest(all, keepTestId)) {
+          reportsCache = all; // still shown this session
+          return { ok: false, pruned };
+        }
+        pruned++;
+      }
+    }
+  }
+
+  function getReport(testId, qid) {
+    const byQ = loadReports()[testId];
+    return (byQ && byQ[qid]) || null;
+  }
+
+  function saveReport(report) {
+    const all = loadReports();
+    all[report.testId] = all[report.testId] || {};
+    all[report.testId][report.qid] = report;
+    const res = persistReports(all, report.testId);
+    if (!res.ok) storageProblem = "Browser storage is full, so the latest AI report could not be saved permanently (its score is still in History). Download reports you want to keep.";
+    else if (res.pruned) storageProblem = "Older detailed AI reports were removed to free browser storage. Their scores are still in History.";
+    return res;
+  }
+
+  function deleteTestReports(testId) {
+    stopTest(testId);
+    const all = loadReports();
+    if (all[testId]) {
+      delete all[testId];
+      persistReports(all, null);
+    }
+  }
+
+  function clearAllReports() {
+    for (const job of jobs.values()) cancelJob(job);
+    reportsCache = {};
+    try { localStorage.removeItem(REPORTS_KEY); } catch (_) { /* ignore */ }
+  }
+
+  function historyList() {
+    return typeof loadJSON === "function" ? loadJSON("rbi_history", []) : [];
+  }
+
+  function findTest(testId) {
+    if (typeof state !== "undefined" && state.lastResultTest && state.lastResultTest.id === testId) return state.lastResultTest;
+    const h = historyList();
+    return (Array.isArray(h) ? h : []).find(t => t && t.id === testId) || null;
+  }
+
+  function writeScore(testId, qid, score) {
+    const history = historyList();
+    const t = Array.isArray(history) ? history.find(h => h && h.id === testId) : null;
+    if (t) {
+      t.scores = t.scores || {};
+      t.scores[qid] = score;
+      t.totalScore = Object.values(t.scores).reduce((a, b) => a + (Number(b) || 0), 0);
+      if (typeof saveJSON === "function") saveJSON("rbi_history", history);
+    }
+    if (typeof state !== "undefined" && state.lastResultTest && state.lastResultTest.id === testId) {
+      state.lastResultTest.scores = state.lastResultTest.scores || {};
+      state.lastResultTest.scores[qid] = score;
+    }
+    return !!t;
+  }
+
+  // --------------------------------------------------------------------------
+  // 9. Grading queue (2 answers at a time, live status, stop / retry)
+  // --------------------------------------------------------------------------
+  const jobs = new Map();   // "testId::qid" -> job
+  const queue = [];
+  const runs = new Map();   // testId -> { total, done } for the progress bar
+  let running = 0;
+
+  function jobKey(testId, qid) { return testId + "::" + qid; }
+  function getJob(testId, qid) { return jobs.get(jobKey(testId, qid)) || null; }
+  function isActive(job) { return !!job && (job.status === "queued" || job.status === "running"); }
+
+  function anyActive(testId) {
+    for (const j of jobs.values()) if (isActive(j) && (!testId || j.testId === testId)) return true;
+    return false;
+  }
+
+  function enqueue(test, idx) {
+    const q = test.questions[idx];
+    const key = jobKey(test.id, q.id);
+    if (isActive(jobs.get(key))) return false;
+    const job = {
+      key, testId: test.id, qid: q.id, idx, test,
+      status: "queued", message: "Waiting for its turn…", startedAt: 0,
+      controller: new AbortController(), error: null
+    };
+    jobs.set(key, job);
+    queue.push(job);
+    const run = runs.get(test.id) || { total: 0, done: 0 };
+    run.total++;
+    runs.set(test.id, run);
+    pump();
+    return true;
+  }
+
+  function pump() {
+    while (running < MAX_PARALLEL && queue.length) {
+      const job = queue.shift();
+      if (job.status !== "queued") continue;
+      running++;
+      runJob(job).finally(() => {
+        running--;
+        pump();
+      });
+    }
+  }
+
+  function finishRun(testId) {
+    const run = runs.get(testId);
+    if (!run) return;
+    run.done++;
+    if (!anyActive(testId)) runs.delete(testId);
+  }
+
+  async function runJob(job) {
+    job.status = "running";
+    job.startedAt = Date.now();
+    job.message = "Sending your answer…";
+    changed(job);
+    const ticker = setInterval(() => tick(job), 1000);
+    try {
+      const report = await gradeAnswer(job.test, job.idx, {
+        signal: job.controller.signal,
+        onStatus: (m) => { job.message = m; tick(job); }
+      });
+      jobs.delete(job.key);
+      // The test may have been deleted from History while it was being graded.
+      if (historyList().some(t => t && t.id === job.testId)) {
+        saveReport(report);
+        writeScore(job.testId, job.qid, report.score);
+      }
+    } catch (err) {
+      const e = err instanceof AIError ? err : new AIError("internal", (err && err.message) || String(err));
+      if (e.kind === "cancelled") {
+        jobs.delete(job.key);
+      } else {
+        job.status = "error";
+        job.error = e;
+        job.provider = activeProvider();
+        console.warn("AI evaluation failed for Q" + (job.idx + 1) + ":", e.kind, e.message, e.detail || "");
+      }
+    } finally {
+      clearInterval(ticker);
+      finishRun(job.testId);
+      changed(job);
+    }
+  }
+
+  function cancelJob(job) {
+    if (job.status === "queued") {
+      job.status = "cancelled";
+      jobs.delete(job.key);
+      finishRun(job.testId);
+    } else if (job.status === "running") {
+      job.controller.abort();
+    } else {
+      jobs.delete(job.key);
+    }
+  }
+
+  function stopTest(testId) {
+    for (const job of Array.from(jobs.values())) if (job.testId === testId) cancelJob(job);
+    runs.delete(testId);
+    refreshPanel(testId);
+    refreshAllSlots(testId);
+  }
+
+  function saveNotAttempted(test, q) {
+    saveReport(notAttemptedReport(test, q));
+    writeScore(test.id, q.id, 0);
+  }
+
+  // Grade the answers of a test. onlyMissing: skip answers that already have a report.
+  function evaluateTest(test, options) {
+    const onlyMissing = !options || options.onlyMissing !== false;
+    if (!test || !Array.isArray(test.questions)) return 0;
+    if (!activeProvider().ready) {
+      openSettings(test.id);
+      return 0;
+    }
+    let started = 0;
+    test.questions.forEach((q, idx) => {
+      if (onlyMissing && getReport(test.id, q.id)) return;
+      const job = getJob(test.id, q.id);
+      if (isActive(job)) return;
+      if (job) jobs.delete(job.key); // clear an old error
+      if (!answerOf(test, q).wordCount) {
+        saveNotAttempted(test, q);
+        return;
+      }
+      if (enqueue(test, idx)) started++;
+    });
+    refreshPanel(test.id);
+    refreshAllSlots(test.id);
+    return started;
+  }
+
+  function evaluateQuestion(test, qid) {
+    const idx = test.questions.findIndex(q => q.id === qid);
+    if (idx < 0) return;
+    if (!activeProvider().ready) {
+      openSettings(test.id);
+      return;
+    }
+    const q = test.questions[idx];
+    const old = getJob(test.id, qid);
+    if (isActive(old)) return;
+    if (old) jobs.delete(old.key);
+    if (!answerOf(test, q).wordCount) saveNotAttempted(test, q);
+    else enqueue(test, idx);
+    refreshQuestion(test.id, qid);
+    refreshPanel(test.id);
+  }
+
+  // Called by app.js right after a subjective test is submitted
+  function autoEvaluate(test) {
+    if (!test || !Array.isArray(test.questions) || !test.questions.length) return;
+    if (getSettings().autoEvaluate && activeProvider().ready) evaluateTest(test, { onlyMissing: true });
+  }
+
+  // --------------------------------------------------------------------------
+  // 10. Rendering - Result screen
+  // --------------------------------------------------------------------------
+  function currentResultTest() {
+    return (typeof state !== "undefined" && state.lastResultTest) || null;
+  }
+
+  function slotFor(qid) {
+    return document.querySelector('#result-list .ai-slot[data-qid="' + cssEsc(qid) + '"]');
+  }
+
+  function refreshQuestion(testId, qid) {
+    const t = currentResultTest();
+    if (!t || t.id !== testId) return;
+    const idx = t.questions.findIndex(q => q.id === qid);
+    const slot = slotFor(qid);
+    if (slot && idx >= 0) slot.innerHTML = slotHTML(t, t.questions[idx], idx);
+  }
+
+  function refreshAllSlots(testId) {
+    const t = currentResultTest();
+    if (!t || t.id !== testId) return;
+    t.questions.forEach(q => refreshQuestion(testId, q.id));
+  }
+
+  function refreshPanel(testId) {
+    const t = currentResultTest();
+    const el = document.getElementById("ai-panel");
+    if (t && el && t.id === testId) el.innerHTML = panelHTML(t);
+  }
+
+  function changed(job) {
+    refreshQuestion(job.testId, job.qid);
+    refreshPanel(job.testId);
+  }
+
+  // Cheap per-second update of a running job's timer and status text
+  function tick(job) {
+    const secs = Math.max(0, Math.round((Date.now() - job.startedAt) / 1000));
+    document.querySelectorAll('[data-ai-time="' + cssEsc(job.key) + '"]').forEach(el => { el.textContent = secs + " s"; });
+    document.querySelectorAll('[data-ai-msg="' + cssEsc(job.key) + '"]').forEach(el => { el.textContent = job.message; });
+  }
+
+  // Called by app.js at the end of renderResult()
+  function renderResultScreen(test) {
+    if (!test) return;
+    const panel = document.getElementById("ai-panel");
+    if (panel) panel.innerHTML = panelHTML(test);
+    test.questions.forEach((q, idx) => {
+      const slot = slotFor(q.id);
+      if (slot) slot.innerHTML = slotHTML(test, q, idx);
+    });
+    updateNavDot();
+  }
+
+  function testState(test) {
+    const rows = (test.questions || []).map((q, idx) => ({
+      q, idx, ans: answerOf(test, q), report: getReport(test.id, q.id), job: getJob(test.id, q.id)
+    }));
+    return {
+      rows,
+      graded: rows.filter(r => r.report),
+      active: rows.filter(r => isActive(r.job)),
+      runningRows: rows.filter(r => r.job && r.job.status === "running"),
+      errors: rows.filter(r => r.job && r.job.status === "error"),
+      missing: rows.filter(r => !r.report && !isActive(r.job)).length
+    };
+  }
+
+  function btn(action, label, test, extra, cls) {
+    return '<button type="button" class="' + (cls || "btn-soft") + '" data-ai-action="' + action + '" data-test-id="' + esc(test.id) + '"' + (extra || "") + ">" + label + "</button>";
+  }
+
+  function ringHTML(score, max, gradeCls, big) {
+    const pct = max > 0 ? clamp(score / max * 100, 0, 100) : 0;
+    return '<div class="ai-ring ai-g-' + gradeCls + (big ? " ai-ring-big" : "") + '" style="--pct:' + pct.toFixed(1) + '">' +
+      '<div class="ai-ring-inner"><strong>' + fmt(score) + "</strong><span>/ " + fmt(max) + "</span></div></div>";
+  }
+
+  function setupCardHTML(test) {
+    const def = activeProvider().def;
+    const host = def.keyUrl ? def.keyUrl.replace(/^https?:\/\//, "").split("/")[0] : "";
+    return '<div class="ai-setup">' +
+      '<div class="ai-setup-text">' +
+        "<h3>Get every answer graded by AI</h3>" +
+        "<p>Add an API key once, and every subjective test is graded the moment you submit it: marks for each answer, exactly where you lost them, your own sentences rewritten, and an exam-ready model answer.</p>" +
+        '<p class="ai-muted">' + esc(def.label) + (host ? ' key: <a href="' + esc(def.keyUrl) + '" target="_blank" rel="noopener noreferrer">' + esc(host) + "</a>" : "") +
+        ". Your key stays in this browser. You can still copy the prompts below into any chatbot.</p>" +
+      "</div>" +
+      btn("open-settings", "Add API key", test, "", "ai-btn-primary") +
+      "</div>";
+  }
+
+  function leaksAcross(reports) {
+    const by = {};
+    reports.forEach(r => (r.penalties || []).forEach(p => {
+      const k = p.code || "Other";
+      by[k] = by[k] || { code: k, total: 0, count: 0 };
+      by[k].total += p.deduction;
+      by[k].count++;
+    }));
+    return Object.values(by).sort((a, b) => b.total - a.total).slice(0, 3);
+  }
+
+  function fatigueNote(rows) {
+    const done = rows.filter(r => r.report && !r.report.notAttempted).sort((a, b) => a.idx - b.idx);
+    const blanks = rows.filter(r => r.report && r.report.notAttempted).length;
+    if (done.length < 2) {
+      return blanks ? blanks + " question" + (blanks > 1 ? "s were" : " was") + " left blank - in the exam a short structured attempt always beats a blank." : "";
+    }
+    const first = done[0];
+    const last = done[done.length - 1];
+    const wp = r => (r.report.wordLimit ? Math.round(r.ans.wordCount / r.report.wordLimit * 100) : 0);
+    const dropScore = first.report.percent - last.report.percent;
+    const dropWords = wp(first) - wp(last);
+    let note;
+    if (dropScore >= 10 || dropWords >= 20) {
+      note = "Quality fell towards the end: Q" + (first.idx + 1) + " scored " + fmt(first.report.percent) + "% using " + wp(first) + "% of the word limit, Q" + (last.idx + 1) + " scored " + fmt(last.report.percent) + "% using " + wp(last) + "%. Practise a fixed time budget per question.";
+    } else {
+      note = "No fatigue drop: your last answer held up as well as your first. Keep the same pacing.";
+    }
+    if (blanks) note += " " + blanks + " question" + (blanks > 1 ? "s were" : " was") + " left blank.";
+    return note;
+  }
+
+  function panelHTML(test) {
+    const pc = activeProvider();
+    const st = testState(test);
+    if (!pc.ready && !st.graded.length) return setupCardHTML(test);
+
+    const busy = st.active.length > 0;
+    let actions = "";
+    if (!pc.ready) actions += btn("open-settings", "Add API key", test, "", "ai-btn-primary");
+    else if (busy) actions += btn("stop", "Stop grading", test);
+    else if (st.missing > 0) actions += btn("evaluate-all", st.graded.length ? "Grade remaining (" + st.missing + ")" : "Grade all answers", test, "", "ai-btn-primary");
+    else actions += btn("reevaluate-all", "Re-grade all", test);
+    if (st.graded.length) {
+      actions += btn("download-test-report", "Download report", test);
+      actions += btn("copy-test-report", "Copy report", test);
+    }
+    actions += btn("open-settings", "AI Settings", test);
+
+    let html = '<div class="ai-panel-head">' +
+      '<div class="ai-panel-title"><h3>AI assessment</h3>' +
+      '<span class="ai-chip' + (pc.ready ? "" : " ai-chip-off") + '">' + (pc.ready ? esc(pc.def.label) + " · " + esc(pc.model) : "AI grading off") + "</span></div>" +
+      '<div class="ai-panel-actions">' + actions + "</div></div>";
+
+    if (busy) {
+      const run = runs.get(test.id) || { total: st.active.length, done: 0 };
+      const total = Math.max(run.total, run.done + st.active.length);
+      const pct = total ? Math.round(run.done / total * 100) : 0;
+      const live = st.runningRows.map(r =>
+        '<li><span class="ai-spinner"></span><strong>Q' + (r.idx + 1) + "</strong> " +
+        '<span class="ai-live-msg" data-ai-msg="' + esc(r.job.key) + '">' + esc(r.job.message) + "</span> " +
+        '<span class="ai-live-time" data-ai-time="' + esc(r.job.key) + '">' + Math.round((Date.now() - r.job.startedAt) / 1000) + " s</span></li>").join("");
+      html += '<div class="ai-progress"><div class="ai-progress-top"><span>Grading your answers… ' + run.done + " of " + total + " done</span><span>" + pct + "%</span></div>" +
+        '<div class="ai-progress-track"><div class="ai-progress-fill" style="width:' + Math.max(pct, 4) + '%"></div></div>' +
+        (live ? '<ul class="ai-live-list">' + live + "</ul>" : "") +
+        '<p class="ai-muted">Grading usually takes 1-3 minutes per answer (answers are graded in parallel). You can keep using the app - results appear here and in History.</p></div>';
+    }
+
+    if (st.errors.length) {
+      html += '<div class="ai-panel-errors">' + st.errors.map(r => {
+        const ex = explainError(r.job.error, r.job.provider || pc);
+        return "<div><strong>Q" + (r.idx + 1) + " · " + esc(ex.title) + ":</strong> " + esc(ex.body) + " " +
+          btn("evaluate-q", "Retry", test, ' data-qid="' + esc(r.q.id) + '"') + "</div>";
+      }).join("") + "</div>";
+    }
+
+    if (st.graded.length) {
+      const reports = st.graded.map(r => r.report);
+      const total = round2(sum(reports.map(r => r.score)));
+      const max = sum(reports.map(r => r.max));
+      const pct = max ? round1(total / max * 100) : 0;
+      const g = gradeFor(pct);
+      const projLo = round2(sum(reports.map(r => (r.projection ? r.projection[0] : r.score))));
+      const projHi = round2(sum(reports.map(r => (r.projection ? r.projection[1] : r.score))));
+      const allDone = st.graded.length === st.rows.length;
+
+      const rowsHTML = st.rows.map(r => {
+        const limit = wordLimitOf(r.q);
+        let status;
+        if (r.report && !isActive(r.job)) {
+          const gi = gradeInfo(r.report.grade);
+          status = r.report.notAttempted ? '<span class="ai-tag">Not attempted</span>' : '<span class="ai-grade-badge ai-g-' + gi.cls + '">' + gi.grade + "</span>";
+        } else if (r.job && r.job.status === "running") status = '<span class="ai-tag ai-tag-live">Grading…</span>';
+        else if (r.job && r.job.status === "queued") status = '<span class="ai-tag">Waiting</span>';
+        else if (r.job && r.job.status === "error") status = '<span class="ai-tag ai-tag-err">Failed</span>';
+        else status = '<span class="ai-tag">Not graded</span>';
+        return '<tr><td><button type="button" class="ai-link" data-ai-action="goto-q" data-qid="' + esc(r.q.id) + '">Q' + (r.idx + 1) + "</button></td>" +
+          "<td>" + esc(r.q.paper || "") + "</td>" +
+          '<td class="ai-num">' + r.ans.wordCount + " / " + limit + "</td>" +
+          '<td class="ai-num">' + (r.report ? "<strong>" + fmt(r.report.score) + "</strong> / " + fmt(r.report.max) : "– / " + fmt(maxMarksOf(r.q))) + "</td>" +
+          "<td>" + status + "</td></tr>";
+      }).join("");
+
+      const leaks = leaksAcross(reports);
+      const leaksHTML = leaks.length
+        ? "<ul>" + leaks.map(l => "<li><strong>" + esc(l.code) + " " + esc(PENALTY_LABELS[l.code] || "") + "</strong> · −" + fmt(l.total) + " marks (" + l.count + "×)</li>").join("") + "</ul>"
+        : '<p class="ai-muted">No red-pen penalties.</p>';
+      const drills = [];
+      reports.forEach(r => { if (r.actions && r.actions[0] && !drills.includes(r.actions[0])) drills.push(r.actions[0]); });
+      const fatigue = fatigueNote(st.rows);
+
+      html += '<div class="ai-overall">' +
+        '<div class="ai-overall-score">' + ringHTML(total, max, g.cls, true) +
+          '<div class="ai-overall-text">' +
+            '<div class="ai-overall-label">' + (allDone ? "Total score" : "Score so far · " + st.graded.length + " of " + st.rows.length + " graded") + "</div>" +
+            '<span class="ai-grade-badge ai-g-' + g.cls + '">Grade ' + g.grade + " · " + esc(g.label) + "</span> <span class=\"ai-pct\">" + fmt(pct) + "%</span>" +
+            '<div class="ai-projection">Likely in the real RBI exam: <strong>' + fmt(projLo) + "–" + fmt(projHi) + " / " + fmt(max) + "</strong></div>" +
+            '<p class="ai-muted">This grader is deliberately about 2–3 marks stricter per answer than the real RBI panel.</p>' +
+          "</div></div>" +
+        '<div class="table-scroll"><table class="ai-table ai-q-table"><thead><tr><th>Q</th><th>Paper</th><th>Words</th><th>Score</th><th>Grade</th></tr></thead><tbody>' + rowsHTML + "</tbody></table></div>" +
+        "</div>" +
+        '<div class="ai-insights">' +
+          '<div class="ai-insight"><h5>Biggest mark leaks</h5>' + leaksHTML + "</div>" +
+          (fatigue ? '<div class="ai-insight"><h5>Pacing &amp; fatigue</h5><p>' + esc(fatigue) + "</p></div>" : "") +
+          (drills.length ? '<div class="ai-insight"><h5>Next drills</h5><ol>' + drills.slice(0, 4).map(d => "<li>" + inline(d) + "</li>").join("") + "</ol></div>" : "") +
+        "</div>";
+    }
+
+    if (storageProblem) html += '<p class="ai-warning">' + esc(storageProblem) + "</p>";
+    return html;
+  }
+
+  function slotHTML(test, q, idx) {
+    const pc = activeProvider();
+    const report = getReport(test.id, q.id);
+    const job = getJob(test.id, q.id);
+    const qAttr = ' data-qid="' + esc(q.id) + '"';
+    if (isActive(job)) {
+      const live = job.status === "running";
+      return '<div class="ai-slot-status' + (report ? " ai-slot-regrade" : "") + '">' +
+        (live ? '<span class="ai-spinner"></span>' : '<span class="ai-wait-dot"></span>') +
+        '<div class="ai-slot-status-text"><strong>' + (live ? (report ? "Re-grading" : "Grading") + " this answer…" : "Waiting for its turn…") + "</strong>" +
+        (live ? '<span class="ai-live-msg" data-ai-msg="' + esc(job.key) + '">' + esc(job.message) + "</span>" : "") + "</div>" +
+        (live ? '<span class="ai-live-time" data-ai-time="' + esc(job.key) + '">' + Math.round((Date.now() - job.startedAt) / 1000) + " s</span>" : "") +
+        btn("stop-q", "Cancel", test, qAttr) +
+        "</div>";
+    }
+    let html = "";
+    if (job && job.status === "error") {
+      const ex = explainError(job.error, job.provider || pc);
+      html += '<div class="ai-error-box"><div class="ai-error-text"><strong>' + esc(ex.title) + "</strong><p>" + esc(ex.body) + "</p></div>" +
+        '<div class="ai-error-actions">' + btn("evaluate-q", "Retry", test, qAttr, "ai-btn-primary") +
+        (ex.settings ? btn("open-settings", "AI Settings", test) : "") +
+        (job.error.raw ? btn("show-raw", "Show raw reply", test, qAttr) : "") + "</div>" +
+        (job.error.raw ? '<pre class="ai-raw" hidden>' + esc(String(job.error.raw).slice(0, 20000)) + "</pre>" : "") +
+        "</div>";
+      if (report) html += '<p class="ai-muted ai-prev-note">Previous assessment:</p>';
+    }
+    if (report) return html + reportHTML(report, q, { test, idx });
+    if (html) return html;
+    if (!pc.ready) {
+      return '<div class="ai-slot-idle"><span>AI grading is off.</span>' + btn("open-settings", "Add API key", test) + "</div>";
+    }
+    return '<div class="ai-slot-idle"><span>Not graded yet.</span>' + btn("evaluate-q", "Grade this answer", test, qAttr, "ai-btn-primary") + "</div>";
+  }
+
+  function listHTML(items, empty) {
+    if (!items || !items.length) return '<p class="ai-muted">' + esc(empty) + "</p>";
+    return "<ul>" + items.map(x => "<li>" + inline(x) + "</li>").join("") + "</ul>";
+  }
+
+  function section(title, meta, body, open) {
+    return '<details class="ai-sec"' + (open ? " open" : "") + "><summary><span>" + title + "</span>" +
+      (meta ? '<span class="ai-sec-meta">' + esc(meta) + "</span>" : "") + "</summary>" +
+      '<div class="ai-sec-body">' + body + "</div></details>";
+  }
+
+  function lossesHTML(r) {
+    if (r.penalties.length) {
+      const top = r.penalties.slice().sort((a, b) => b.deduction - a.deduction).slice(0, 4);
+      return "<ul>" + top.map(p => "<li><strong>−" + fmt(p.deduction) + " · " + esc(PENALTY_LABELS[p.code] || p.code) + "</strong>" +
+        (p.trigger ? ': <span class="ai-muted">' + inline(p.trigger) + "</span>" : "") + "</li>").join("") + "</ul>";
+    }
+    const weak = r.parameters.filter(p => p.max > 0 && p.awarded !== null).sort((a, b) => a.awarded / a.max - b.awarded / b.max).slice(0, 3);
+    if (weak.length) return "<ul>" + weak.map(p => "<li><strong>" + esc(p.name) + "</strong>: " + fmt(p.awarded) + " / " + fmt(p.max) + "</li>").join("") + "</ul>";
+    return '<p class="ai-muted">No specific deductions listed.</p>';
+  }
+
+  function breakdownHTML(r) {
+    let h = "";
+    if (r.parameters.length) {
+      h += '<div class="table-scroll"><table class="ai-table"><thead><tr><th>Criterion</th><th>Marks</th><th>Why</th></tr></thead><tbody>' +
+        r.parameters.map(p => {
+          const ratio = p.max > 0 && p.awarded !== null ? clamp(p.awarded / p.max, 0, 1) : 0;
+          return "<tr><td><strong>" + esc(p.name) + "</strong>" + (p.cap ? '<span class="ai-cap">Capped: ' + esc(p.cap) + "</span>" : "") + "</td>" +
+            '<td class="ai-num"><span class="ai-bar"><i style="width:' + Math.round(ratio * 100) + '%"></i></span>' +
+            (p.awarded !== null ? fmt(p.awarded) : "–") + (p.max !== null ? " / " + fmt(p.max) : "") + "</td>" +
+            "<td>" + inline(p.why) + "</td></tr>";
+        }).join("") +
+        '<tr class="ai-total-row"><td>Marks earned (before penalties)</td><td class="ai-num">' + fmt(r.rawSum) + " / " + fmt(r.max) + "</td><td></td></tr>" +
+        "</tbody></table></div>";
+    }
+    h += "<h6>Red-pen penalties</h6>";
+    if (r.penalties.length) {
+      h += '<div class="table-scroll"><table class="ai-table"><thead><tr><th>Penalty</th><th>What triggered it</th><th>Marks</th></tr></thead><tbody>' +
+        r.penalties.map(p => '<tr><td><span class="ai-code">' + esc(p.code) + "</span> " + esc(PENALTY_LABELS[p.code] || "") + "</td><td>" + inline(p.trigger) + '</td><td class="ai-num ai-neg">−' + fmt(p.deduction) + "</td></tr>").join("") +
+        "</tbody></table></div>";
+    } else {
+      h += '<p class="ai-muted">No penalties.</p>';
+    }
+    h += '<p class="ai-math">' + (r.rawSum !== null ? fmt(r.rawSum) + " − " + fmt(r.penaltySum) + " penalties = " : "Final score: ") +
+      "<strong>" + fmt(r.score) + " / " + fmt(r.max) + "</strong>" + (r.capped ? " (limited to the 0–" + fmt(r.max) + " range)" : "") + "</p>";
+    if (r.adjusted) h += '<p class="ai-muted">The model\'s own total was ' + fmt(r.modelFinal) + "; the score above is re-added from this breakdown so the numbers match.</p>";
+    return h;
+  }
+
+  function subpartsHTML(r) {
+    return '<ul class="ai-subparts">' + r.subparts.map(s => {
+      const c = COVERAGE[s.coverage] || { label: s.coverage || "–", cls: "ok" };
+      return '<li><span class="ai-cov ai-cov-' + c.cls + '">' + esc(c.label) + "</span><div><strong>" + esc(s.part) + "</strong>" + (s.comment ? "<p>" + inline(s.comment) + "</p>" : "") + "</div></li>";
+    }).join("") + "</ul>";
+  }
+
+  function errorsHTML(r) {
+    return r.errors.map(e =>
+      '<div class="ai-err">' +
+        (e.quote ? "<blockquote>\u201c" + esc(e.quote) + "\u201d</blockquote>" : "") +
+        "<p>" + (e.code ? '<span class="ai-code">' + esc(e.code) + "</span> " : "") + inline(e.problem) + "</p>" +
+        (e.correction ? '<p class="ai-fix"><strong>Better:</strong> ' + inline(e.correction) + "</p>" : "") +
+      "</div>").join("");
+  }
+
+  function anchorsHTML(r) {
+    let h = "";
+    if (r.anchorsUsed.length) h += "<h6>Used well</h6>" + listHTML(r.anchorsUsed, "");
+    if (r.nameDrops.length) h += "<h6>Mentioned without explaining what it does</h6>" + listHTML(r.nameDrops, "");
+    if (r.missingAnchors.length) h += "<h6>Add these to reach Grade A</h6>" + listHTML(r.missingAnchors, "");
+    if (r.verifyFlags.length) h += "<h6>Double-check these figures</h6>" + listHTML(r.verifyFlags, "");
+    return h;
+  }
+
+  function rewritesHTML(r) {
+    return r.rewrites.map(w =>
+      '<div class="ai-rewrite"><div class="ai-before"><span>Your version</span><p>' + inline(w.before) + "</p></div>" +
+      '<div class="ai-after"><span>Grade-A version</span><p>' + inline(w.after) + "</p></div>" +
+      (w.why ? '<p class="ai-why">' + inline(w.why) + "</p>" : "") + "</div>").join("");
+  }
+
+  function reportHTML(r, q, opts) {
+    const test = opts && opts.test;
+    const readonly = !!(opts && opts.readonly);
+    const tid = test ? test.id : r.testId;
+    const ids = ' data-test-id="' + esc(tid) + '" data-qid="' + esc(q.id) + '"';
+    const footBtns =
+      (readonly ? "" : '<button type="button" class="btn-soft" data-ai-action="evaluate-q"' + ids + ">Re-grade</button>") +
+      '<button type="button" class="btn-soft" data-ai-action="copy-report"' + ids + ">Copy report</button>" +
+      '<button type="button" class="btn-soft" data-ai-action="download-report"' + ids + ">Download .md</button>";
+
+    if (r.notAttempted) {
+      return '<div class="ai-report ai-report-blank"><div class="ai-report-head">' + ringHTML(0, r.max, "f") +
+        '<div class="ai-report-head-text"><span class="ai-tag">Not attempted</span><p class="ai-summary">' + inline(r.summary) + "</p></div></div>" +
+        (r.modelAnswer ? section("Reference answer (from your question set)", wordsIn(r.modelAnswer) + " words", '<div class="ai-model-answer">' + esc(r.modelAnswer) + "</div>") : "") +
+        '<div class="ai-report-foot"><span class="ai-meta">Recorded as 0 / ' + fmt(r.max) + " in History</span>" +
+        '<div class="ai-foot-actions">' + (readonly ? "" : '<button type="button" class="btn-soft" data-ai-action="copy-report"' + ids + ">Copy</button>") + "</div></div></div>";
+    }
+
+    const g = gradeInfo(r.grade);
+    const proj = r.projection ? fmt(r.projection[0]) + "–" + fmt(r.projection[1]) + " / " + fmt(r.max) : "–";
+    const when = new Date(r.createdAt || Date.now()).toLocaleString();
+    const mwords = r.modelAnswer ? wordsIn(r.modelAnswer.replace(/\[EXACT WORD COUNT[^\]]*\]/i, "")) : 0;
+    const refCount = r.anchorsUsed.length + r.nameDrops.length + r.missingAnchors.length + r.verifyFlags.length;
+    const missed = r.subparts.filter(s => s.coverage === "MISSED").length;
+
+    return '<div class="ai-report">' +
+      '<div class="ai-report-head">' + ringHTML(r.score, r.max, g.cls) +
+        '<div class="ai-report-head-text">' +
+          '<div class="ai-report-title-row"><span class="ai-grade-badge ai-g-' + g.cls + '">Grade ' + g.grade + " · " + esc(g.label) + '</span><span class="ai-pct">' + fmt(r.percent) + "%</span>" +
+          (r.track && TRACKS[r.track] ? '<span class="ai-tag">' + esc(TRACKS[r.track]) + "</span>" : "") + "</div>" +
+          '<div class="ai-projection">Likely in the real RBI exam: <strong>' + proj + "</strong></div>" +
+          '<div class="ai-muted">Strict grader: about 2–3 marks tougher than the real panel, so clearing it here means you are safe there.</div>' +
+        "</div></div>" +
+      (r.summary ? '<p class="ai-summary">' + inline(r.summary) + "</p>" : "") +
+      '<div class="ai-quick-grid">' +
+        '<div class="ai-quick ai-quick-good"><h5>What worked</h5>' + listHTML(r.strengths, "Nothing stood out yet - focus on the fixes.") + "</div>" +
+        '<div class="ai-quick ai-quick-bad"><h5>Where you lost marks</h5>' + lossesHTML(r) + "</div>" +
+        '<div class="ai-quick ai-quick-next"><h5>Fix these next</h5>' + (r.actions.length ? "<ol>" + r.actions.map(a => "<li>" + inline(a) + "</li>").join("") + "</ol>" : '<p class="ai-muted">–</p>') + "</div>" +
+      "</div>" +
+      section("Marks breakdown", r.parameters.length + " criteria · " + r.penalties.length + " penalties", breakdownHTML(r)) +
+      (r.subparts.length ? section("Did you answer every part?", r.subparts.length + " parts" + (missed ? " · " + missed + " missed" : ""), subpartsHTML(r)) : "") +
+      (r.errors.length ? section("Mistakes, line by line", String(r.errors.length), errorsHTML(r)) : "") +
+      (refCount ? section("Facts, data and references", r.anchorsUsed.length + " used · " + r.missingAnchors.length + " to add", anchorsHTML(r)) : "") +
+      (r.rewrites.length ? section("Your sentences, rewritten", String(r.rewrites.length), rewritesHTML(r)) : "") +
+      (r.modelAnswer ? section("Model answer (exam format)", "~" + mwords + " words",
+        '<div class="ai-model-answer">' + esc(r.modelAnswer) + "</div>" +
+        '<div class="ai-sec-actions"><button type="button" class="btn-soft" data-ai-action="copy-model"' + ids + ">Copy model answer</button></div>") : "") +
+      ((r.pacing || r.caps.length || r.meritCheck) ? section("Pacing, caps and examiner verdict", "",
+        (r.pacing ? "<h6>Pacing</h6><p>" + inline(r.pacing) + "</p>" : "") +
+        (r.caps.length ? "<h6>Caps applied</h6>" + listHTML(r.caps, "") : "") +
+        (r.meritCheck ? "<h6>Merit-list reality check</h6><p>" + inline(r.meritCheck) + "</p>" : "")) : "") +
+      '<div class="ai-report-foot"><span class="ai-meta">Graded by ' + esc(r.providerLabel) + " · " + esc(r.model) +
+        (r.modelUsed ? " (" + esc(r.modelUsed) + ")" : "") + " · " + esc(when) + (r.durationMs ? " · " + Math.round(r.durationMs / 1000) + " s" : "") +
+        (r.fallbackFrom ? ' · <span class="ai-warn-text">\u201c' + esc(r.fallbackFrom) + "\u201d was unavailable - pick a model in AI Settings</span>" : "") + "</span>" +
+        '<div class="ai-foot-actions">' + footBtns + "</div></div>" +
+      "</div>";
+  }
+
+  // --------------------------------------------------------------------------
+  // 11. Rendering - History
+  // --------------------------------------------------------------------------
+  // Called by app.js inside each History review card
+  function historyBlockHTML(test, q) {
+    const r = getReport(test.id, q.id);
+    if (!r) return "";
+    const key = esc(jobKey(test.id, q.id));
+    const ids = ' data-test-id="' + esc(test.id) + '" data-qid="' + esc(q.id) + '"';
+    if (r.notAttempted) {
+      return '<div class="ai-hist"><div class="ai-hist-row"><span class="ai-hist-score">AI: not attempted · 0 / ' + fmt(r.max) + "</span></div></div>";
+    }
+    const g = gradeInfo(r.grade);
+    return '<div class="ai-hist">' +
+      '<div class="ai-hist-row"><span class="ai-hist-score">AI assessment: <strong>' + fmt(r.score) + " / " + fmt(r.max) + "</strong></span>" +
+      '<span class="ai-grade-badge ai-g-' + g.cls + '">Grade ' + g.grade + " · " + esc(g.label) + "</span>" +
+      (r.projection ? '<span class="ai-muted">Likely real: ' + fmt(r.projection[0]) + "–" + fmt(r.projection[1]) + "</span>" : "") +
+      '<button type="button" class="btn-soft" data-ai-action="toggle-history"' + ids + ">View full AI report</button></div>" +
+      (r.summary ? '<p class="ai-hist-summary">' + inline(r.summary) + "</p>" : "") +
+      '<div class="ai-hist-body" data-ai-hist-body="' + key + '" hidden></div>' +
+      "</div>";
+  }
+
+  // --------------------------------------------------------------------------
+  // 12. Markdown export (copy / download)
+  // --------------------------------------------------------------------------
+  function cell(v) { return String(v == null ? "" : v).replace(/\|/g, "/").replace(/\s*\n\s*/g, " "); }
+
+  function questionMarkdown(test, q, idx, r) {
+    const ans = answerOf(test, q);
+    const L = [];
+    const g = gradeInfo(r.grade);
+    L.push("## Q" + (idx + 1) + " · " + (q.paper || "") + " · " + q.marks + " marks: " + fmt(r.score) + " / " + fmt(r.max) +
+      (r.notAttempted ? " (not attempted)" : " (" + fmt(r.percent) + "%, Grade " + g.grade + " - " + g.label + ")"));
+    L.push("");
+    L.push("**Question:** " + (q.text || ""));
+    L.push("");
+    if (r.projection) L.push("**Likely real RBI score:** " + fmt(r.projection[0]) + "–" + fmt(r.projection[1]) + " / " + fmt(r.max) + " (this grader is ~2–3 marks stricter)", "");
+    if (r.summary) L.push("**In plain words:** " + r.summary, "");
+    if (r.strengths.length) L.push("### What worked", ...r.strengths.map(s => "- " + s), "");
+    if (r.penalties.length) L.push("### Where marks were lost", ...r.penalties.map(p => "- " + p.code + " " + (PENALTY_LABELS[p.code] || "") + " (−" + fmt(p.deduction) + "): " + p.trigger), "");
+    if (r.parameters.length) {
+      L.push("### Marks breakdown", "| Criterion | Marks | Why |", "|---|---|---|");
+      r.parameters.forEach(p => L.push("| " + cell(p.name) + (p.cap ? " (capped: " + cell(p.cap) + ")" : "") + " | " + fmt(p.awarded) + " / " + fmt(p.max) + " | " + cell(p.why) + " |"));
+      L.push("", (r.rawSum !== null ? fmt(r.rawSum) + " − " + fmt(r.penaltySum) + " penalties = " : "") + "**" + fmt(r.score) + " / " + fmt(r.max) + "**", "");
+    }
+    if (r.subparts.length) L.push("### Question coverage", ...r.subparts.map(s => "- [" + ((COVERAGE[s.coverage] || {}).label || s.coverage) + "] " + s.part + (s.comment ? " - " + s.comment : "")), "");
+    if (r.errors.length) L.push("### Mistakes, line by line", ...r.errors.map(e => "- " + (e.quote ? "\u201c" + e.quote + "\u201d - " : "") + (e.code ? e.code + ": " : "") + e.problem + (e.correction ? " Better: " + e.correction : "")), "");
+    if (r.anchorsUsed.length) L.push("### References used", ...r.anchorsUsed.map(s => "- " + s), "");
+    if (r.nameDrops.length) L.push("### Mentioned without explaining", ...r.nameDrops.map(s => "- " + s), "");
+    if (r.missingAnchors.length) L.push("### Add these to reach Grade A", ...r.missingAnchors.map(s => "- " + s), "");
+    if (r.rewrites.length) {
+      L.push("### Your sentences, rewritten");
+      r.rewrites.forEach((w, i) => L.push((i + 1) + ". **Your version:** " + w.before, "   **Grade-A version:** " + w.after, w.why ? "   *Why:* " + w.why : ""));
+      L.push("");
+    }
+    if (r.modelAnswer) L.push(r.modelAnswerFromQuestion ? "### Reference answer" : "### Model answer (exam format)", "```text", r.modelAnswer, "```", "");
+    if (r.actions.length) L.push("### Next drills", ...r.actions.map((a, i) => (i + 1) + ". " + a), "");
+    if (r.pacing) L.push("**Pacing:** " + r.pacing, "");
+    if (r.meritCheck) L.push("**Merit-list reality check:** " + r.meritCheck, "");
+    L.push("### Your answer (" + ans.wordCount + " words)", "```text", ans.text || "[No answer written]", "```", "");
+    L.push("SCORE_LOG | " + (q.paper || "") + " | " + q.marks + " marks | " + fmt(r.score) + "/" + q.marks + " | " + ans.wordCount + " words");
+    if (r.providerLabel) L.push("", "_Graded by " + r.providerLabel + " · " + r.model + " on " + new Date(r.createdAt).toLocaleString() + "_");
+    return L.join("\n");
+  }
+
+  function testMarkdown(test) {
+    const st = testState(test);
+    const reports = st.graded.map(r => r.report);
+    const total = round2(sum(reports.map(r => r.score)));
+    const max = sum(reports.map(r => r.max));
+    const pct = max ? round1(total / max * 100) : 0;
+    const g = gradeFor(pct);
+    const L = ["# RBI Grade B Phase-2 - AI assessment", ""];
+    L.push("Test date: " + new Date(test.date).toLocaleString() + " · " + test.questions.length + " question(s)" +
+      (typeof formatDuration === "function" ? " · time used " + formatDuration(test.usedSeconds || 0) + " of " + test.totalMinutes + " min" : ""), "");
+    L.push("**Total: " + fmt(total) + " / " + fmt(max) + " (" + fmt(pct) + "%) · Grade " + g.grade + " - " + g.label + "**" +
+      (st.graded.length < st.rows.length ? " (" + st.graded.length + " of " + st.rows.length + " graded)" : ""), "");
+    L.push("| Q | Paper | Marks | Words | Score | Grade |", "|---|---|---|---|---|---|");
+    st.rows.forEach(r => L.push("| " + (r.idx + 1) + " | " + cell(r.q.paper) + " | " + r.q.marks + " | " + r.ans.wordCount + "/" + wordLimitOf(r.q) + " | " +
+      (r.report ? fmt(r.report.score) : "–") + " | " + (r.report ? (r.report.notAttempted ? "not attempted" : r.report.grade) : "not graded") + " |"));
+    L.push("");
+    st.rows.forEach(r => { if (r.report) L.push("---", "", questionMarkdown(test, r.q, r.idx, r.report), ""); });
+    return L.join("\n");
+  }
+
+  function reportFilename(test, idx, q) {
+    const date = typeof getLocalDateString === "function" ? getLocalDateString(test.date) : String(test.date || "").slice(0, 10);
+    const paper = String((q && q.paper) || "").replace(/&/g, "and").replace(/[^a-zA-Z0-9]/g, "");
+    return "RBI_AI_Assessment_" + date + (q ? "_Q" + (idx + 1) + "_" + paper : "_FullTest") + ".md";
+  }
+
+  function copyOut(text, button) {
+    if (typeof copyText === "function") copyText(text, button);
+    else if (navigator.clipboard) navigator.clipboard.writeText(text);
+  }
+
+  function downloadOut(name, text) {
+    if (typeof downloadText === "function") downloadText(name, text);
+  }
+
+  // --------------------------------------------------------------------------
+  // 13. Clicks (delegated - works for Result, History and the settings dialog)
+  // --------------------------------------------------------------------------
+  function onClick(e) {
+    const el = e.target.closest("[data-ai-action]");
+    if (!el) return;
+    const action = el.dataset.aiAction;
+    const testId = el.dataset.testId || "";
+    const qid = el.dataset.qid || "";
+    const test = testId ? findTest(testId) : null;
+    const q = test && qid ? test.questions.find(x => x.id === qid) : null;
+    const idx = test && q ? test.questions.indexOf(q) : -1;
+
+    switch (action) {
+      case "open-settings":
+        openSettings(testId);
+        break;
+      case "evaluate-all":
+        if (test) evaluateTest(test, { onlyMissing: true });
+        break;
+      case "reevaluate-all":
+        if (test && confirm("Grade every answer of this test again? This sends " + test.questions.length + " new request(s) to the AI and replaces the current reports.")) {
+          evaluateTest(test, { onlyMissing: false });
+        }
+        break;
+      case "stop":
+        stopTest(testId);
+        break;
+      case "stop-q": {
+        const job = getJob(testId, qid);
+        if (job) cancelJob(job);
+        refreshQuestion(testId, qid);
+        refreshPanel(testId);
+        break;
+      }
+      case "evaluate-q":
+        if (test) evaluateQuestion(test, qid);
+        break;
+      case "copy-report": {
+        const r = getReport(testId, qid);
+        if (test && q && r) copyOut(questionMarkdown(test, q, idx, r), el);
+        break;
+      }
+      case "download-report": {
+        const r = getReport(testId, qid);
+        if (test && q && r) downloadOut(reportFilename(test, idx, q), questionMarkdown(test, q, idx, r));
+        break;
+      }
+      case "copy-model": {
+        const r = getReport(testId, qid);
+        if (r && r.modelAnswer) copyOut(r.modelAnswer, el);
+        break;
+      }
+      case "copy-test-report":
+        if (test) copyOut(testMarkdown(test), el);
+        break;
+      case "download-test-report":
+        if (test) downloadOut(reportFilename(test, -1, null), testMarkdown(test));
+        break;
+      case "toggle-history": {
+        const body = document.querySelector('[data-ai-hist-body="' + cssEsc(jobKey(testId, qid)) + '"]');
+        if (!body) break;
+        if (body.hidden) {
+          const r = getReport(testId, qid);
+          if (!body.dataset.rendered && r && q) {
+            body.innerHTML = reportHTML(r, q, { test, readonly: true });
+            body.dataset.rendered = "1";
+          }
+          body.hidden = false;
+          el.textContent = "Hide AI report";
+        } else {
+          body.hidden = true;
+          el.textContent = "View full AI report";
+        }
+        break;
+      }
+      case "goto-q": {
+        const slot = slotFor(qid);
+        const card = slot && slot.closest(".result-card");
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+        break;
+      }
+      case "show-raw": {
+        const pre = el.closest(".ai-error-box") && el.closest(".ai-error-box").querySelector(".ai-raw");
+        if (pre) {
+          pre.hidden = !pre.hidden;
+          el.textContent = pre.hidden ? "Show raw reply" : "Hide raw reply";
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  function updateNavDot() {
+    const pc = activeProvider();
+    const dot = document.getElementById("ai-nav-dot");
+    const navBtn = document.getElementById("nav-ai-settings");
+    if (dot) dot.classList.toggle("on", pc.ready);
+    if (navBtn) navBtn.title = pc.ready ? "AI grading is on: " + pc.def.label + " · " + pc.model : "AI grading is off - add an API key";
+  }
+
+  // --------------------------------------------------------------------------
+  // 14. AI Settings dialog
+  // --------------------------------------------------------------------------
+  let draft = null; // unsaved values while the dialog is open
+
+  function el(id) { return document.getElementById(id); }
+
+  function openSettings(testId) {
+    const modal = el("ai-settings-modal");
+    if (!modal) return;
+    const s = getSettings();
+    draft = { provider: s.provider, autoEvaluate: s.autoEvaluate, per: {}, testId: testId || "" };
+    Object.values(PROVIDERS).forEach(def => {
+      const pc = resolveProvider(def.id);
+      draft.per[def.id] = { key: pc.apiKey, model: pc.model, baseUrl: pc.baseUrl };
+    });
+    fillForm();
+    modal.hidden = false;
+    const key = el("ai-key");
+    setTimeout(() => { if (key && !key.value) key.focus(); else if (el("ai-provider")) el("ai-provider").focus(); }, 30);
+  }
+
+  function closeSettings() {
+    const modal = el("ai-settings-modal");
+    if (modal) modal.hidden = true;
+    draft = null;
+  }
+
+  function setStatus(id, text, kind) {
+    const node = el(id);
+    if (!node) return;
+    node.textContent = text || "";
+    node.className = "ai-field-status" + (kind ? " is-" + kind : "");
+  }
+
+  function keySourceText(def, value) {
+    const d = defaultsFor(def);
+    const v = String(value || "").trim();
+    if (!v) return def.keyOptional ? "Not needed for most local servers." : "No key yet" + (d.key && isPlaceholderKey(d.key) ? " (ai_config.js only has a DEMO placeholder)." : ".");
+    if (isPlaceholderKey(v)) return "This is a placeholder, not a real key.";
+    if (v === d.key) return "From ai_config.js.";
+    return "Saved only in this browser.";
+  }
+
+  function fillForm() {
+    const def = PROVIDERS[draft.provider];
+    const p = draft.per[def.id];
+    el("ai-provider").value = def.id;
+    el("ai-provider-note").textContent = def.note || "";
+    const key = el("ai-key");
+    key.value = p.key || "";
+    key.type = "password";
+    key.placeholder = "Paste your " + def.label + " API key" + (def.keyHint ? " (" + def.keyHint + ")" : "");
+    el("ai-key-toggle").textContent = "Show";
+    el("ai-key-source").textContent = keySourceText(def, key.value);
+    const link = el("ai-key-link");
+    link.hidden = !def.keyUrl;
+    if (def.keyUrl) link.href = def.keyUrl;
+    el("ai-base-row").hidden = !def.customBaseUrl;
+    el("ai-base-url").value = p.baseUrl || "";
+    el("ai-model").value = p.model || def.defaultModel;
+    fillModelOptions(def.suggestions.map(id => ({ id, label: id })), false);
+    el("ai-auto").checked = !!draft.autoEvaluate;
+    setStatus("ai-models-status", "");
+    setStatus("ai-test-status", "");
+  }
+
+  function fillModelOptions(models, fromServer) {
+    const list = el("ai-model-list");
+    const chips = el("ai-model-chips");
+    if (list) list.innerHTML = models.map(m => '<option value="' + esc(m.id) + '">' + (m.label && m.label !== m.id ? esc(m.label) : "") + "</option>").join("");
+    if (chips) {
+      chips.innerHTML = models.slice(0, fromServer ? 10 : 6).map(m => '<button type="button" class="ai-chip-btn" data-model="' + esc(m.id) + '">' + esc(m.id) + "</button>").join("");
+    }
+  }
+
+  function readForm() {
+    if (!draft) return;
+    draft.per[draft.provider] = {
+      key: el("ai-key").value.trim(),
+      model: el("ai-model").value.trim(),
+      baseUrl: el("ai-base-url").value.trim()
+    };
+    draft.autoEvaluate = el("ai-auto").checked;
+  }
+
+  function formConfig() {
+    readForm();
+    const def = PROVIDERS[draft.provider];
+    const p = draft.per[def.id];
+    return makeConfig(def, p.key, p.model, p.baseUrl);
+  }
+
+  function saveSettings() {
+    readForm();
+    const local = readOverrides();
+    const out = {
+      provider: draft.provider,
+      autoEvaluate: draft.autoEvaluate,
+      keys: Object.assign({}, local.keys),
+      models: Object.assign({}, local.models),
+      baseUrls: Object.assign({}, local.baseUrls)
+    };
+    Object.values(PROVIDERS).forEach(def => {
+      const p = draft.per[def.id];
+      if (!p) return;
+      const d = defaultsFor(def);
+      const k = String(p.key || "").trim();
+      if (!k || isPlaceholderKey(k) || k === d.key) delete out.keys[def.id];
+      else out.keys[def.id] = k;
+      const m = cleanModel(def, p.model);
+      if (!m || m === d.model) delete out.models[def.id];
+      else out.models[def.id] = m;
+      if (def.customBaseUrl) {
+        const b = String(p.baseUrl || "").trim().replace(/\/+$/, "");
+        if (!b || b === d.baseUrl) delete out.baseUrls[def.id];
+        else out.baseUrls[def.id] = b;
+      }
+    });
+    if (!writeOverrides(out)) {
+      setStatus("ai-test-status", "Could not save - this browser is blocking storage for this page.", "error");
+      return;
+    }
+    const reopenTestId = draft.testId;
+    closeSettings();
+    updateNavDot();
+    const t = currentResultTest();
+    const resultVisible = el("screen-result") && !el("screen-result").hidden;
+    if (t && resultVisible) {
+      renderResultScreen(t);
+      // Opened from "Add API key" on a result: start grading straight away.
+      if (reopenTestId === t.id && activeProvider().ready && getSettings().autoEvaluate && testState(t).missing > 0) {
+        evaluateTest(t, { onlyMissing: true });
+      }
+    }
+  }
+
+  function wireSettings() {
+    const modal = el("ai-settings-modal");
+    const form = el("ai-settings-form");
+    if (!modal || !form) return;
+
+    const select = el("ai-provider");
+    select.innerHTML = Object.values(PROVIDERS).map(p => '<option value="' + p.id + '">' + esc(p.label) + "</option>").join("");
+    select.addEventListener("change", () => {
+      readForm();
+      draft.provider = select.value;
+      fillForm();
+    });
+
+    el("ai-key").addEventListener("input", () => {
+      el("ai-key-source").textContent = keySourceText(PROVIDERS[draft.provider], el("ai-key").value);
+    });
+
+    el("ai-key-toggle").addEventListener("click", () => {
+      const key = el("ai-key");
+      key.type = key.type === "password" ? "text" : "password";
+      el("ai-key-toggle").textContent = key.type === "password" ? "Show" : "Hide";
+    });
+
+    el("ai-forget-key").addEventListener("click", () => {
+      const def = PROVIDERS[draft.provider];
+      const d = defaultsFor(def);
+      el("ai-key").value = isPlaceholderKey(d.key) ? "" : d.key;
+      el("ai-key-source").textContent = keySourceText(def, el("ai-key").value);
+      setStatus("ai-test-status", "The saved key will be removed when you press Save.", "warn");
+    });
+
+    el("ai-model-chips").addEventListener("click", (e) => {
+      const chip = e.target.closest("[data-model]");
+      if (chip) el("ai-model").value = chip.dataset.model;
+    });
+
+    el("ai-load-models").addEventListener("click", async () => {
+      const pc = formConfig();
+      if (!pc.ready) { setStatus("ai-models-status", pc.def.keyOptional ? "Enter the server URL first." : "Paste your API key first.", "warn"); return; }
+      const loadBtn = el("ai-load-models");
+      loadBtn.disabled = true;
+      setStatus("ai-models-status", "Loading models…", "loading");
+      try {
+        const models = await listModels(pc);
+        if (!models.length) setStatus("ai-models-status", "No suitable models found for this key.", "warn");
+        else {
+          fillModelOptions(models, true);
+          setStatus("ai-models-status", "Found " + models.length + " model" + (models.length > 1 ? "s" : "") + ". Pick one below, or type in the Model box to search them all.", "ok");
+        }
+      } catch (err) {
+        const ex = explainError(err, pc);
+        setStatus("ai-models-status", ex.title + ": " + ex.body, "error");
+      } finally {
+        loadBtn.disabled = false;
+      }
+    });
+
+    el("ai-test").addEventListener("click", async () => {
+      const pc = formConfig();
+      if (!pc.ready) { setStatus("ai-test-status", pc.def.keyOptional ? "Enter the server URL first." : "Paste your API key first.", "warn"); return; }
+      const testBtn = el("ai-test");
+      testBtn.disabled = true;
+      setStatus("ai-test-status", "Contacting " + pc.def.label + "…", "loading");
+      try {
+        const res = await testConnection(pc);
+        setStatus("ai-test-status", "Connected: " + res.modelUsed + " replied in " + (res.ms / 1000).toFixed(1) + " s. Press Save to use it.", "ok");
+      } catch (err) {
+        const ex = explainError(err, pc);
+        setStatus("ai-test-status", ex.title + ": " + ex.body, "error");
+      } finally {
+        testBtn.disabled = false;
+      }
+    });
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      saveSettings();
+    });
+
+    modal.querySelectorAll("[data-ai-close]").forEach(b => b.addEventListener("click", closeSettings));
+    modal.addEventListener("mousedown", (e) => { if (e.target === modal) closeSettings(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) closeSettings();
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // 15. Start-up
+  // --------------------------------------------------------------------------
+  let initialised = false;
+
+  function init() {
+    if (initialised) return;
+    initialised = true;
+    wireSettings();
+    document.addEventListener("click", onClick);
+    // Closing the tab mid-grading would waste the requests already made.
+    window.addEventListener("beforeunload", (e) => {
+      if (anyActive()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
+    updateNavDot();
+  }
+
+  window.AIEval = {
+    init,
+    autoEvaluate,
+    renderResultScreen,
+    historyBlockHTML,
+    deleteTestReports,
+    clearAllReports,
+    getReport,
+    openSettings,
+    // exposed for tests / debugging
+    _internal: {
+      PROVIDERS, REPORT_SCHEMA, JSON_CONTRACT, extractJSON, normalizeReport, httpError, explainError,
+      isPlaceholderKey, resolveProvider, getSettings, projectionFor, gradeFor, buildPrompt, generate,
+      listModels, testConnection, gradeAnswer, questionMarkdown, testMarkdown, reportHTML, panelHTML,
+      AIError
+    }
+  };
+})();

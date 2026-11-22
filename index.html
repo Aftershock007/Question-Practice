@@ -9,16 +9,17 @@
 <body>
   <header id="app-header">
     <div class="header-main-bar">
-      <h1>RBI Grade B Practice Console</h1>
-      <div class="phase-switcher-container">
-        <button type="button" id="phase-btn-p1" class="phase-toggle-btn active" title="MCQ tests: Phase-1 and Phase-2 objective papers">🎯 Objective (MCQ)</button>
-        <button type="button" id="phase-btn-p2" class="phase-toggle-btn" title="Phase-2 descriptive (subjective) answer writing">✍️ Subjective (Phase-2)</button>
+      <h1 class="brand"><span class="brand-mark" aria-hidden="true">RBI</span><span class="brand-name">Grade B <span>Practice Console</span></span></h1>
+      <div class="phase-switcher-container" role="group" aria-label="Test type">
+        <button type="button" id="phase-btn-p1" class="phase-toggle-btn active" title="MCQ tests: Phase-1 and Phase-2 objective papers">Objective</button>
+        <button type="button" id="phase-btn-p2" class="phase-toggle-btn" title="Phase-2 descriptive (subjective) answer writing">Subjective</button>
       </div>
     </div>
     <nav>
       <button type="button" id="nav-setup">New Test</button>
-      <button type="button" id="nav-calendar">📅 Calendar &amp; TODO</button>
+      <button type="button" id="nav-calendar">Calendar</button>
       <button type="button" id="nav-history">History</button>
+      <button type="button" id="nav-ai-settings" data-ai-action="open-settings" title="AI evaluation settings"><span id="ai-nav-dot" class="ai-nav-dot" aria-hidden="true"></span>AI Settings</button>
     </nav>
   </header>
 
@@ -27,7 +28,8 @@
     <section id="screen-setup-p1" class="screen">
       <div class="setup-header">
         <div class="setup-title-group">
-          <h2>Objective (MCQ) Test</h2>
+          <span class="eyebrow">Phase 1 &amp; Phase 2 · Objective</span>
+          <h2>Objective test</h2>
           <p class="setup-subtitle">For your daily Phase-1 objective exam and Phase-2 objective exam (ESI / Finance &amp; Management MCQs). TCS iON-style console with instant scoring.</p>
         </div>
       </div>
@@ -59,7 +61,7 @@
       <!-- Collapsible Manual Question Form -->
       <details id="p1-manual-accordion" class="minimal-accordion">
         <summary class="accordion-summary">
-          <span class="accordion-title">✏️ Add an MCQ manually</span>
+          <span class="accordion-title">Add an MCQ manually</span>
           <span class="accordion-hint" aria-hidden="true"></span>
         </summary>
         <form id="p1-question-form" class="minimal-form-card">
@@ -148,14 +150,14 @@
     <section id="screen-exam-p1" class="screen" hidden>
       <div class="rbi-exam-header">
         <div class="rbi-exam-title">
-          <div class="rbi-emblem">🏛️</div>
+          <div class="rbi-emblem" aria-hidden="true">RBI</div>
           <div>
             <h3>RESERVE BANK OF INDIA</h3>
             <p>Online Examination - Objective (MCQ) Console</p>
           </div>
         </div>
         <div class="rbi-candidate-box">
-          <div class="candidate-avatar">👤</div>
+          <div class="candidate-avatar" aria-hidden="true">PC</div>
           <div class="candidate-details">
             <span class="cand-name">Candidate: <strong>Practice Candidate</strong></span>
             <span class="cand-roll">Roll No: <strong>RBI-2026-P1</strong> | System: <strong>C-104</strong></span>
@@ -171,7 +173,7 @@
           </div>
         </div>
         <div class="rbi-timer-box">
-          <span class="timer-label">⏱️ Time Left :</span>
+          <span class="timer-label">Time left</span>
           <span id="p1-exam-timer">120:00</span>
         </div>
       </div>
@@ -200,12 +202,12 @@
 
           <div class="rbi-action-bar">
             <div class="action-left">
-              <button type="button" id="p1-btn-prev" class="rbi-btn secondary">◀ Previous</button>
+              <button type="button" id="p1-btn-prev" class="rbi-btn secondary">Previous</button>
               <button type="button" id="p1-btn-clear" class="rbi-btn outline">Clear Response</button>
             </div>
             <div class="action-right">
               <button type="button" id="p1-btn-review" class="rbi-btn purple">Mark for Review &amp; Next</button>
-              <button type="button" id="p1-btn-next" class="rbi-btn primary">Save &amp; Next ▶</button>
+              <button type="button" id="p1-btn-next" class="rbi-btn primary">Save &amp; Next</button>
             </div>
           </div>
         </div>
@@ -269,7 +271,7 @@
                 </tr>
               </tbody>
             </table>
-            <p class="rbi-modal-warning">⚠️ Are you sure you want to submit the test? No changes will be allowed after submission.</p>
+            <p class="rbi-modal-warning">Are you sure you want to submit the test? No changes will be allowed after submission.</p>
           </div>
           <div class="rbi-modal-actions">
             <button type="button" id="p1-btn-confirm-yes" class="rbi-btn primary">Yes, Submit Test</button>
@@ -282,7 +284,8 @@
     <!-- Screen: Phase-1 Result (Objective Scorecard & Review) -->
     <section id="screen-result-p1" class="screen" hidden>
       <div class="result-scorecard">
-        <h2>Objective Test Result &amp; Analysis</h2>
+        <span class="eyebrow">Objective · MCQ</span>
+        <h2>Result &amp; analysis</h2>
         <div class="score-main-grid">
           <div class="score-big-box">
             <span class="score-title">Final Score</span>
@@ -290,10 +293,10 @@
             <div class="score-pct"><span id="p1-score-pct">0%</span> Accuracy</div>
           </div>
           <div class="score-stat-pills">
-            <div class="stat-pill correct"><span>Correct (🟩):</span> <strong id="p1-stat-correct">0</strong></div>
-            <div class="stat-pill incorrect"><span>Incorrect (🟥):</span> <strong id="p1-stat-incorrect">0</strong></div>
-            <div class="stat-pill unattempted"><span>Unattempted (⬜):</span> <strong id="p1-stat-unattempted">0</strong></div>
-            <div class="stat-pill time"><span>Time Spent:</span> <strong id="p1-stat-time">0 min</strong></div>
+            <div class="stat-pill correct"><span>Correct</span> <strong id="p1-stat-correct">0</strong></div>
+            <div class="stat-pill incorrect"><span>Incorrect</span> <strong id="p1-stat-incorrect">0</strong></div>
+            <div class="stat-pill unattempted"><span>Unattempted</span> <strong id="p1-stat-unattempted">0</strong></div>
+            <div class="stat-pill time"><span>Time spent</span> <strong id="p1-stat-time">0 min</strong></div>
           </div>
         </div>
       </div>
@@ -319,7 +322,8 @@
 
     <!-- Screen: Phase-1 History -->
     <section id="screen-history-p1" class="screen" hidden>
-      <h2>Objective (MCQ) Test History</h2>
+      <span class="eyebrow">Objective · MCQ</span>
+      <h2>History</h2>
       <div id="p1-history-stats" class="history-stats-bar"></div>
       <div id="p1-history-list"></div>
       <button type="button" id="btn-clear-p1-history" class="danger">Delete all objective test history</button>
@@ -329,8 +333,9 @@
     <section id="screen-setup" class="screen" hidden>
       <div class="setup-header">
         <div class="setup-title-group">
-          <h2>Phase-2 Subjective (Descriptive) Test</h2>
-          <p class="setup-subtitle">Timed answer writing for ESI, Finance, Management and English with word limits, like the real exam. After the test, copy the evaluation file into Gemini / Claude for a score.</p>
+          <span class="eyebrow">Phase 2 · Descriptive</span>
+          <h2>Subjective test</h2>
+          <p class="setup-subtitle">Timed answer writing for ESI, Finance, Management and English with word limits, like the real exam. When you submit, every answer is graded by AI against the RBI rubric.</p>
         </div>
       </div>
 
@@ -361,7 +366,7 @@
       <!-- Collapsible Manual Question Form -->
       <details id="p2-manual-accordion" class="minimal-accordion">
         <summary class="accordion-summary">
-          <span class="accordion-title">✏️ Add a descriptive question manually</span>
+          <span class="accordion-title">Add a descriptive question manually</span>
           <span class="accordion-hint" aria-hidden="true"></span>
         </summary>
         <form id="question-form" class="minimal-form-card">
@@ -446,14 +451,14 @@
       <!-- Top Exam Header Banner (TCS iON Style) -->
       <div class="rbi-exam-header">
         <div class="rbi-exam-title">
-          <div class="rbi-emblem">🏛️</div>
+          <div class="rbi-emblem" aria-hidden="true">RBI</div>
           <div>
             <h3>RESERVE BANK OF INDIA</h3>
             <p>Phase-II Online Examination - Descriptive (Subjective) Console</p>
           </div>
         </div>
         <div class="rbi-candidate-box">
-          <div class="candidate-avatar">👤</div>
+          <div class="candidate-avatar" aria-hidden="true">PC</div>
           <div class="candidate-details">
             <span class="cand-name">Candidate: <strong>Practice Candidate</strong></span>
             <span class="cand-roll">Roll No: <strong>RBI-2026-P2</strong> | System: <strong>C-104</strong></span>
@@ -470,7 +475,7 @@
           </div>
         </div>
         <div class="rbi-timer-box">
-          <span class="timer-label">⏱️ Time Left :</span>
+          <span class="timer-label">Time left</span>
           <span id="exam-timer">30:00</span>
         </div>
       </div>
@@ -503,12 +508,12 @@
 
           <div id="exam-bottombar" class="rbi-action-bar">
             <div class="action-left">
-              <button type="button" id="btn-prev" class="rbi-btn secondary">◀ Previous</button>
+              <button type="button" id="btn-prev" class="rbi-btn secondary">Previous</button>
               <button type="button" id="btn-clear-answer" class="rbi-btn outline">Clear Response</button>
             </div>
             <div class="action-right">
               <button type="button" id="btn-mark-review" class="rbi-btn purple">Mark for Review &amp; Next</button>
-              <button type="button" id="btn-next" class="rbi-btn primary">Save &amp; Next ▶</button>
+              <button type="button" id="btn-next" class="rbi-btn primary">Save &amp; Next</button>
             </div>
           </div>
         </div>
@@ -578,7 +583,7 @@
                 </tr>
               </tbody>
             </table>
-            <p class="rbi-modal-warning">⚠️ Are you sure you want to submit the test? No changes will be allowed after submission.</p>
+            <p class="rbi-modal-warning">Are you sure you want to submit the test? No changes will be allowed after submission.</p>
           </div>
           <div class="rbi-modal-actions">
             <button type="button" id="btn-confirm-yes" class="rbi-btn primary">Yes, Submit Test</button>
@@ -590,27 +595,28 @@
 
     <!-- Screen: Result -->
     <section id="screen-result" class="screen" hidden>
-      <h2>Subjective Test Finished</h2>
+      <span class="eyebrow">Phase 2 · Descriptive</span>
+      <h2>Your results</h2>
       <p id="result-summary"></p>
 
-      <div id="result-howto" class="info">
-        <b>How to get your score:</b> click <b>Copy</b> (or Download) for a question,
-        open Gemini or Claude, paste everything, and send. The AI will grade it with comprehensive feedback.
-      </div>
+      <!-- AI assessment of the whole test: status, total, per-question table (built by ai_eval.js) -->
+      <div id="ai-panel" class="ai-panel"></div>
 
       <div class="result-toolbar">
-        <button type="button" id="btn-download-all">Download All (one .txt file)</button>
-        <button type="button" id="btn-copy-all" class="secondary">Copy All</button>
+        <span class="result-toolbar-hint">Prefer another chatbot? Copy the evaluation prompts and paste them into Gemini, Claude or ChatGPT:</span>
+        <button type="button" id="btn-download-all" class="btn-soft">Download all prompts (.txt)</button>
+        <button type="button" id="btn-copy-all" class="btn-soft">Copy all prompts</button>
       </div>
 
       <div id="result-list"></div>   <!-- one card per question, built by JS -->
 
-      <button type="button" id="btn-go-history">Go to History</button>
+      <button type="button" id="btn-go-history" class="btn-soft">Go to History</button>
     </section>
 
     <!-- Screen: History -->
     <section id="screen-history" class="screen" hidden>
-      <h2>Subjective (Descriptive) Test History</h2>
+      <span class="eyebrow">Phase 2 · Descriptive</span>
+      <h2>History</h2>
       <div id="history-stats"></div>
       <div id="history-list"></div>
       <button type="button" id="btn-clear-history" class="danger">Delete all history</button>
@@ -646,11 +652,68 @@
         </form>
       </div>
     </div>
+
+    <!-- AI evaluation settings (behaviour in ai_eval.js, defaults in ai_config.js) -->
+    <div id="ai-settings-modal" class="modal" hidden>
+      <div class="modal-content ai-settings-card" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title">
+        <div class="ai-settings-head">
+          <h3 id="ai-settings-title">AI evaluation</h3>
+          <button type="button" class="ai-icon-btn" data-ai-close aria-label="Close">&times;</button>
+        </div>
+        <form id="ai-settings-form" autocomplete="off" novalidate>
+          <label for="ai-provider">AI provider</label>
+          <select id="ai-provider"></select>
+          <p id="ai-provider-note" class="ai-field-note"></p>
+
+          <label for="ai-key">API key</label>
+          <div class="ai-input-row">
+            <input id="ai-key" type="password" autocomplete="off" spellcheck="false">
+            <button type="button" id="ai-key-toggle" class="btn-soft">Show</button>
+          </div>
+          <p class="ai-field-note"><span id="ai-key-source"></span> <a id="ai-key-link" href="#" target="_blank" rel="noopener noreferrer">Get a key ↗</a></p>
+
+          <div id="ai-base-row" hidden>
+            <label for="ai-base-url">Server URL (OpenAI-compatible)</label>
+            <input id="ai-base-url" type="url" spellcheck="false" placeholder="http://localhost:11434/v1">
+          </div>
+
+          <label for="ai-model">Model</label>
+          <div class="ai-input-row">
+            <input id="ai-model" type="text" list="ai-model-list" autocomplete="off" spellcheck="false">
+            <button type="button" id="ai-load-models" class="btn-soft">Load models</button>
+          </div>
+          <datalist id="ai-model-list"></datalist>
+          <div id="ai-model-chips" class="ai-chips"></div>
+          <p id="ai-models-status" class="ai-field-status" role="status" aria-live="polite"></p>
+
+          <label class="ai-check" for="ai-auto">
+            <input type="checkbox" id="ai-auto">
+            <span>Grade my answers automatically when I submit a subjective test</span>
+          </label>
+
+          <div class="ai-test-row">
+            <button type="button" id="ai-test" class="btn-soft">Test connection</button>
+            <p id="ai-test-status" class="ai-field-status" role="status" aria-live="polite"></p>
+          </div>
+
+          <p class="ai-privacy">Your key is saved only in this browser, never in the repository. When an answer is graded, the question, your answer and its reference answer are sent directly from this page to the provider you choose.</p>
+
+          <div class="ai-settings-actions">
+            <button type="button" id="ai-forget-key" class="btn-soft btn-soft-danger">Remove saved key</button>
+            <span class="ai-spacer"></span>
+            <button type="button" class="secondary" data-ai-close>Cancel</button>
+            <button type="submit" class="ai-btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </main>
 
   <script src="prompt.js"></script>
   <script src="schedule_data.js"></script>
   <script src="app.js"></script>
+  <script src="ai_config.js"></script>
+  <script src="ai_eval.js"></script>
   <script src="calendar.js"></script>
 </body>
 </html>

@@ -141,7 +141,7 @@ async function copyText(text, button) {
   }
   if (button) {
     const old = button.textContent;
-    button.textContent = "Copied ✓";
+    button.textContent = "Copied";
     setTimeout(() => button.textContent = old, 1500);
   }
 }
@@ -226,9 +226,9 @@ function renderPaginationControls({ containerId, currentPage, totalPages, totalI
     <div class="pagination-bar">
       <span class="pagination-info">Page ${currentPage} of ${totalPages} (${totalItems} total questions · 50 per page)</span>
       <div class="pagination-actions">
-        <button type="button" class="pagination-nav-btn prev" ${currentPage === 1 ? 'disabled' : ''}>◀ Prev</button>
+        <button type="button" class="pagination-nav-btn prev" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>
         <div class="pagination-pages">${pagesHtml}</div>
-        <button type="button" class="pagination-nav-btn next" ${currentPage === totalPages ? 'disabled' : ''}>Next ▶</button>
+        <button type="button" class="pagination-nav-btn next" ${currentPage === totalPages ? 'disabled' : ''}>Next</button>
       </div>
     </div>
   `;
@@ -443,8 +443,8 @@ function renderSetupList() {
         <div class="q-actions">
           <button type="button" class="q-act" data-action="move-up" data-id="${escapeHTML(q.id)}" title="Move up" aria-label="Move up" ${globalIdx === 0 ? "disabled" : ""}>▲</button>
           <button type="button" class="q-act" data-action="move-down" data-id="${escapeHTML(q.id)}" title="Move down" aria-label="Move down" ${globalIdx === questions.length - 1 ? "disabled" : ""}>▼</button>
-          <button type="button" class="q-act" data-action="edit" data-id="${escapeHTML(q.id)}" title="Edit question">✎ Edit</button>
-          <button type="button" class="q-act q-act-danger" data-action="delete" data-id="${escapeHTML(q.id)}" title="Remove from this test" aria-label="Remove from this test">✕</button>
+          <button type="button" class="q-act" data-action="edit" data-id="${escapeHTML(q.id)}" title="Edit question">Edit</button>
+          <button type="button" class="q-act q-act-danger" data-action="delete" data-id="${escapeHTML(q.id)}" title="Remove from this test" aria-label="Remove from this test">Remove</button>
         </div>
       </div>
     `;
@@ -722,7 +722,7 @@ function showQuestion(index) {
   $("btn-prev").disabled = (index === 0);
   const btnNext = $("btn-next");
   if (btnNext) {
-    btnNext.textContent = (index === totalQ - 1) ? "Save Answer" : "Save & Next ▶";
+    btnNext.textContent = (index === totalQ - 1) ? "Save Answer" : "Save & Next";
     btnNext.disabled = false;
   }
 
@@ -994,6 +994,9 @@ function finishTest(auto) {
 
   renderResult(test);
   showScreen("result");
+
+  // Grade the answers with AI straight away (only when an API key is set up - see ai_eval.js)
+  if (window.AIEval) AIEval.autoEvaluate(test);
 }
 
 // Check for and resume an interrupted test on page load
@@ -1148,11 +1151,11 @@ function renderResult(test) {
 
     card.innerHTML = `
       <div class="result-card-header">
-        <h3 class="${headingClass}">Q${idx + 1} · ${escapeHTML(q.paper)} · ${escapeHTML(q.marks)} marks · ${wc}/${limit} words</h3>
+        <h3>Q${idx + 1} · ${escapeHTML(q.paper)} · ${escapeHTML(q.marks)} marks <span class="wc-pill ${headingClass}">${wc} / ${limit} words</span></h3>
         <div class="actions">
-          <button type="button" class="btn-copy-card" data-idx="${idx}">Copy</button>
-          <button type="button" class="btn-download-card" data-idx="${idx}">Download .txt</button>
-          <button type="button" class="btn-toggle-model secondary" data-idx="${idx}">Show model answer</button>
+          <button type="button" class="btn-copy-card btn-soft" data-idx="${idx}">Copy prompt</button>
+          <button type="button" class="btn-download-card btn-soft" data-idx="${idx}">Download prompt</button>
+          <button type="button" class="btn-toggle-model btn-soft" data-idx="${idx}">Show model answer</button>
         </div>
       </div>
       <div class="model-comparison-box" hidden id="model-box-${idx}">
@@ -1161,12 +1164,19 @@ function renderResult(test) {
         <strong>Your Answer:</strong>
         <p>${escapeHTML(ans.text ? ans.text.trim() : "[No answer written]")}</p>
       </div>
-      <pre class="txt-preview"></pre>
+      <div class="ai-slot" data-qid="${escapeHTML(q.id)}"></div>
+      <details class="prompt-preview">
+        <summary>Evaluation prompt (for grading in another chatbot)</summary>
+        <pre class="txt-preview"></pre>
+      </details>
     `;
 
     card.querySelector(".txt-preview").textContent = fullPromptText;
     list.appendChild(card);
   });
+
+  // AI assessment panel + one assessment per question (ai_eval.js)
+  if (window.AIEval) AIEval.renderResultScreen(test);
 }
 
 // Calculate the number of consecutive practice days ending today or yesterday
@@ -1341,8 +1351,8 @@ function renderHistory() {
                    data-test-id="${escapeHTML(t.id)}" data-qid="${escapeHTML(q.id)}" value="${currentScore}">
           </td>
           <td>
-            <button type="button" class="btn-copy-history" data-test-id="${escapeHTML(t.id)}" data-idx="${idx}">Copy</button>
-            <button type="button" class="btn-download-history" data-test-id="${escapeHTML(t.id)}" data-idx="${idx}">Download</button>
+            <button type="button" class="btn-copy-history btn-soft" data-test-id="${escapeHTML(t.id)}" data-idx="${idx}">Copy prompt</button>
+            <button type="button" class="btn-download-history btn-soft" data-test-id="${escapeHTML(t.id)}" data-idx="${idx}">Download</button>
           </td>
         </tr>
       `;
@@ -1356,7 +1366,7 @@ function renderHistory() {
           <div class="q-review-prompt">${escapeHTML(q.text)}</div>
           <div class="q-review-answer-box">
             <div class="q-review-answer-title">
-              <span>✍️ My Written Answer (${ans.wordCount || 0} words)</span>
+              <span>Your answer · ${ans.wordCount || 0} words</span>
               <button type="button" class="btn-copy-ans-mini" data-test-id="${escapeHTML(t.id)}" data-idx="${idx}">Copy Answer</button>
             </div>
             <div class="q-review-answer-text">${escapeHTML(ans.text || "(No answer recorded for this question)")}</div>
@@ -1371,6 +1381,7 @@ function renderHistory() {
             ${q.modelAnswer ? `<button type="button" class="btn-toggle-model-mini" data-test-id="${escapeHTML(t.id)}" data-idx="${idx}">Toggle Model Answer</button>` : ""}
           </div>
           ${q.modelAnswer ? `<div class="q-review-model-box" id="model-${escapeHTML(t.id)}-${idx}" style="display:none;"><strong>Model Answer:</strong><br>${escapeHTML(q.modelAnswer)}</div>` : ""}
+          ${window.AIEval ? AIEval.historyBlockHTML(t, q) : ""}
         </div>
       `;
     });
@@ -1384,10 +1395,10 @@ function renderHistory() {
           ${scoreBadge}
         </div>
         <div class="actions">
-          <button type="button" class="btn-toggle-answer-review" data-test-id="${escapeHTML(t.id)}">📖 Review Answers &amp; Marks</button>
+          <button type="button" class="btn-toggle-answer-review btn-soft" data-test-id="${escapeHTML(t.id)}">Review answers</button>
           <button type="button" class="btn-open-results" data-test-id="${escapeHTML(t.id)}">Open results</button>
-          <button type="button" class="btn-retake secondary" data-test-id="${escapeHTML(t.id)}">Retake</button>
-          <button type="button" class="btn-delete-test danger" data-test-id="${escapeHTML(t.id)}">Delete</button>
+          <button type="button" class="btn-retake btn-soft" data-test-id="${escapeHTML(t.id)}">Retake</button>
+          <button type="button" class="btn-delete-test btn-soft btn-soft-danger" data-test-id="${escapeHTML(t.id)}">Delete</button>
         </div>
       </div>
       <div class="table-scroll">
@@ -1398,7 +1409,7 @@ function renderHistory() {
             <th>Paper</th>
             <th>Marks</th>
             <th>Words</th>
-            <th>Score (input)<br><small style="font-weight:normal;color:var(--muted);">Paste AI's SCORE_LOG</small></th>
+            <th>Score (input)<br><small style="font-weight:normal;color:var(--muted);">Filled by AI grading, or paste a SCORE_LOG</small></th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -1409,7 +1420,7 @@ function renderHistory() {
       </div>
       <div class="test-answers-review-container" id="review-container-${escapeHTML(t.id)}" style="display: none;">
         <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #003366; display: flex; align-items: center; justify-content: space-between;">
-          <span>📝 Candidate Written Answers &amp; Evaluation</span>
+          <span>Answers and evaluation</span>
           <span style="font-size: 12px; font-weight: normal; color: var(--muted);">${totalWords} total words</span>
         </h4>
         ${reviewCardsHTML}
@@ -1437,7 +1448,7 @@ function historyScoreBadgeHTML(t) {
     if (a && a.wordCount) words += a.wordCount;
   });
   return any
-    ? `<span class="score-badge">🏆 Score: ${Number(total.toFixed(2))} / ${max} marks</span>`
+    ? `<span class="score-badge">Score ${Number(total.toFixed(2))} / ${max}</span>`
     : `<span class="score-pending">${words} words written · score not entered yet</span>`;
 }
 
@@ -1488,6 +1499,7 @@ function deleteTest(testId) {
     let history = loadJSON("rbi_history", []);
     history = history.filter(t => t.id !== testId);
     saveJSON("rbi_history", history);
+    if (window.AIEval) AIEval.deleteTestReports(testId);
     renderHistory();
   }
 }
@@ -1498,6 +1510,7 @@ function clearAllHistory() {
     const confirmation = prompt("Type DELETE to confirm");
     if (confirmation === "DELETE") {
       localStorage.removeItem("rbi_history");
+      if (window.AIEval) AIEval.clearAllReports();
       renderHistory();
     }
   }
@@ -1543,252 +1556,594 @@ async function decompressBuffer(data, format = "deflate-raw") {
   return out;
 }
 
-// Extract plain text paragraphs from a DOCX file buffer by decompressing word/document.xml
-async function extractDocxText(arrayBuffer) {
+// ---------------------------------------------------------------------------
+// DOCX import: the document body as clean text lines
+// ---------------------------------------------------------------------------
+// - Page headers/footers live in separate parts of the file and are never read.
+// - Word's automatic numbering and bullets are rebuilt ("1.", "a)", "•"); nested
+//   list levels are indented with 3 spaces per level.
+// - Tables become one line per row ("cell | cell"); a single-cell "box" keeps its
+//   paragraphs as separate lines.
+// - Tabs and line breaks inside a paragraph are kept; tracked deletions, field
+//   codes and duplicate fallback copies of text boxes are skipped.
+
+const DOCX_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const DOCX_M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math";
+
+// Read selected entries of a ZIP archive as UTF-8 text
+async function readZipTextEntries(arrayBuffer, wantedNames) {
   const bytes = new Uint8Array(arrayBuffer);
-  const view = new DataView(arrayBuffer);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const decoder = new TextDecoder("utf-8");
+  const found = {};
 
-  let targetEntry = null;
+  // 1. Central directory (authoritative: sizes are right even when data descriptors are used)
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd >= 0) {
+    const total = view.getUint16(eocd + 10, true);
+    let p = view.getUint32(eocd + 16, true);
+    for (let i = 0; i < total && p + 46 <= bytes.length && view.getUint32(p, true) === 0x02014b50; i++) {
+      const method = view.getUint16(p + 10, true);
+      const compSize = view.getUint32(p + 20, true);
+      const nameLen = view.getUint16(p + 28, true);
+      const extraLen = view.getUint16(p + 30, true);
+      const commentLen = view.getUint16(p + 32, true);
+      const local = view.getUint32(p + 42, true);
+      const name = decoder.decode(bytes.subarray(p + 46, p + 46 + nameLen));
+      p += 46 + nameLen + extraLen + commentLen;
+      if (!wantedNames.includes(name) || local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50) continue;
+      const dataStart = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+      found[name] = { method, compSize, dataStart };
+    }
+  }
 
-  // 1. Scan Central Directory first (authoritative in ZIP specification, guarantees valid compSize even when data descriptors are used)
-  let offset = 0;
-  while (offset + 46 < bytes.length) {
-    const sig = view.getUint32(offset, true);
-    if (sig === 0x02014b50) {
-      const compMethod = view.getUint16(offset + 10, true);
-      const compSize = view.getUint32(offset + 20, true);
-      const nameLen = view.getUint16(offset + 28, true);
-      const extraLen = view.getUint16(offset + 30, true);
-      const commentLen = view.getUint16(offset + 32, true);
-      const localHeaderOffset = view.getUint32(offset + 42, true);
-      const filename = new TextDecoder().decode(bytes.slice(offset + 46, offset + 46 + nameLen));
-
-      if (filename === "word/document.xml") {
-        if (localHeaderOffset + 30 <= bytes.length) {
-          const lhNameLen = view.getUint16(localHeaderOffset + 26, true);
-          const lhExtraLen = view.getUint16(localHeaderOffset + 28, true);
-          const dataStart = localHeaderOffset + 30 + lhNameLen + lhExtraLen;
-          targetEntry = { compMethod, compSize, dataStart };
-          break;
+  // 2. Damaged central directory: scan the local file headers instead
+  if (!Object.keys(found).length) {
+    let off = 0;
+    while (off + 30 <= bytes.length) {
+      if (view.getUint32(off, true) !== 0x04034b50) { off++; continue; }
+      const method = view.getUint16(off + 8, true);
+      let compSize = view.getUint32(off + 18, true);
+      const nameLen = view.getUint16(off + 26, true);
+      const extraLen = view.getUint16(off + 28, true);
+      const name = decoder.decode(bytes.subarray(off + 30, off + 30 + nameLen));
+      const dataStart = off + 30 + nameLen + extraLen;
+      if (compSize === 0) {
+        let scan = dataStart;
+        while (scan + 4 <= bytes.length) {
+          const s = view.getUint32(scan, true);
+          if (s === 0x04034b50 || s === 0x08074b50 || s === 0x02014b50) break;
+          scan++;
         }
+        compSize = scan - dataStart;
       }
-      offset += 46 + nameLen + extraLen + commentLen;
+      if (wantedNames.includes(name) && !found[name]) found[name] = { method, compSize, dataStart };
+      off = dataStart + Math.max(compSize, 1);
+    }
+  }
+
+  const out = {};
+  for (const name of Object.keys(found)) {
+    const e = found[name];
+    const raw = bytes.subarray(e.dataStart, Math.min(bytes.length, e.dataStart + e.compSize));
+    if (e.method === 0) {
+      out[name] = decoder.decode(raw);
+    } else if (e.method === 8) {
+      out[name] = decoder.decode(await inflateTolerant(raw));
     } else {
-      offset++;
+      throw new Error("Unsupported ZIP compression method " + e.method + " in " + name + ".");
     }
   }
+  return out;
+}
 
-  // 2. Fallback to Local File Header (if central directory is missing or compSize is 0)
-  if (!targetEntry || targetEntry.compSize === 0) {
-    offset = 0;
-    while (offset + 30 < bytes.length) {
-      const sig = view.getUint32(offset, true);
-      if (sig === 0x04034b50) {
-        const compMethod = view.getUint16(offset + 8, true);
-        const compSize = view.getUint32(offset + 18, true);
-        const nameLen = view.getUint16(offset + 26, true);
-        const extraLen = view.getUint16(offset + 28, true);
-        const filename = new TextDecoder().decode(bytes.slice(offset + 30, offset + 30 + nameLen));
-        const dataStart = offset + 30 + nameLen + extraLen;
+// Inflate raw DEFLATE data; if the stream ends with stray bytes, keep everything decoded so far
+async function inflateTolerant(raw) {
+  try {
+    return await decompressBuffer(raw, "deflate-raw");
+  } catch (err) {
+    const reader = new Response(raw).body.pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+    const chunks = [];
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+    } catch (_) { /* keep the decoded part */ }
+    if (!chunks.length) throw err;
+    const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+    let pos = 0;
+    for (const c of chunks) { out.set(c, pos); pos += c.length; }
+    return out;
+  }
+}
 
-        if (filename === "word/document.xml") {
-          let effectiveCompSize = compSize;
-          if (effectiveCompSize === 0) {
-            let scan = dataStart;
-            while (scan + 4 <= bytes.length) {
-              const s = view.getUint32(scan, true);
-              if (s === 0x04034b50 || s === 0x08074b50 || s === 0x02014b50) {
-                break;
-              }
-              scan++;
-            }
-            effectiveCompSize = scan - dataStart;
-          }
-          targetEntry = { compMethod, compSize: effectiveCompSize, dataStart };
-          break;
+function docxParseXml(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) throw new Error("The Word document is damaged (its XML could not be read).");
+  return doc;
+}
+
+function docxKids(el) {
+  const out = [];
+  for (let n = el.firstChild; n; n = n.nextSibling) if (n.nodeType === 1) out.push(n);
+  return out;
+}
+
+function docxChild(el, localName) {
+  for (let n = el && el.firstChild; n; n = n.nextSibling) if (n.nodeType === 1 && n.localName === localName) return n;
+  return null;
+}
+
+function docxAttr(el, localName) {
+  if (!el) return "";
+  return el.getAttributeNS(DOCX_W_NS, localName) || el.getAttribute("w:" + localName) || "";
+}
+
+// Symbol / Wingdings characters (w:sym and private-use bullet glyphs)
+const DOCX_SYMBOL_MAP = { 0xAE: "→", 0xAC: "←", 0xAD: "↑", 0xAF: "↓", 0xDE: "⇒", 0xDC: "⇐", 0xB3: "≥", 0xA3: "≤", 0xB4: "×", 0xB8: "÷", 0xB1: "±", 0xB9: "≠", 0xBB: "≈", 0xB7: "•", 0xB0: "°", 0xA5: "∞", 0xD6: "√", 0x44: "Δ", 0x53: "Σ", 0x70: "π", 0x61: "α", 0x62: "β", 0x6D: "μ" };
+const DOCX_WINGDINGS_MAP = { 0xFC: "✓", 0xFB: "✗", 0xFE: "☑", 0xA7: "▪", 0x6C: "●", 0x6E: "■", 0xD8: "➢", 0xE8: "➔", 0xF0: "⇨", 0x9F: "•" };
+
+function docxSymbolChar(code, font) {
+  const c = code >= 0xF000 && code <= 0xF0FF ? code - 0xF000 : code;
+  if (/wingdings/i.test(font || "")) return DOCX_WINGDINGS_MAP[c] || "";
+  if (/symbol/i.test(font || "") || code >= 0xF000) return DOCX_SYMBOL_MAP[c] || "";
+  return String.fromCharCode(code);
+}
+
+function docxReadLevel(lvl) {
+  const val = (name) => { const e = docxChild(lvl, name); return e ? docxAttr(e, "val") : null; };
+  return {
+    fmt: val("numFmt") || "decimal",
+    text: val("lvlText") || "",
+    start: parseInt(val("start") || "1", 10),
+    pStyle: val("pStyle") || ""
+  };
+}
+
+function docxParseNumbering(xml) {
+  const result = { abstracts: {}, nums: {} };
+  if (!xml) return result;
+  const doc = docxParseXml(xml);
+  for (const an of Array.from(doc.getElementsByTagNameNS(DOCX_W_NS, "abstractNum"))) {
+    const lvls = {};
+    for (const lvl of docxKids(an).filter(k => k.localName === "lvl")) lvls[docxAttr(lvl, "ilvl") || "0"] = docxReadLevel(lvl);
+    result.abstracts[docxAttr(an, "abstractNumId")] = lvls;
+  }
+  for (const num of Array.from(doc.getElementsByTagNameNS(DOCX_W_NS, "num"))) {
+    const overrides = {};
+    for (const ov of docxKids(num).filter(k => k.localName === "lvlOverride")) {
+      const so = docxChild(ov, "startOverride");
+      const lvl = docxChild(ov, "lvl");
+      overrides[docxAttr(ov, "ilvl") || "0"] = { start: so ? parseInt(docxAttr(so, "val"), 10) : null, lvl: lvl ? docxReadLevel(lvl) : null };
+    }
+    result.nums[docxAttr(num, "numId")] = { abs: docxAttr(docxChild(num, "abstractNumId"), "val"), overrides };
+  }
+  return result;
+}
+
+function docxParseStyles(xml) {
+  const styles = {};
+  if (!xml) return styles;
+  const doc = docxParseXml(xml);
+  for (const st of Array.from(doc.getElementsByTagNameNS(DOCX_W_NS, "style"))) {
+    const pPr = docxChild(st, "pPr");
+    const numPr = pPr && docxChild(pPr, "numPr");
+    const numIdEl = numPr && docxChild(numPr, "numId");
+    const ilvlEl = numPr && docxChild(numPr, "ilvl");
+    styles[docxAttr(st, "styleId")] = {
+      basedOn: docxAttr(docxChild(st, "basedOn"), "val"),
+      numId: numIdEl ? docxAttr(numIdEl, "val") : null,
+      ilvl: ilvlEl ? parseInt(docxAttr(ilvlEl, "val"), 10) : null
+    };
+  }
+  return styles;
+}
+
+function docxToRoman(n) {
+  const map = [[1000, "m"], [900, "cm"], [500, "d"], [400, "cd"], [100, "c"], [90, "xc"], [50, "l"], [40, "xl"], [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"]];
+  let out = "";
+  for (const [v, s] of map) while (n >= v) { out += s; n -= v; }
+  return out;
+}
+
+function docxFormatNumber(n, fmt) {
+  switch (fmt) {
+    case "lowerLetter": return String.fromCharCode(97 + ((n - 1) % 26)).repeat(Math.floor((n - 1) / 26) + 1);
+    case "upperLetter": return String.fromCharCode(65 + ((n - 1) % 26)).repeat(Math.floor((n - 1) / 26) + 1);
+    case "lowerRoman": return docxToRoman(n);
+    case "upperRoman": return docxToRoman(n).toUpperCase();
+    case "decimalZero": return n < 10 ? "0" + n : String(n);
+    default: return String(n);
+  }
+}
+
+// Convert word/document.xml (+ numbering and styles) into plain text lines
+function docxXmlToText(documentXml, numberingXml, stylesXml) {
+  const doc = docxParseXml(documentXml);
+  const numbering = docxParseNumbering(numberingXml);
+  const styles = docxParseStyles(stylesXml);
+  const counters = {};
+  const BULLETS = ["•", "◦", "▪"];
+
+  const levelDef = (numId, ilvl) => {
+    const num = numbering.nums[numId];
+    if (!num) return null;
+    const ov = num.overrides[String(ilvl)];
+    if (ov && ov.lvl) return ov.lvl;
+    const abs = numbering.abstracts[num.abs];
+    return (abs && abs[String(ilvl)]) || null;
+  };
+  const startOf = (numId, ilvl) => {
+    const num = numbering.nums[numId];
+    const ov = num && num.overrides[String(ilvl)];
+    if (ov && ov.start !== null && !isNaN(ov.start)) return ov.start;
+    const def = levelDef(numId, ilvl);
+    return def && !isNaN(def.start) ? def.start : 1;
+  };
+  const styleNumbering = (styleId) => {
+    for (let i = 0, s = styles[styleId]; s && i < 20; i++, s = styles[s.basedOn]) {
+      if (s.numId !== null) return { numId: s.numId, ilvl: s.ilvl };
+    }
+    return null;
+  };
+  const levelForStyle = (numId, styleId) => {
+    const num = numbering.nums[numId];
+    const abs = num && numbering.abstracts[num.abs];
+    if (abs) for (const k of Object.keys(abs)) if (abs[k].pStyle && abs[k].pStyle === styleId) return parseInt(k, 10);
+    return 0;
+  };
+  const nextLabel = (numId, ilvl) => {
+    const def = levelDef(numId, ilvl);
+    if (!def) return "";
+    const c = counters[numId] || (counters[numId] = []);
+    c[ilvl] = c[ilvl] === undefined ? startOf(numId, ilvl) : c[ilvl] + 1;
+    for (let k = ilvl + 1; k < 9; k++) c[k] = undefined;
+    if (def.fmt === "bullet") return BULLETS[Math.min(ilvl, BULLETS.length - 1)];
+    if (def.fmt === "none") return "";
+    return def.text.replace(/%([1-9])/g, (m, d) => {
+      const k = Number(d) - 1;
+      const kDef = levelDef(numId, k);
+      return docxFormatNumber(c[k] !== undefined ? c[k] : startOf(numId, k), kDef ? kDef.fmt : "decimal");
+    }).trim();
+  };
+  const cleanLine = (s) => s
+    .replace(/[   ]/g, " ")
+    .replace(/[​‌‍﻿­]/g, "")
+    .replace(/[–—]/g, "-")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  // Text of one paragraph, plus any text boxes found inside it
+  function paragraphLines(p) {
+    const parts = [];
+    const boxes = [];
+    (function walk(node) {
+      for (const ch of docxKids(node)) {
+        const n = ch.localName;
+        if (n === "pPr" || n === "rPr" || n === "del" || n === "moveFrom" || n === "delText" || n === "instrText" || n === "rt") continue;
+        if (n === "t") { if (ch.namespaceURI === DOCX_W_NS || ch.namespaceURI === DOCX_M_NS) parts.push(ch.textContent); continue; }
+        if (n === "tab" && ch.namespaceURI === DOCX_W_NS) { parts.push("\t"); continue; }
+        if ((n === "br" || n === "cr") && ch.namespaceURI === DOCX_W_NS) { parts.push("\n"); continue; }
+        if (n === "noBreakHyphen") { parts.push("-"); continue; }
+        if (n === "softHyphen") continue;
+        if (n === "sym") { parts.push(docxSymbolChar(parseInt(docxAttr(ch, "char") || "0", 16), docxAttr(ch, "font"))); continue; }
+        if (n === "txbxContent") { boxes.push(ch); continue; }
+        if (n === "AlternateContent") {
+          // Text boxes are stored twice (modern + legacy copy): read only one of them
+          const pick = docxKids(ch).find(k => k.localName === "Choice") || docxKids(ch).find(k => k.localName === "Fallback");
+          if (pick) walk(pick);
+          continue;
         }
-        offset = dataStart + (compSize > 0 ? compSize : 1);
-      } else {
-        offset++;
+        walk(ch);
+      }
+    })(p);
+
+    // Numbering: on the paragraph itself, or inherited from its style (e.g. "List Bullet")
+    const pPr = docxChild(p, "pPr");
+    const styleId = docxAttr(pPr && docxChild(pPr, "pStyle"), "val");
+    const numPr = pPr && docxChild(pPr, "numPr");
+    let numId = numPr && docxChild(numPr, "numId") ? docxAttr(docxChild(numPr, "numId"), "val") : "";
+    let ilvl = numPr && docxChild(numPr, "ilvl") ? parseInt(docxAttr(docxChild(numPr, "ilvl"), "val"), 10) : null;
+    if (!numId && styleId) {
+      const sn = styleNumbering(styleId);
+      if (sn) { numId = sn.numId; if (ilvl === null) ilvl = sn.ilvl; }
+    }
+    if (ilvl === null || isNaN(ilvl)) ilvl = numId ? levelForStyle(numId, styleId) : 0;
+    const label = numId && numId !== "0" ? nextLabel(numId, ilvl) : "";
+    const indent = numId && numId !== "0" ? "   ".repeat(Math.max(0, Math.min(ilvl, 8))) : "";
+
+    const lines = [];
+    parts.join("").split("\n").forEach((segment) => {
+      const text = cleanLine(segment);
+      if (!text) return;
+      lines.push(indent + (label && !lines.length ? label + " " : "") + text);
+    });
+    return { lines, boxes };
+  }
+
+  function blockLines(container) {
+    const out = [];
+    for (const ch of docxKids(container)) {
+      const n = ch.localName;
+      if (n === "p") {
+        const r = paragraphLines(ch);
+        out.push(...r.lines);
+        for (const box of r.boxes) out.push(...blockLines(box));
+      } else if (n === "tbl") {
+        out.push(...tableLines(ch));
+      } else if (n === "sdt") {
+        const content = docxChild(ch, "sdtContent");
+        if (content) out.push(...blockLines(content));
+      } else if (n === "customXml" || n === "ins" || n === "moveTo" || n === "sdtContent") {
+        out.push(...blockLines(ch));
       }
     }
+    return out;
   }
 
-  if (!targetEntry || targetEntry.compSize === 0) {
+  // Elements with a given local name, looking through wrapper elements (content controls)
+  function childrenThrough(el, localName) {
+    const out = [];
+    for (const ch of docxKids(el)) {
+      if (ch.localName === localName) out.push(ch);
+      else if (ch.localName === "sdt" || ch.localName === "sdtContent" || ch.localName === "customXml") out.push(...childrenThrough(ch, localName));
+    }
+    return out;
+  }
+
+  function tableLines(tbl) {
+    const out = [];
+    for (const tr of childrenThrough(tbl, "tr")) {
+      const cells = childrenThrough(tr, "tc").map(tc => blockLines(tc).map(l => l.trim()));
+      const filled = cells.filter(c => c.length);
+      if (!filled.length) continue;
+      if (cells.length === 1 || filled.length === 1) out.push(...filled[0]);   // a text "box"
+      else out.push(cells.map(c => c.join(" ")).join(" | "));
+    }
+    return out;
+  }
+
+  const body = doc.getElementsByTagNameNS(DOCX_W_NS, "body")[0];
+  if (!body) throw new Error("Could not find the document body inside the DOCX file.");
+  return blockLines(body).join("\n");
+}
+
+// Extract the document body of a DOCX file as plain text lines
+async function extractDocxText(arrayBuffer) {
+  const parts = await readZipTextEntries(arrayBuffer, ["word/document.xml", "word/numbering.xml", "word/styles.xml"]);
+  if (!parts["word/document.xml"]) {
     throw new Error("Could not find document content (word/document.xml) inside the DOCX file.");
   }
-
-  const compressedData = bytes.slice(targetEntry.dataStart, targetEntry.dataStart + targetEntry.compSize);
-  let xmlString = "";
-
-  if (targetEntry.compMethod === 0) {
-    xmlString = new TextDecoder("utf-8").decode(compressedData);
-  } else if (targetEntry.compMethod === 8) {
-    try {
-      const full = await decompressBuffer(compressedData, "deflate-raw");
-      xmlString = new TextDecoder("utf-8").decode(full);
-    } catch (e1) {
-      const ds = new DecompressionStream("deflate-raw");
-      const resp = new Response(new Response(compressedData).body.pipeThrough(ds));
-      const blob = await resp.blob();
-      xmlString = await blob.text();
-    }
-  } else {
-    throw new Error("Unsupported ZIP compression method: " + targetEntry.compMethod);
-  }
-
-  const paragraphs = [];
-  const pRegex = /<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g;
-  let pMatch;
-  while ((pMatch = pRegex.exec(xmlString)) !== null) {
-    const pContent = pMatch[1];
-    const normalized = pContent.replace(/<w:tab\/>/g, "    ").replace(/<w:br\/>/g, "\n");
-    const tRegex = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g;
-    let tMatch;
-    let text = "";
-    while ((tMatch = tRegex.exec(normalized)) !== null) {
-      text += tMatch[1];
-    }
-    text = text.replace(/&amp;/g, "&")
-               .replace(/&lt;/g, "<")
-               .replace(/&gt;/g, ">")
-               .replace(/&quot;/g, '"')
-               .replace(/&apos;/g, "'")
-               .replace(/[\u2013\u2014]/g, "-");
-    if (text.trim()) {
-      paragraphs.push(text.trim());
-    }
-  }
-
-  return paragraphs.join("\n");
+  return docxXmlToText(parts["word/document.xml"], parts["word/numbering.xml"], parts["word/styles.xml"]);
 }
 
-// Extract text from content streams in a PDF file buffer with support for compressed streams
-async function extractPdfText(arrayBuffer) {
-  const bytes = new Uint8Array(arrayBuffer);
-  const textDecoder = new TextDecoder("latin1");
-  const str = textDecoder.decode(bytes);
+// ---------------------------------------------------------------------------
+// PDF import (Mozilla pdf.js, vendored in vendor/pdfjs and loaded on first use)
+// ---------------------------------------------------------------------------
+// Text is read through each font's character map (so Word / LibreOffice / Chrome
+// PDFs come out as real text), lines are rebuilt from text positions, wrapped lines
+// are joined back into paragraphs, and running headers, footers and page numbers
+// are removed by their position on the page (top/bottom band, repeated on most pages).
 
-  const objStreamRegex = /<<([^>]*)>>\s*stream\r?\n/g;
-  let objMatch;
-  const streamPositions = [];
-  while ((objMatch = objStreamRegex.exec(str)) !== null) {
-    const dict = objMatch[1];
-    const isFlate = dict.includes("/FlateDecode");
-    const streamStart = objMatch.index + objMatch[0].length;
-    const endstreamIdx = str.indexOf("endstream", streamStart);
-    if (endstreamIdx !== -1) {
-      streamPositions.push({ isFlate, start: streamStart, end: endstreamIdx });
-    }
-  }
+let pdfJsLoading = null;
 
-  if (streamPositions.length === 0) {
-    const basicStream = /stream\r?\n/g;
-    let sMatch;
-    while ((sMatch = basicStream.exec(str)) !== null) {
-      const start = sMatch.index + sMatch[0].length;
-      const end = str.indexOf("endstream", start);
-      if (end !== -1) {
-        streamPositions.push({ isFlate: false, start, end });
-      }
-    }
-  }
-
-  const allExtracted = [];
-
-  for (const pos of streamPositions) {
-    let streamText = "";
-    let actualEnd = pos.end;
-    while (actualEnd > pos.start && (bytes[actualEnd - 1] === 10 || bytes[actualEnd - 1] === 13)) {
-      actualEnd--;
-    }
-    const rawChunk = bytes.slice(pos.start, actualEnd);
-
-    if (pos.isFlate) {
-      try {
-        const out = await decompressBuffer(rawChunk, "deflate");
-        streamText = new TextDecoder("latin1").decode(out);
-      } catch (e) {
-        try {
-          const out = await decompressBuffer(rawChunk, "deflate-raw");
-          streamText = new TextDecoder("latin1").decode(out);
-        } catch (e2) {
-          streamText = textDecoder.decode(rawChunk);
-        }
-      }
-    } else {
-      streamText = textDecoder.decode(rawChunk);
-    }
-
-    const btRegex = /BT([\s\S]*?)ET/g;
-    let btMatch;
-    while ((btMatch = btRegex.exec(streamText)) !== null) {
-      const block = btMatch[1];
-      const tokenRegex = /(?:\(([^()]*?(?:\\.[^()]*?)*)\)\s*(?:Tj|'|")|\[([\s\S]*?)\]\s*TJ|T\*|(?:-?[\d\.]+)\s+(?:-?[\d\.]+)\s+T[dD])/g;
-      let tokMatch;
-      const blockLines = [];
-      let currentLine = "";
-
-      while ((tokMatch = tokenRegex.exec(block)) !== null) {
-        const fullTok = tokMatch[0];
-        if (tokMatch[1] !== undefined) {
-          const unescaped = tokMatch[1].replace(/\\([()\\])/g, "$1").replace(/\\r/g, "\r").replace(/\\n/g, "\n");
-          currentLine += unescaped;
-        } else if (tokMatch[2] !== undefined) {
-          const arrContent = tokMatch[2];
-          const innerStrRegex = /\(([^()]*?(?:\\.[^()]*?)*)\)/g;
-          let isMatch;
-          while ((isMatch = innerStrRegex.exec(arrContent)) !== null) {
-            currentLine += isMatch[1].replace(/\\([()\\])/g, "$1");
-          }
-        } else if (fullTok.includes("T*") || fullTok.endsWith("Td") || fullTok.endsWith("TD")) {
-          if (currentLine.trim()) blockLines.push(currentLine.trim());
-          currentLine = "";
-        }
-      }
-      if (currentLine.trim()) blockLines.push(currentLine.trim());
-      if (blockLines.length > 0) allExtracted.push(blockLines.join("\n"));
-    }
-  }
-
-  if (allExtracted.length === 0) {
-    const rawLiteralRegex = /\(([^()]{3,})\)\s*(?:Tj|'|TJ)/g;
-    let rMatch;
-    const lines = [];
-    while ((rMatch = rawLiteralRegex.exec(str)) !== null) {
-      lines.push(rMatch[1].replace(/\\([()\\])/g, "$1"));
-    }
-    if (lines.length > 0) allExtracted.push(lines.join("\n"));
-  }
-
-  const combined = allExtracted.join("\n").replace(/[\u2013\u2014]/g, "-");
-  const rawPdfLines = combined.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-  const repPdfHeaders = findRepetitiveHeaders(rawPdfLines);
-  const cleanPdfLines = rawPdfLines.filter(l => !isHeaderOrFooterLine(l, repPdfHeaders));
-  return cleanPdfLines.join("\n");
+function loadPdfJs() {
+  if (pdfJsLoading) return pdfJsLoading;
+  const base = "vendor/pdfjs/";
+  pdfJsLoading = new Promise((resolve, reject) => {
+    if (window.pdfjsLib) { resolve(window.pdfjsLib); return; }
+    const s = document.createElement("script");
+    s.src = base + "pdf.min.js";
+    s.onload = () => (window.pdfjsLib ? resolve(window.pdfjsLib) : reject(new Error("The PDF reader did not start.")));
+    s.onerror = () => reject(new Error("The PDF reader (vendor/pdfjs/pdf.min.js) could not be loaded."));
+    document.head.appendChild(s);
+  }).then((lib) => {
+    // Runs in a Web Worker when the site is served over http(s); on a file:// page
+    // browsers block workers and pdf.js reads the PDF on the page itself.
+    lib.GlobalWorkerOptions.workerSrc = base + "pdf.worker.min.js";
+    return lib;
+  }).catch((err) => {
+    pdfJsLoading = null;
+    throw err;
+  });
+  return pdfJsLoading;
 }
 
-// Detect repetitive running headers and footers across document lines
-function findRepetitiveHeaders(lines) {
-  const counts = {};
+// Group pdf.js text items of one page into visual lines (reading order kept)
+function pdfItemsToLines(items, pageNo) {
+  const lines = [];
+  let cur = null;
+  for (const it of items) {
+    if (typeof it.str !== "string") continue;
+    const tr = it.transform || [1, 0, 0, 1, 0, 0];
+    const x = tr[4];
+    const y = tr[5];
+    const size = Math.abs(it.height) || Math.hypot(tr[2], tr[3]) || 10;
+    const width = Math.abs(it.width) || 0;
+    if (it.str !== "") {
+      const sameLine = cur && Math.abs(y - cur.y) <= Math.max(cur.size, size) * 0.45 && x >= cur.xEnd - Math.max(cur.size, size) * 0.9;
+      const visible = it.str.trim() !== "";
+      if (!sameLine) {
+        if (cur) lines.push(cur);
+        cur = { page: pageNo, x, y, xEnd: visible ? x + width : x, size, text: it.str, sizeChars: {} };
+      } else {
+        const gap = x - cur.xEnd;
+        // A word gap - or a narrower one after a label such as "100." / "[a]" (the tab after it shrinks)
+        const needsSpace = gap > size * 0.15 || (gap > size * 0.05 && /[.):\]]$/.test(cur.text));
+        if (needsSpace && !/\s$/.test(cur.text) && !/^\s/.test(it.str)) cur.text += " ";
+        cur.text += it.str;
+        if (visible) cur.xEnd = Math.max(cur.xEnd, x + width);
+      }
+      const sk = size.toFixed(1);
+      cur.sizeChars[sk] = (cur.sizeChars[sk] || 0) + it.str.trim().length;
+    }
+    if (it.hasEOL && cur) {
+      lines.push(cur);
+      cur = null;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines
+    .map(l => Object.assign(l, {
+      size: Number(Object.keys(l.sizeChars).sort((a, b) => l.sizeChars[b] - l.sizeChars[a])[0] || l.size),
+      text: l.text
+        .replace(/[●•]/g, "•")
+        .replace(/[   ]/g, " ")
+        .replace(/[–—]/g, "-")
+        .replace(/\s+/g, " ")
+        .trim()
+    }))
+    .filter(l => l.text);
+}
+
+// Merge consecutive pieces that share a baseline into one row, so table cells drawn
+// one after another become "cell | cell" like DOCX tables. Drawing order is kept:
+// re-sorting by position would interleave the lines of cells that wrap.
+function pdfMergeRows(lines) {
+  const rows = [];
   for (const l of lines) {
-    const trimmed = (l || "").trim().toLowerCase();
-    if (
-      trimmed.length >= 4 &&
-      trimmed.length <= 90 &&
-      !/(?:\[[a-e]\]|\([a-e]\)|\b[a-e]\b[\.\)])/i.test(trimmed) &&
-      !/\?$/.test(trimmed) &&
-      !/\b(?:statement|statements|following|which\s+of|correct|incorrect|option|options|true|false)\b/i.test(trimmed) &&
-      !/^(?:(?:model\s+)?answer|ans|solution|explanation|q\s*\d+|\d+[\.\)])/i.test(trimmed)
-    ) {
-      counts[trimmed] = (counts[trimmed] || 0) + 1;
+    const row = rows[rows.length - 1];
+    if (row && row.page === l.page && Math.abs(row.y - l.y) <= Math.min(row.size, l.size) * 0.35 && l.x >= row.xEnd - 1) {
+      const gap = l.x - row.xEnd;
+      row.text += (gap > Math.max(row.size, l.size) ? " | " : " ") + l.text;
+      row.xEnd = Math.max(row.xEnd, l.xEnd);
+    } else {
+      rows.push(Object.assign({}, l));
     }
   }
-  const repetitive = new Set();
-  for (const [text, count] of Object.entries(counts)) {
-    if (count >= 2) repetitive.add(text);
+  return rows;
+}
+
+// Remove running headers/footers and page numbers: lines in the top or bottom band of a
+// page whose text (digits ignored) repeats on many pages, plus bare page numbers there.
+function pdfRemovePageFurniture(pages) {
+  const BAND = 0.1;
+  const PAGE_NO = /^(?:-\s*)?(?:page\s*)?\d{1,4}(?:\s*(?:of|\/)\s*\d{1,4})?(?:\s*-)?$|^\d{1,4}\s*\|\s*page$|^page\s*\|\s*\d{1,4}$/i;
+  const key = l => l.text.toLowerCase().replace(/\d+/g, "#").replace(/\s+/g, " ").trim();
+  const inBand = (l, p) => l.y >= p.top - (p.top - p.bottom) * BAND || l.y <= p.bottom + (p.top - p.bottom) * BAND;
+  const counts = {};
+  pages.forEach(p => {
+    const seen = new Set();
+    p.lines.forEach(l => { if (inBand(l, p)) seen.add(key(l)); });
+    seen.forEach(k => { counts[k] = (counts[k] || 0) + 1; });
+  });
+  const minPages = Math.max(2, Math.ceil(pages.length * 0.3));
+  // "... - Page 3" / "Page 3 of 10" at the end of a header or footer line
+  const ENDS_WITH_PAGE = /(?:^|[\s\-|–])page\s*\d{1,4}(?:\s*(?:of|\/)\s*\d{1,4})?\s*$/i;
+  pages.forEach(p => {
+    p.lines = p.lines.filter(l => !(inBand(l, p) && (PAGE_NO.test(l.text) || ENDS_WITH_PAGE.test(l.text) || (pages.length >= 2 && counts[key(l)] >= minPages))));
+  });
+  // A one-page PDF has nothing to compare with: a header/footer is the top-most / bottom-most
+  // line, sitting in the margin band and set apart from the body by a clear gap.
+  if (pages.length === 1) {
+    const p = pages[0];
+    const byY = p.lines.slice().sort((a, b) => b.y - a.y);
+    const drop = new Set();
+    if (byY.length > 2) {
+      const [top, next] = byY;
+      if (inBand(top, p) && top.y - next.y >= top.size * 2.2 && top.text.length <= 100) drop.add(top);
+      const [bottom, prev] = [byY[byY.length - 1], byY[byY.length - 2]];
+      if (inBand(bottom, p) && prev.y - bottom.y >= bottom.size * 2.2 && bottom.text.length <= 100) drop.add(bottom);
+    }
+    p.lines = p.lines.filter(l => !drop.has(l));
   }
-  return repetitive;
+}
+
+// Join wrapped lines back into paragraphs. A line continues the previous one when the
+// previous line stopped only because this line's first word did not fit before the
+// right margin (how word processors wrap). Bullets, options, statements ("I.") and
+// new questions always start a new line; so does a heading (larger than body text).
+function pdfLinesToParagraphs(pages) {
+  const NEW_BLOCK = /^(?:[•◦▪‣\-*–]\s|\(?\d{1,3}[.)](?:\s|(?=[A-Z“"‘(]))|\(?[a-zA-Z][.)]\s|\[[a-eA-E]\]|\([a-eA-E]\)|Q\s*[.\-]?\s*\d+|Question\s+\d+|[IVX]{1,4}\.\s|(?:Model\s+)?Answer\s*[:.\-]|Ans\s*[:.\-]|Explanation\s*[:.\-]|Directions?\s*(?:\(|:|for\b))/;
+  const LIST_START = /^(?:[•◦▪‣\-*–]\s|\(?\d{1,3}[.)]\s|\(?[a-zA-Z][.)]\s|\[[a-eA-E]\]|\([a-eA-E]\)|[IVX]{1,4}\.\s)/;
+  // "...by 2029." + "Which of the statements..." is a new paragraph, not a wrapped line
+  const SENTENCE_END = /[.?!]["”’)\]]*$/;
+  const STARTS_SENTENCE = /^["“‘(]?[A-Z0-9]/;
+  const all = pages.flatMap(p => p.lines);
+  if (!all.length) return [];
+  // Body text size and the right edge of the text column, measured across the document
+  const sizes = all.map(l => l.size).sort((a, b) => a - b);
+  const bodySize = sizes[Math.floor(sizes.length / 2)];
+  const ends = all.filter(l => Math.abs(l.size - bodySize) <= 2).map(l => l.xEnd).sort((a, b) => a - b);
+  const right = ends[Math.min(ends.length - 1, Math.floor(ends.length * 0.98))];
+  const left = Math.min(...all.map(l => l.x));
+  const isHeadingSize = (l) => l.size > bodySize + 0.4;
+
+  const out = [];
+  let prev = null;
+  let paraStart = null;   // first line of the paragraph being built
+  pages.forEach(p => {
+    p.lines.forEach((l, i) => {
+      let join = false;
+      if (prev && !NEW_BLOCK.test(l.text) && !/ \| /.test(prev.text) && !/ \| /.test(l.text) &&
+          (!(isHeadingSize(prev) || isHeadingSize(l)) || Math.abs(prev.size - l.size) <= 0.3)) {
+        const charW = (l.xEnd - l.x) / Math.max(1, l.text.length);
+        const firstWord = l.text.split(" ")[0];
+        const wrapped = prev.xEnd + charW * (firstWord.length + 1) >= right - charW * 1.5;
+        const nextLine = prev.page === l.page
+          ? prev.y - l.y > 0 && prev.y - l.y <= Math.max(prev.size, l.size) * 1.9
+          : i === 0;   // a paragraph running over onto the next page
+        // A line at the hanging indent of a bullet/numbered item continues that item
+        const hanging = paraStart && LIST_START.test(paraStart.text) && l.x >= paraStart.x + 4;
+        const newSentence = SENTENCE_END.test(prev.text) && STARTS_SENTENCE.test(l.text);
+        join = wrapped && nextLine && (!newSentence || hanging);
+      }
+      if (join) {
+        const last = out.length - 1;
+        // "3,500-" + "5,000 km": the line broke after a hyphen inside a word - no space
+        out[last] += /\S-$/.test(out[last]) && /^[\w₹$]/.test(l.text) ? l.text : " " + l.text;
+      } else {
+        // Nested bullet/numbered items keep a visible indent (3 spaces per level)
+        const isListItem = /^(?:[•◦▪‣\-*–]\s|\(?\d{1,3}[.)]\s|\(?[a-z][.)]\s)/.test(l.text);
+        const level = Math.max(0, Math.min(3, Math.round((l.x - left) / 18) - 1));
+        out.push((isListItem && level > 0 ? "   ".repeat(level) : "") + l.text);
+        paraStart = l;
+      }
+      prev = l;
+    });
+  });
+  return out;
+}
+
+// Extract the text of a PDF file as plain lines (one paragraph per line)
+async function extractPdfText(arrayBuffer) {
+  const pdfjsLib = await loadPdfJs();
+  let pdf;
+  try {
+    pdf = await pdfjsLib.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      isEvalSupported: false,   // never compile font code (CVE-2024-4367)
+      disableFontFace: true,
+      useSystemFonts: false,
+      stopAtErrors: false,
+      verbosity: 0
+    }).promise;
+  } catch (err) {
+    if (err && err.name === "PasswordException") throw new Error("This PDF is password-protected. Save a copy without a password and import that.");
+    throw new Error("This file could not be opened as a PDF (" + ((err && err.message) || err) + ").");
+  }
+  try {
+    const pages = [];
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n);
+      const content = await page.getTextContent();
+      const view = page.view || [0, 0, 612, 792];
+      pages.push({ top: view[3], bottom: view[1], lines: pdfMergeRows(pdfItemsToLines(content.items, n)) });
+      page.cleanup();
+    }
+    if (!pages.some(p => p.lines.length)) {
+      throw new Error("This PDF has no selectable text - it is probably a scanned image. Use the DOCX file, or a PDF exported from Word.");
+    }
+    pdfRemovePageFurniture(pages);
+    return pdfLinesToParagraphs(pages).join("\n");
+  } finally {
+    pdf.destroy();
+  }
 }
 
 // Determine if a line is a running header, footer, page number, watermark, or metadata banner
@@ -1819,6 +2174,15 @@ function isHeaderOrFooterLine(line, repetitiveSet = null) {
   if (/^(?:All\s*questions\s*are\s*compulsory|Read\s*the\s*following\s*instructions\s*carefully)/i.test(trimmed)) return true;
 
   return false;
+}
+
+// Chapter / unit / section / practice-set headings and exam banners (never "Note: ..." content)
+function isSectionBannerLine(line) {
+  const t = String(line || "").trim();
+  if (!t || /\?$/.test(t) || t.length > 100) return false;
+  if (/^(?:page\s*\-*\s*\d+(?:\s*(?:of|\/)\s*\d+)?|\d{1,3})$/i.test(t)) return true;
+  return /^(?:RBI\s*Grade\s*B(?:\s*\d{4})?|Reserve\s*Bank\s*of\s*India|Phase\s*[\-:]?\s*(?:I{1,2}|[12]))(?:\s*[\-:|]\s*.*)?$/i.test(t) ||
+    /^(?:Chapter|Ch|Unit|Section|Part|Practice\s*Set|Practice\s*Paper|Mock\s*Test|Test\s*Series|Sample\s*Paper|Exercise|Paper)\s*[\-:]?\s*[A-Z0-9]+(?:\s*[\-:]\s*.*)?$/i.test(t);
 }
 
 // Clean descriptive question lines and strip extraneous title/banner lines
@@ -1866,13 +2230,41 @@ function cleanMCQPrompt(lines) {
   return clean.filter(l => l.trim().length > 0).join("\n").trim();
 }
 
+// Does a line read like a question (rather than a point inside an answer)?
+function looksLikeQuestionLine(line) {
+  const t = String(line || "").replace(/^\s*(?:Q(?:uestion)?\s*[\.\-]?\s*)?\d+\s*[\.\):\-]\s*/i, "");
+  if (/\?\s*(?:\(?\s*\d+\s*marks?\s*\)?)?\s*$/i.test(t)) return true;
+  if (/\b\d+\s*marks?\b|\b\d+\s*words\b/i.test(t)) return true;
+  if (/["”’]\s*(?:critically|discuss|examine|comment|analy[sz]e|evaluate|explain|elucidate)\b/i.test(t)) return true;
+  return /^(?:["“'‘(]\s*)?(?:discuss|explain|analy[sz]e|critically|examine|evaluate|assess|describe|elucidate|elaborate|comment|write|highlight|enumerate|suggest|what|why|how|which|who|when|where|identify|outline|state|define|compare|differentiate|distinguish|justify|illustrate|bring\s+out|trace|give|list|mention|in\s+the\s+(?:light|context)|do\s+you|to\s+what\s+extent)\b/i.test(t);
+}
+
+// Join model-answer lines: list items and table rows stay on consecutive lines,
+// other paragraphs are separated by a blank line.
+function joinAnswerLines(lines) {
+  const isItem = l => /^\s*(?:[•◦▪‣\-*]|\(?\d{1,3}[.)]|\(?[a-z][.)]|\(?[ivx]{1,5}[.)])\s/i.test(l) || / \| /.test(l);
+  let out = "";
+  lines.forEach((l, i) => {
+    out += i === 0 ? l : (isItem(l) && isItem(lines[i - 1]) ? "\n" : "\n\n") + l;
+  });
+  return out.replace(/^\n+/, "").replace(/\s+$/, "");
+}
+
 // Parse raw document text into structured question objects with paper, marks, and model answers
 function parseQuestionsAndAnswers(rawText) {
   if (!rawText || !rawText.trim()) return [];
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const rawLines = text.split("\n").map(l => l.trim());
-  const repHeaders = findRepetitiveHeaders(rawLines);
+  // origLines keep leading spaces (indentation of nested bullets) for model answers;
+  // rawLines are trimmed and used for detection.
+  const origLines = text.split("\n").map(l => l.replace(/\s+$/, ""));
+  const rawLines = origLines.map(l => l.trim());
+  // "Answer:", "Ans.", "Model Answer -" or the word alone on a line - but not "Answering..." / "Solutions include..."
+  const ANSWER_RE = /^(?:(?:Model\s+)?Answer|Ans|Solution|Reference\s+Answer)\b\s*(?:[:\.\-]\s*|$)(.*)$/i;
+  // Running headers/footers are never in this text: DOCX keeps them in separate parts and
+  // the PDF reader removes them by position. So nothing that repeats (e.g. a "Conclusion"
+  // heading in every answer) is thrown away here.
+  const repHeaders = null;
 
   // Check document-level metadata from the first few lines
   let docDefaultPaper = "Other";
@@ -1926,14 +2318,26 @@ function parseQuestionsAndAnswers(rawText) {
     questionStarts.push(qs);
   }
 
-  // Fallback to numbered list e.g. "1. ..." if no Q1/Question headers found
+  // Fallback: questions numbered only "1.", "2." ... (typed, or Word auto-numbering).
+  // Numbered points inside an answer restart at 1 - after such a restart, the next
+  // number only starts a question if the line reads like one. Indented (nested)
+  // items are never questions.
   if (questionStarts.length === 0) {
+    let expected = null;
+    let restarted = false;
     for (let i = 0; i < rawLines.length; i++) {
       const line = rawLines[i];
-      if (isHeaderOrFooterLine(line, repHeaders)) continue;
-      if (/^\d+[\.\)]\s+/.test(line)) {
-        questionStarts.push({ lineIndex: i, qNum: parseInt(line, 10), line });
+      const m = line.match(/^(\d+)[\.\)]\s+\S/);
+      if (!m || /^\s/.test(origLines[i]) || isHeaderOrFooterLine(line, repHeaders)) continue;
+      const n = parseInt(m[1], 10);
+      if (expected !== null && n !== expected) {
+        if (n < expected) restarted = true;
+        continue;
       }
+      if (restarted && !looksLikeQuestionLine(line)) continue;
+      questionStarts.push({ lineIndex: i, qNum: n, line });
+      expected = n + 1;
+      restarted = false;
     }
   }
 
@@ -1953,7 +2357,11 @@ function parseQuestionsAndAnswers(rawText) {
   for (let k = 0; k < questionStarts.length; k++) {
     const startIdx = questionStarts[k].lineIndex;
     const endIdx = (k + 1 < questionStarts.length) ? questionStarts[k + 1].lineIndex : rawLines.length;
-    const blockLines = rawLines.slice(startIdx, endIdx).filter(l => l.length > 0 && !isHeaderOrFooterLine(l, repHeaders));
+    const blockIdx = [];
+    for (let i = startIdx; i < endIdx; i++) if (rawLines[i]) blockIdx.push(i);
+    // A section banner between two questions ("Chapter 2", "Practice Set B") is not part of the answer
+    while (blockIdx.length > 1 && isSectionBannerLine(rawLines[blockIdx[blockIdx.length - 1]])) blockIdx.pop();
+    const blockLines = blockIdx.map(i => rawLines[i]);
 
     if (blockLines.length === 0) continue;
 
@@ -1967,13 +2375,14 @@ function parseQuestionsAndAnswers(rawText) {
     let inAnswer = false;
 
     // Check if there is an explicit Answer: / Ans: marker in this question block
-    const hasExplicitAnswer = blockLines.some(l => /^(?:(?:Model\s+)?Answer|Ans|Solution|Reference\s+Answer)\s*[:\.\-]/i.test(l));
+    const hasExplicitAnswer = blockLines.some(l => ANSWER_RE.test(l));
 
     for (let i = 0; i < blockLines.length; i++) {
       const line = blockLines[i];
+      const answerLine = origLines[blockIdx[i]]; // keeps nested-bullet indentation
 
       // Check for inline metadata e.g. "QUESTION 1     15 MARKS     600 WORDS"
-      if (/QUESTION\s*\d+/i.test(line) && /MARKS/i.test(line)) {
+      if (/^Q(?:uestion)?\s*\.?\s*\d+\s*[:.\-]?\s*[\(\[]?\s*\d+\s*marks?\s*[\)\]]?\s*(?:[|,\-·•]?\s*[\(\[]?\s*\d+\s*words?\s*[\)\]]?)?\s*$/i.test(line)) {
         const mMarks = line.match(/(\d+)\s*MARKS/i);
         if (mMarks) marks = Number(mMarks[1]);
         const mWords = line.match(/(\d+)\s*WORDS/i);
@@ -1982,11 +2391,15 @@ function parseQuestionsAndAnswers(rawText) {
         continue;
       }
 
-      // Check for topic header e.g. "Q1. GDP and Welfare"
-      const topicHeaderMatch = line.match(/^Q\d+[\.\)]\s*(.+)/i);
+      // Topic header e.g. "Q1. GDP and Welfare" - but "Q1. Discuss the role of RBI..." is the question itself
+      const topicHeaderMatch = line.match(/^(?:Q(?:uestion)?\s*[\.\-]?\s*)\d+\s*[\.\):\-]\s*(.+)/i);
       if (topicHeaderMatch && qLines.length === 0 && !inAnswer) {
-        topic = topicHeaderMatch[1].trim();
-        continue;
+        const rest = topicHeaderMatch[1].trim();
+        const next = blockLines[i + 1] || "";
+        if (rest.length <= 80 && !looksLikeQuestionLine(rest) && next && !ANSWER_RE.test(next)) {
+          topic = rest;
+          continue;
+        }
       }
 
       // Check standard metadata lines: "Marks: 10", "Paper: Finance", "Topic: ...", "Word limit: 400"
@@ -2021,7 +2434,7 @@ function parseQuestionsAndAnswers(rawText) {
       }
 
       // Check for explicit Answer start
-      const ansMatch = line.match(/^(?:(?:Model\s+)?Answer|Ans|Solution|Reference\s+Answer)\s*[:\.\-]?\s*(.*)/i);
+      const ansMatch = line.match(ANSWER_RE);
       if (ansMatch) {
         inAnswer = true;
         if (ansMatch[1].trim()) aLines.push(ansMatch[1].trim());
@@ -2033,7 +2446,7 @@ function parseQuestionsAndAnswers(rawText) {
           const cleanQ = line.replace(/^(?:\(\d+\)|\[\d+\]|(?:Question|Q)\s*[\.\-]?\s*\d+|\d+)\s*[\.\:\)\-\]]*\s*/i, "").replace(/^[\.\:\)\-\]\s]+/, "");
           if (cleanQ) qLines.push(cleanQ);
         } else {
-          aLines.push(line);
+          aLines.push(answerLine);
         }
       } else {
         // No explicit Answer marker in document: first non-metadata paragraph is Question prompt, rest is Model Answer
@@ -2041,15 +2454,22 @@ function parseQuestionsAndAnswers(rawText) {
           const cleanQ = line.replace(/^(?:\(\d+\)|\[\d+\]|(?:Question|Q)\s*[\.\-]?\s*\d+|\d+)\s*[\.\:\)\-\]]*\s*/i, "").replace(/^[\.\:\)\-\]\s]+/, "");
           if (cleanQ) qLines.push(cleanQ);
         } else {
-          aLines.push(line);
+          aLines.push(answerLine);
         }
       }
     }
 
     const cleaned = cleanDescriptiveQuestion(qLines, topic);
+    // Marks written inside the question: "... (15 marks)" / "[10 Marks]" (the text itself is kept)
+    const inlineMarks = cleaned.text.match(/[\(\[]\s*(\d{1,2})\s*marks?\s*[\)\]]/i);
+    if (inlineMarks && marks === 10 && wordLimit === 400) {
+      marks = Number(inlineMarks[1]);
+      wordLimit = marks === 15 ? 600 : 400;
+    }
     const questionText = cleaned.text;
     topic = cleaned.topic;
-    const modelAnswer = aLines.filter(l => !isHeaderOrFooterLine(l, repHeaders)).join("\n\n").trim();
+    // The model answer exactly as written in the file (headings, bullets, table rows, order)
+    const modelAnswer = joinAnswerLines(aLines);
 
     if (questionText || modelAnswer) {
       results.push({
@@ -2099,9 +2519,10 @@ async function handleDocImport(event) {
       throw new Error("No readable text found in the document.");
     }
 
-    // An MCQ file (options [a]-[e]) must not be imported as descriptive questions
+    // An MCQ file (options [a]-[e]) must not be imported as descriptive questions.
+    // Descriptive files parse to 0 MCQs, so 3 is a safe threshold.
     const mcqLike = parseMCQDocument(rawText, inferMCQSubject(rawText)).filter(q => (q.options || []).length >= 4);
-    if (mcqLike.length >= 5) {
+    if (mcqLike.length >= 3) {
       if (statusElem) statusElem.textContent = "";
       if (confirm(`"${file.name}" is an objective (MCQ) file with ${mcqLike.length} MCQs, not descriptive questions.\n\nOK = add them to the Objective (MCQ) test instead\nCancel = do not import`)) {
         addImportedMCQs(mcqLike, file.name);
@@ -2122,7 +2543,7 @@ async function handleDocImport(event) {
     renderSetupList();
 
     if (statusElem) {
-      statusElem.textContent = `✓ Added ${parsedQuestions.length} question(s) from ${file.name}.`;
+      statusElem.textContent = `Added ${parsedQuestions.length} question(s) from ${file.name}.`;
       setTimeout(() => { statusElem.textContent = ""; }, 6000);
     }
   } catch (err) {
@@ -2147,21 +2568,27 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const rawParagraphs = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-  const repHeaders = findRepetitiveHeaders(rawParagraphs);
-  const paragraphs = rawParagraphs.filter(p => !isHeaderOrFooterLine(p, repHeaders));
+  // Section banners and page artefacts ("Practice Set B", "Page 3") are not question text.
+  // Running headers/footers never get here (DOCX keeps them apart; the PDF reader drops
+  // them by position), so repeated question stems such as "Find the odd one out." stay.
+  const paragraphs = rawParagraphs.filter(p => !isHeaderOrFooterLine(p));
 
-  // 1. Locate Answer Key section if present
+  // 1. Locate Answer Key section if present ("Answer Key", "Answers", "Answers & Explanations"...)
+  const ANSWER_SECTION_RE = /^(?:answer\s*keys?|answers|solutions|answers?\s*(?:&|and|with)\s*(?:explanations?|solutions?)|answer\s*keys?\s*(?:&|and|with)\s*(?:explanations?|solutions?))\s*:?$/i;
   let ansKeyIdx = -1;
+  let ansKeyRest = "";
   for (let i = 0; i < paragraphs.length; i++) {
-    const pLower = paragraphs[i].toLowerCase();
-    if (pLower === "answer key" || pLower === "answers" || pLower.startsWith("answer key:") || pLower === "answer keys" || pLower.startsWith("answers:")) {
+    const p = paragraphs[i];
+    const inline = p.match(/^(?:answer\s*keys?|answers)\s*:\s*(.+)$/i);   // "Answers: 1-a, 2-c, ..."
+    if (ANSWER_SECTION_RE.test(p) || inline) {
       ansKeyIdx = i;
+      ansKeyRest = inline ? inline[1] : "";
       break;
     }
   }
 
   const qParagraphs = ansKeyIdx !== -1 ? paragraphs.slice(0, ansKeyIdx) : paragraphs;
-  const ansParagraphs = ansKeyIdx !== -1 ? paragraphs.slice(ansKeyIdx + 1) : [];
+  const ansParagraphs = ansKeyIdx !== -1 ? (ansKeyRest ? [ansKeyRest] : []).concat(paragraphs.slice(ansKeyIdx + 1)) : [];
 
   // Parse Answer Key
   const answersMap = {}; // 0-based question index -> { answer: 'a'|'b'|'c'|'d'|'e', explanation: string }
@@ -2178,6 +2605,44 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
         currentOffset += lastSeenQNum;
         lastSeenQNum = 0;
       }
+      continue;
+    }
+
+    // Answer-key table rows (DOCX tables arrive as "cell | cell | ..." lines)
+    if (p.includes("|")) {
+      const cells = p.split("|").map(c => c.trim());
+      // "1 to 10 | a | e | b | ..."
+      const range = cells[0].match(/^(?:Q\.?\s*)?(\d+)\s*(?:to|-)\s*(?:Q\.?\s*)?(\d+)$/i);
+      if (range) {
+        const startQ = parseInt(range[1], 10);
+        cells.slice(1).forEach((c, k) => {
+          const m = c.match(/^[\(\[]?([a-eA-E])[\)\]]?$/);
+          if (m) answersMap[startQ - 1 + k + currentOffset] = { answer: m[1].toLowerCase(), explanation: "" };
+        });
+        lastSeenQNum = Math.max(lastSeenQNum, parseInt(range[2], 10));
+        continue;
+      }
+      // Header row: "Questions | 1 | 2 | 3 ..." or "Q. No. | Answer"
+      if (/^(?:q(?:uestions?)?\.?\s*(?:no\.?)?|s\.?\s*no\.?|question\s*no\.?)$/i.test(cells[0]) && cells.slice(1).every(c => /^\d+$|^answers?$|^ans\.?$|^options?$/i.test(c))) continue;
+      // Pairs: "1 | c" or "1 | (c) | 2 | (a) | ..."
+      if (cells.length >= 2 && cells.length % 2 === 0 && cells.every((c, k) => (k % 2 === 0 ? /^(?:Q\.?\s*)?\d+[.)]?$/i.test(c) : /^[\(\[]?[a-eA-E][\)\]]?$/.test(c)))) {
+        for (let k = 0; k < cells.length; k += 2) {
+          const qNum = parseInt(cells[k].replace(/\D/g, ""), 10);
+          if (lastSeenQNum > 0 && qNum === 1 && k === 0 && answersMap[currentOffset]) currentOffset += lastSeenQNum;
+          answersMap[qNum - 1 + currentOffset] = { answer: cells[k + 1].replace(/[^a-eA-E]/g, "").toLowerCase(), explanation: [] };
+          currentQIdx = qNum - 1 + currentOffset;
+          lastSeenQNum = qNum;
+        }
+        continue;
+      }
+    }
+
+    // A table row flattened by a PDF: "1 to 10 a e b d d b e c e c"
+    const flatRange = p.match(/^(\d+)\s*to\s*(\d+)\s+((?:[a-eA-E](?:\s+|$))+)$/i);
+    if (flatRange) {
+      const startQ = parseInt(flatRange[1], 10);
+      flatRange[3].trim().split(/\s+/).forEach((v, k) => { answersMap[startQ - 1 + k + currentOffset] = { answer: v.toLowerCase(), explanation: "" }; });
+      lastSeenQNum = Math.max(lastSeenQNum, parseInt(flatRange[2], 10));
       continue;
     }
 
@@ -2199,6 +2664,20 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
         }
       }
       i--;
+      continue;
+    }
+
+    // A line holding only answers: "1. c  2. a  3. b" / "1-a, 2-c, 3-d"
+    const pairRe = /(?:^|[\s,;])(?:Q\.?\s*)?(\d+)\s*[\.:\-\)]?\s*[\(\[]?([a-eA-E])[\)\]]?(?=$|[\s,;])/g;
+    const pairs = [...p.matchAll(pairRe)];
+    if (pairs.length > 1 && !p.replace(pairRe, "").replace(/[\s,;]/g, "")) {
+      for (const sm of pairs) {
+        const qNum = parseInt(sm[1], 10);
+        if (lastSeenQNum > 0 && qNum === 1 && sm === pairs[0] && answersMap[currentOffset]) currentOffset += lastSeenQNum;
+        answersMap[(qNum - 1) + currentOffset] = { answer: sm[2].toLowerCase(), explanation: [] };
+        currentQIdx = (qNum - 1) + currentOffset;
+        lastSeenQNum = qNum;
+      }
       continue;
     }
 
@@ -2234,11 +2713,9 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       continue;
     }
 
-    // Accumulate explanation lines for the current answer block
+    // Accumulate explanation lines (including table header rows) for the current answer block
     if (currentQIdx !== -1 && answersMap[currentQIdx] && Array.isArray(answersMap[currentQIdx].explanation)) {
-      if (!/^(?:word\s+meaning\s+opposite|word|meaning|opposite)$/i.test(p)) {
-        answersMap[currentQIdx].explanation.push(p);
-      }
+      answersMap[currentQIdx].explanation.push(p);
     }
   }
 
@@ -2246,11 +2723,30 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   const questions = [];
   let currQ = [];
   let currOpts = [];
+  let currFirstLine = "";   // the numbered line that started the current question
+  let context = null;       // shared passage: "Directions (Q.1 to Q.3): ..." -> { from, to, left, lines }
+  let collectingContext = false;
   const optRegex = /(?:\[([a-eA-E])\]|\(([a-eA-E])\)|(?:\b|^)([a-eA-E])[\.\)])/g;
+  const NEW_Q_RE = /^(?:Q(?:uestion)?\s*[\.\-]?\s*\d+|\d+[\.\)])(?:\s*[\.\:\)\-]*\s*|\s+)/i;
+  const DIRECTIONS_RE = /^Directions?\b[^:\n]{0,40}?(\d+)\s*(?:-|to)\s*(?:Q(?:uestions?)?\.?\s*)?(\d+)/i;
+  // Short heading-like line: no sentence punctuation at the end, not a question
+  const isTitleLike = (line) => line.length <= 80 && !/[.?:;,]$/.test(line) && !NEW_Q_RE.test(line);
+  const questionNumber = (line) => {
+    const m = String(line || "").match(/^(?:Q(?:uestion)?\s*[\.\-]?\s*)?(\d+)\s*[\.\):\-]/i);
+    return m ? parseInt(m[1], 10) : null;
+  };
 
   function finalizeCurrentQuestion() {
     if (currQ.length > 0 || currOpts.length > 0) {
-      const cleanText = cleanMCQPrompt(currQ);
+      let cleanText = cleanMCQPrompt(currQ);
+      // A shared passage / directions block belongs to every question of its range
+      if (context) {
+        const n = questionNumber(currFirstLine);
+        const inRange = n !== null ? (n >= context.from && n <= context.to) : context.left > 0;
+        if (inRange) cleanText = context.lines.join("\n") + (cleanText ? "\n" + cleanText : "");
+        context.left--;
+        if ((n !== null && n >= context.to) || context.left <= 0) context = null;
+      }
       questions.push({
         id: makeId("mcq"),
         subject: defaultSubject,
@@ -2263,6 +2759,7 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       });
       currQ = [];
       currOpts = [];
+      currFirstLine = "";
     }
   }
 
@@ -2273,16 +2770,43 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       continue;
     }
 
-    const inlineAnsMatch = p.match(/^(?:(?:Correct\s+)?Answer|Ans|Correct\s*Option)\s*[:\.\-]?\s*\(?([a-eA-E])\)?/i);
+    // "Directions (Q.1 to Q.3): Read the passage..." starts a shared passage
+    const dir = p.match(DIRECTIONS_RE);
+    if (dir) {
+      if (currOpts.length > 0) finalizeCurrentQuestion();
+      currQ = currQ.filter(l => !isTitleLike(l));
+      const from = parseInt(dir[1], 10);
+      const to = parseInt(dir[2], 10);
+      context = { from, to, left: Math.max(1, to - from + 1), lines: [p] };
+      collectingContext = true;
+      continue;
+    }
+    if (collectingContext) {
+      const startsQ = NEW_Q_RE.test(p);
+      const hasOpt = /\[[a-eA-E]\]|\([a-eA-E]\)/.test(p) || /^[a-eA-E][\.\)]\s/.test(p);
+      if (!startsQ && !hasOpt) {
+        context.lines.push(p);
+        continue;
+      }
+      collectingContext = false;
+      // Un-numbered question: its stem was read as the last line of the passage
+      if (!startsQ && currQ.length === 0 && context.lines.length > 1) currQ.push(context.lines.pop());
+    }
+
+    // "Answer: (c)" / "Ans. b" - not "Answer each question..."
+    const inlineAnsMatch = p.match(/^(?:(?:Correct\s+)?Answer|Ans|Correct\s*Option)\b\s*[:\.\-]?\s*[\(\[]?([a-eA-E])[\)\]]?(?=$|[\s.,;:)])/i);
     if (inlineAnsMatch) {
+      if (currOpts.length > 0) finalizeCurrentQuestion();   // the question right above this line
       if (questions.length > 0) {
         questions[questions.length - 1].correctAnswer = inlineAnsMatch[1].toLowerCase();
       }
       continue;
     }
 
-    const explMatch = p.match(/^(?:Explanation|Exp|Solution|Notes?)\s*[:\.\-]?\s*(.*)/i);
+    // "Explanation: ..." / "Exp. ..." / "Note: ..." - not "Experts at..." / "Notes on ..."
+    const explMatch = p.match(/^(?:Explanation|Exp|Solution|Notes?)\b\s*(?:[:\.\-]\s*|$)(.*)/i);
     if (explMatch) {
+      if (currOpts.length > 0) finalizeCurrentQuestion();
       if (questions.length > 0) {
         questions[questions.length - 1].explanation = explMatch[1] || "";
       }
@@ -2290,19 +2814,23 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     }
 
     // Detect if this line starts a new question
-    const isNewQ = /^(?:Q(?:uestion)?\s*[\.\-]?\s*\d+|\d+[\.\)])(?:\s*[\.\:\)\-]*\s*|\s+)/i.test(p);
+    const isNewQ = NEW_Q_RE.test(p);
     if (isNewQ && currOpts.length > 0) {
       finalizeCurrentQuestion();
     }
+    // Title lines before the very first question ("Reasoning - Puzzle Practice") are not question text
+    if (isNewQ && questions.length === 0 && !currFirstLine && currQ.length) currQ = currQ.filter(l => !isTitleLike(l));
+    if (isNewQ && currOpts.length === 0) currFirstLine = p;
 
     // Find options
     const matches = [];
     let m;
     const re = new RegExp(optRegex);
     while ((m = re.exec(p)) !== null) {
-      // Guard against Column A, Column B, Section B, Part B, Table B, etc.
-      const prefix = p.slice(Math.max(0, m.index - 10), m.index).toLowerCase();
-      if (/(?:column|section|part|table|schedule|figure|group|row)\s+$/i.test(prefix)) {
+      // Guard against Column A, Column B, Section B, Part B, Table B, etc. (whole words only:
+      // "charitable [d]" or "unstable [b]" are real options)
+      const prefix = p.slice(Math.max(0, m.index - 12), m.index).toLowerCase();
+      if (/\b(?:column|section|part|table|schedule|figure|group|row)\s+$/i.test(prefix)) {
         continue;
       }
       const label = (m[1] || m[2] || m[3]).toLowerCase();
@@ -2384,12 +2912,13 @@ async function handleP1DocImport(event) {
       throw new Error("No readable text found in the document.");
     }
 
-    const parsedQuestions = parseMCQDocument(rawText, inferMCQSubject(rawText));
+    // Only real MCQs (with options) are imported
+    const parsedQuestions = parseMCQDocument(rawText, inferMCQSubject(rawText)).filter(q => (q.options || []).length >= 2);
     if (parsedQuestions.length < 3) {
-      const descriptive = parseQuestionsAndAnswers(rawText).filter(q => (q.modelAnswer || "").length > 200);
-      if (descriptive.length >= 2) {
+      const descriptive = parseQuestionsAndAnswers(rawText).filter(q => (q.modelAnswer || "").length > 0);
+      if (descriptive.length >= 1 && parsedQuestions.length === 0 || descriptive.filter(q => q.modelAnswer.length > 200).length >= 2) {
         if (statusElem) statusElem.textContent = "";
-        alert(`"${file.name}" contains descriptive (subjective) questions with model answers, not MCQs.\n\nSwitch to "✍️ Subjective (Phase-2)" and upload it on that New Test screen.`);
+        alert(`"${file.name}" contains descriptive (subjective) questions with model answers, not MCQs.\n\nSwitch to "Subjective" and upload it on that New Test screen.`);
         return;
       }
     }
@@ -2436,7 +2965,7 @@ function addImportedMCQs(parsedQuestions, fileName) {
   const statusElem = $("setup-p1-doc-status");
   if (statusElem) {
     statusElem.classList.remove("is-error");
-    statusElem.textContent = `✓ Imported ${parsedQuestions.length} MCQs (${subject}) from ${fileName}: ${withAns} with answer key.`;
+    statusElem.textContent = `Imported ${parsedQuestions.length} MCQs (${subject}) from ${fileName}: ${withAns} with answer key.`;
     setTimeout(() => { statusElem.textContent = ""; }, 6000);
   }
 }
@@ -2506,7 +3035,7 @@ function renderP1SetupList() {
         <div class="q-actions">
           <button type="button" class="q-act btn-p1-move-up" data-index="${globalIdx}" title="Move up" aria-label="Move up" ${globalIdx === 0 ? "disabled" : ""}>▲</button>
           <button type="button" class="q-act btn-p1-move-down" data-index="${globalIdx}" title="Move down" aria-label="Move down" ${globalIdx === questions.length - 1 ? "disabled" : ""}>▼</button>
-          <button type="button" class="q-act q-act-danger btn-p1-delete-q" data-id="${escapeHTML(q.id)}" title="Remove from this test" aria-label="Remove from this test">✕</button>
+          <button type="button" class="q-act q-act-danger btn-p1-delete-q" data-id="${escapeHTML(q.id)}" title="Remove from this test" aria-label="Remove from this test">Remove</button>
         </div>
       </li>
     `;
@@ -2640,7 +3169,7 @@ function handleP1QuestionFormSubmit(e) {
   if (p1Err) p1Err.textContent = "";
   const addBtn = $("btn-add-p1-question");
   if (addBtn) {
-    addBtn.textContent = "Added ✓";
+    addBtn.textContent = "Added";
     setTimeout(() => { addBtn.textContent = "Add MCQ to Test"; }, 1500);
   }
   $("p1-q-text")?.focus();
@@ -3111,10 +3640,10 @@ function renderP1ResultReviewList() {
 
     const cardStatusClass = isCorrect ? "correct" : isIncorrect ? "incorrect" : "unattempted";
     const statusBadge = isCorrect
-      ? `<span style="background:#dcfce7; color:#166534; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">🟩 Correct (+${(test.positiveMarks || 1).toFixed(2)})</span>`
+      ? `<span style="background:#dcfce7; color:#166534; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">Correct (+${(test.positiveMarks || 1).toFixed(2)})</span>`
       : isIncorrect
-      ? `<span style="background:#fee2e2; color:#991b1b; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">🟥 Incorrect (-${(test.negativeMarks || 0.25).toFixed(2)})</span>`
-      : `<span style="background:#f1f5f9; color:#475569; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">⬜ Unattempted (0.00)</span>`;
+      ? `<span style="background:#fee2e2; color:#991b1b; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">Incorrect (-${(test.negativeMarks || 0.25).toFixed(2)})</span>`
+      : `<span style="background:#f1f5f9; color:#475569; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">Unattempted (0.00)</span>`;
 
     const optionsHtml = (q.options || []).map(opt => {
       const optLabel = opt.label.toLowerCase().trim();
@@ -3126,13 +3655,13 @@ function renderP1ResultReviewList() {
 
       if (isChosen && isActualCorrect) {
         optClass += " is-correct-opt";
-        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#15803d;">✓ Your Answer (Correct)</span>`;
+        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#15803d;">Your answer · correct</span>`;
       } else if (isChosen && !isActualCorrect) {
         optClass += " chosen-wrong";
-        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#b91c1c;">✗ Your Answer (Incorrect)</span>`;
+        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#b91c1c;">Your answer · incorrect</span>`;
       } else if (!isChosen && isActualCorrect) {
         optClass += " is-correct-opt";
-        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#15803d;">✓ Correct Answer</span>`;
+        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#15803d;">Correct answer</span>`;
       }
 
       return `
@@ -3253,10 +3782,10 @@ function renderP1History() {
           </div>
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:6px 12px; font-size:13px; color:var(--muted); margin-bottom:10px;">
-          <span>🟩 Correct: <strong>${t.correctCount}</strong></span>
-          <span>🟥 Incorrect: <strong>${t.incorrectCount}</strong></span>
-          <span>⬜ Unattempted: <strong>${t.unattemptedCount}</strong></span>
-          <span>⏱ Time: <strong>${formatDuration(t.timeSpent || 0)}</strong></span>
+          <span><i class="dot dot-ok"></i>Correct <strong>${t.correctCount}</strong></span>
+          <span><i class="dot dot-bad"></i>Incorrect <strong>${t.incorrectCount}</strong></span>
+          <span><i class="dot dot-none"></i>Unattempted <strong>${t.unattemptedCount}</strong></span>
+          <span>Time <strong>${formatDuration(t.timeSpent || 0)}</strong></span>
         </div>
         <div style="display:flex; gap:8px;">
           <button type="button" class="btn-p1-history-review" data-id="${t.id}" style="padding:6px 14px; font-size:13px;">Review Test &amp; Questions</button>
@@ -3923,7 +4452,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (container) {
           const isHidden = container.style.display === "none";
           container.style.display = isHidden ? "block" : "none";
-          toggleRevBtn.textContent = isHidden ? "📖 Hide Answers & Marks" : "📖 Review Answers & Marks";
+          toggleRevBtn.textContent = isHidden ? "Hide answers" : "Review answers";
         }
         return;
       }
@@ -4241,6 +4770,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Calendar & TODO screens (see calendar.js)
   initCalendar();
+
+  // AI evaluation: settings dialog, result & history assessments (see ai_eval.js)
+  if (window.AIEval) AIEval.init();
 
   // Initial load
   setPhase(state.phase);
