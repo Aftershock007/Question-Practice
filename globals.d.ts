@@ -1,8 +1,3 @@
-// Editor / language-server hints only. The browser never loads this file.
-// The app's scripts are classic <script> tags that share one global scope;
-// these are the globals that are attached to `window` instead of declared
-// with a top-level const/function, so tooling can resolve them across files.
-
 declare const RBI_OFFICIAL_SCHEDULE_DATA: Array<{
   day: number;
   dayType: string;

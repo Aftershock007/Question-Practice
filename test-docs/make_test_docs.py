@@ -1,13 +1,3 @@
-"""Build the import test documents (DOCX) and their expected results (JSON).
-
-Run:  python3 test-docs/make_test_docs.py      (needs python-docx)
-Then: soffice --headless --convert-to pdf --outdir test-docs test-docs/*.docx
-
-Every objective file uses a different layout, so the importer is tested on
-numbering styles, option styles, answer-key formats, shared passages / tables,
-multi-answer questions and deliberate defects (wrong key, missing key,
-skipped question number, key without a question).
-"""
 import json, os
 from docx import Document
 from docx.shared import Pt
@@ -41,11 +31,6 @@ def save(d, name, expected):
 
 os.makedirs(os.path.join(OUT, "expected"), exist_ok=True)
 
-# ---------------------------------------------------------------------------
-# obj-01: "Q.1)" numbering, topic headings, (a) options one per line,
-# statements, assertion-reason, match list, shared data table, multi-correct,
-# answer key = Quick Check grid + "Q | Answer | Why" table
-# ---------------------------------------------------------------------------
 Q1 = [
     ("1. Monetary Policy Framework", [
         (["Under the amended RBI Act, 1934, the inflation target for India is set by:"],
@@ -117,10 +102,6 @@ d.add_heading("Answers with Reasons", 2)
 table(d, [["Q", "Answer", "Why"]] + [[str(e["number"]), ", ".join(e["answer"]), e["explanation"]] for e in exp])
 save(d, "obj-01-monetary-policy", {"kind": "mcq", "questions": exp})
 
-# ---------------------------------------------------------------------------
-# obj-02: "1." numbering, options inline "A) ... E)", "Answer: (C)" and a
-# multi-paragraph "Explanation:" under each question, a shared Directions passage
-# ---------------------------------------------------------------------------
 Q2 = [
     ("Which of the following is NOT a function of a commercial bank?", ["Accepting deposits", "Granting loans", "Issuing currency notes", "Agency services", "Remittance of funds"], "c",
      ["Only the Reserve Bank of India issues currency notes (one-rupee notes and coins are issued by the Government).", "Commercial banks accept deposits, lend and provide agency and remittance services."]),
@@ -154,10 +135,6 @@ for i, (stem, opts, ans, expl) in enumerate(Q2, 1):
     exp.append({"number": i, "stem": stem, "options": opts, "answer": ans, "explanation": "\n".join(expl), "shared": "Directions" if 5 <= i <= 7 else ""})
 save(d, "obj-02-banking-awareness", {"kind": "mcq", "questions": exp})
 
-# ---------------------------------------------------------------------------
-# obj-03: two sets with numbering restarting at 1, "[a]" options on one line,
-# answers as "1. b  2. d ..." lines under "Set A" / "Set B"
-# ---------------------------------------------------------------------------
 SET_A = [
     ("Choose the word most similar in meaning to ABUNDANT.", ["Scarce", "Plentiful", "Rare", "Meagre", "Sparse"], "b"),
     ("Choose the word most opposite in meaning to TRANSPARENT.", ["Clear", "Lucid", "Evident", "Opaque", "Visible"], "d"),
@@ -187,11 +164,6 @@ d.add_paragraph("Set B")
 d.add_paragraph("  ".join(f"{i}. {q[2]}" for i, q in enumerate(SET_B, 1)))
 save(d, "obj-03-english-sets", {"kind": "mcq", "questions": exp})
 
-# ---------------------------------------------------------------------------
-# obj-04: "Question 1:" numbering, "a." options one per line, a DI table
-# shared by Questions 1 to 4, and DELIBERATE DEFECTS: Q6 has a wrong key,
-# Q7 is missing from the file, Q9 has no key, the key lists a Q11 that does not exist
-# ---------------------------------------------------------------------------
 Q4 = [
     (1, "What is the credit-deposit ratio of Bank R?", ["75%", "80%", "85%", "90%", "70%"], "c"),
     (2, "What are the total advances of the four banks (Rs crore)?", ["3,830", "3,930", "4,030", "3,980", "3,880"], "b"),
@@ -203,7 +175,7 @@ Q4 = [
     (9, "The average of 5 numbers is 18. When one number is excluded, the average of the rest is 16. What is the excluded number?", ["20", "22", "24", "26", "28"], "d"),
     (10, "If A : B = 3 : 5 and B : C = 2 : 3, then A : B : C is:", ["3 : 5 : 6", "6 : 10 : 15", "6 : 10 : 9", "3 : 10 : 15", "2 : 5 : 3"], "b"),
 ]
-KEY4 = {1: "c", 2: "b", 3: "d", 4: "c", 5: "b", 6: "b", 8: "c", 10: "b", 11: "a"}   # 6 wrong on purpose, 9 missing, 11 orphan
+KEY4 = {1: "c", 2: "b", 3: "d", 4: "c", 5: "b", 6: "b", 8: "c", 10: "b", 11: "a"}
 d = doc_new("Quantitative Aptitude: Data Interpretation and Arithmetic", "Practice Test 4")
 d.add_paragraph("Study the table below and answer Questions 1 to 4.")
 table(d, [["Bank", "Deposits (Rs crore)", "Advances (Rs crore)"], ["Bank P", "1,200", "900"], ["Bank Q", "1,500", "1,050"], ["Bank R", "800", "680"], ["Bank S", "2,000", "1,300"]])
@@ -218,10 +190,6 @@ d.add_heading("Answer Key", 1)
 table(d, [["Q.No.", "Answer"]] + [[str(k), v] for k, v in KEY4.items()])
 save(d, "obj-04-quant-di", {"kind": "mcq", "questions": exp, "missingNumbers": [7], "orphanKeys": [11]})
 
-# ---------------------------------------------------------------------------
-# obj-05: "Q1." numbering, "(A)" upper-case options, syllogism with I. / II.,
-# answer key as a range table "1 to 8 | d | d | ..."
-# ---------------------------------------------------------------------------
 Q5 = [
     (["Find the odd one out."], ["27", "64", "125", "144", "216"], "d"),
     (["Statements: All banks are institutions. Some institutions are regulators.", "Conclusions:", "I. Some banks are regulators.", "II. All institutions are banks."],
@@ -246,12 +214,6 @@ d.add_heading("Answer Key", 1)
 table(d, [["Questions"] + [str(i) for i in range(1, 9)], ["1 to 8"] + [q[2] for q in Q5]])
 save(d, "obj-05-reasoning", {"kind": "mcq", "questions": exp})
 
-# ---------------------------------------------------------------------------
-# obj-06: EDGE CASES - options on the question line, "Answer: Option B",
-# "Note:" lines inside a question and an explanation, explanation lines that
-# start with "(a)" / "(e)", "One or more options may be correct", and a real
-# 4-option question in a 5-option file (flagged until the AI confirms it)
-# ---------------------------------------------------------------------------
 d = doc_new("Banking Edge Cases Practice")
 exp = []
 d.add_paragraph("1. Which of the following is the central bank of India? (a) SBI (b) RBI (c) NABARD (d) SIDBI (e) EXIM Bank")
@@ -296,10 +258,6 @@ d.add_paragraph("Answer: (c)")
 exp.append({"number": 6, "stem": "In which year was the Reserve Bank of India nationalised?", "options": ["1935", "1947", "1949", "1969", "1991"], "answer": "c"})
 save(d, "obj-06-edge-cases", {"kind": "mcq", "questions": exp})
 
-# ---------------------------------------------------------------------------
-# obj-07: "Q1." numbering, "a)" options two per line, answer table with an
-# extra column ("Q.No. | Answer | Marks | Explanation")
-# ---------------------------------------------------------------------------
 Q7 = [
     ("Which reserve must banks keep as cash balances with the RBI?", ["SLR", "CRR", "LCR", "NSFR", "LTV"], "b", "CRR is kept as cash balances with the RBI; SLR is kept in liquid assets by the bank itself."),
     ("Which Basel III ratio measures liquid assets against 30-day net cash outflows?", ["NSFR", "Leverage ratio", "LCR", "CET1", "CRAR"], "c", "The Liquidity Coverage Ratio compares high-quality liquid assets with net cash outflows over 30 days."),
@@ -316,9 +274,6 @@ d.add_heading("Answer Key", 1)
 table(d, [["Q.No.", "Answer", "Marks", "Explanation"]] + [[str(i), q[2], "1", q[3]] for i, q in enumerate(Q7, 1)])
 save(d, "obj-07-key-table-extra-column", {"kind": "mcq", "questions": exp})
 
-# ---------------------------------------------------------------------------
-# Subjective files
-# ---------------------------------------------------------------------------
 def bullets(d, items):
     for it in items:
         d.add_paragraph(it, style="List Bullet")
@@ -394,10 +349,6 @@ for i, (q, ans) in enumerate(ENG, 1):
         d.add_paragraph(a)
     exp.append({"question": q[:80], "answerStart": ans[0][:60]})
 save(d, "subj-03-english", {"kind": "desc", "questions": exp})
-# ---------------------------------------------------------------------------
-# subj-04: "Q1. Topic" + "Question (15 Marks, 600 Words): ..." is ONE question;
-# an answer that ends with a table row before an un-numbered question
-# ---------------------------------------------------------------------------
 d = doc_new("ESI Answer Writing: Mixed Formats")
 exp = []
 d.add_paragraph("Q1. Monetary Transmission")
@@ -416,12 +367,6 @@ for a in ans2:
     d.add_paragraph(a)
 exp.append({"topic": "Financial Inclusion", "marks": 10, "wordLimit": 400, "question": "What is financial inclusion? Discuss two recent measures that promote it.", "answerStart": ans2[0][:60]})
 save(d, "subj-04-mixed-formats", {"kind": "desc", "questions": exp})
-# ---------------------------------------------------------------------------
-# obj-08: question sets built on a shared passage / table, as in RBI Phase-1:
-# RC passage "Directions (1-5)", a DI table with NO range ("answer the questions
-# that follow"), a "Case Study:" caselet, stand-alone GA questions under a
-# heading (no passage), and a ranged reasoning puzzle. Key = table at the end.
-# ---------------------------------------------------------------------------
 RC_PASSAGE = [
     "India's push for financial inclusion has moved in three distinct waves. The first, after bank nationalisation in 1969, took branches into villages that had never seen a bank. The second, in the 2000s, relied on business correspondents who carried basic banking to the doorstep. The third wave, which is still unfolding, rests on digital public infrastructure: a bank account for almost every adult, a biometric identity and an interoperable payments system that works on any phone.",
     "Yet access is not the same as use. Many accounts opened in enrolment drives stayed dormant for months because their holders had little money to save and no reason to transact. Usage rose only when wages, subsidies and pensions began to flow into these accounts directly, giving people a reason to visit the account every month.",
@@ -485,10 +430,6 @@ d.add_heading("Answer Key", 1)
 table(d, [["Q.No.", "Answer", "Explanation"]] + [[str(e["number"]), e["answer"], e["explanation"]] for e in exp])
 save(d, "obj-08-passage-sets", {"kind": "mcq", "questions": exp})
 
-# ---------------------------------------------------------------------------
-# subj-05: a case study with a data table for Q1-Q2 (no range given), a passage
-# for "Questions 3 and 4" placed after Q2's answer, then a stand-alone Q5
-# ---------------------------------------------------------------------------
 d = doc_new("Finance Descriptive Practice: Case Study and Passage")
 exp = []
 d.add_paragraph("Case Study 1: Asset quality at Shakti Bank")

@@ -2,11 +2,9 @@
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
   --dur-fast: 0.16s;
   --dur-med: 0.24s;
-  /* Type */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* Neutrals */
   --bg: #f5f5f7;
   --card: #ffffff;
   --ink: #1d1d1f;
@@ -19,7 +17,6 @@
   --fill: #f8f8fa;
   --fill-2: #f0f0f3;
 
-  /* Brand: Reserve Bank navy, a calmer interactive blue, a little bronze */
   --brand: #0d2b5e;
   --brand-hover: #0a2249;
   --accent: #1d5fc4;
@@ -29,7 +26,6 @@
   --gold: #9a7128;
   --gold-soft: #faf4e8;
 
-  /* Status */
   --ok: #1e8e3e;
   --ok-soft: #ebf6ee;
   --ok-line: #c8e7d1;
@@ -40,7 +36,6 @@
   --warn-soft: #fdf4e7;
   --warn-line: #f2dbb8;
 
-  /* Shape */
   --radius: 14px;
   --radius-sm: 10px;
   --radius-lg: 20px;
@@ -49,7 +44,6 @@
   --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.16);
   --ring: 0 0 0 4px rgba(29, 95, 196, 0.16);
 
-  /* Legacy names used throughout this file */
   --text: var(--ink);
   --primary: var(--accent);
   --primary-hover: var(--accent-hover);
@@ -69,7 +63,6 @@ body {
   padding: 0;
 }
 
-/* Very important: hidden elements must remain hidden regardless of other display rules */
 [hidden] {
   display: none !important;
 }
@@ -270,7 +263,6 @@ button.secondary:hover {
   font-size: 14px;
 }
 
-/* Setup Screen & Minimal Upload Layout */
 .setup-header {
   margin-bottom: 20px;
 }
@@ -290,7 +282,6 @@ button.secondary:hover {
   line-height: 1.5;
 }
 
-/* Minimal Upload Card */
 .minimal-upload-card {
   background: #ffffff;
   border: 1px solid var(--line);
@@ -405,7 +396,6 @@ button.secondary:hover {
   background: var(--ink-2) !important;
 }
 
-/* Quick Actions Bar */
 .quick-actions-row {
   display: flex;
   align-items: center;
@@ -447,7 +437,6 @@ button.secondary:hover {
   color: var(--ink);
 }
 
-/* Upload Status Badge */
 .upload-status-badge:not(:empty) {
   display: block;
   margin-top: 12px;
@@ -460,7 +449,6 @@ button.secondary:hover {
   font-weight: 500;
 }
 
-/* Minimal Accordion for Manual Entry */
 .minimal-accordion {
   background: #ffffff;
   border: 1px solid var(--line);
@@ -538,7 +526,6 @@ button.secondary:hover {
   cursor: pointer;
 }
 
-/* Setup List Header */
 .setup-list-header {
   display: flex;
   justify-content: space-between;
@@ -662,7 +649,6 @@ button.secondary:hover {
   font-size: 12px;
 }
 
-/* Config Boxes */
 .minimal-config {
   background: #ffffff;
   border: 1px solid var(--line);
@@ -745,7 +731,6 @@ button.secondary:hover {
   font-weight: 500;
 }
 
-/* Exam Screen */
 #exam-topbar {
   display: flex;
   justify-content: space-between;
@@ -781,7 +766,6 @@ button.secondary:hover {
   animation: slow-blink 1s infinite;
 }
 
-/* Real RBI Grade B / TCS iON Exam Console Styles */
 #screen-exam,
 #screen-exam-p1 {
   width: 100%;
@@ -866,7 +850,6 @@ button.secondary:hover {
   color: #ffffff;
 }
 
-/* Exam Section Bar */
 .rbi-section-bar {
   background: var(--line);
   border: 1px solid var(--line-strong);
@@ -936,7 +919,6 @@ button.secondary:hover {
   animation: slow-blink 1s infinite;
 }
 
-/* Main Split View */
 .rbi-exam-body {
   display: flex;
   gap: 12px;
@@ -944,7 +926,6 @@ button.secondary:hover {
   align-items: flex-start;
 }
 
-/* Left Panel */
 .rbi-work-panel {
   flex: 1 1 73%;
   background: #ffffff;
@@ -1086,7 +1067,6 @@ button.secondary:hover {
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 3px rgba(0, 51, 102, 0.15);
 }
 
-/* Action Bar */
 .rbi-action-bar {
   display: flex;
   align-items: center;
@@ -1171,7 +1151,6 @@ button.secondary:hover {
   background: var(--danger);
 }
 
-/* Right Side Panel: Legend & Palette */
 .rbi-side-panel {
   flex: 1 1 27%;
   display: flex;
@@ -1243,7 +1222,6 @@ button.secondary:hover {
   color: #ffffff;
 }
 
-/* Palette Box */
 .rbi-palette-box {
   background: #ffffff;
   border: 1px solid var(--line-strong);
@@ -1360,7 +1338,6 @@ button.secondary:hover {
   margin-top: 2px;
 }
 
-/* Summary Box */
 .rbi-summary-box {
   background: #ffffff;
   border: 1px solid var(--line-strong);
@@ -1389,7 +1366,6 @@ button.secondary:hover {
   margin-top: 4px;
 }
 
-/* Realistic RBI / TCS iON Confirmation Modal */
 .rbi-modal-content {
   background: #ffffff;
   max-width: 600px;
@@ -1457,7 +1433,6 @@ button.secondary:hover {
   gap: 10px;
 }
 
-/* Modal */
 .modal {
   position: fixed;
   top: 0;
@@ -1491,7 +1466,6 @@ button.secondary:hover {
   margin: 6px;
 }
 
-/* Result Screen */
 .result-card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -1542,7 +1516,6 @@ button.secondary:hover {
   line-height: 1.5;
 }
 
-/* History Screen */
 .history-stats-bar,
 #history-stats,
 #p1-history-stats {
@@ -1618,7 +1591,6 @@ button.secondary:hover {
   font-size: 14px;
 }
 
-/* Responsive / Mobile */
 @media (max-width: 900px) {
   .rbi-exam-body {
     flex-direction: column;
@@ -1674,7 +1646,6 @@ button.secondary:hover {
   }
 }
 
-/* Phase-1 Objective / MCQ Styles */
 .p1-options-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1758,7 +1729,6 @@ button.secondary:hover {
   color: var(--ok);
 }
 
-/* Exam Screen Options */
 .mcq-options-list {
   display: flex;
   flex-direction: column;
@@ -1819,7 +1789,6 @@ button.secondary:hover {
   color: var(--ink);
 }
 
-/* Phase 1 Result Scorecard */
 .result-scorecard {
   background: #ffffff;
   border: 1px solid var(--line-strong);
@@ -1910,7 +1879,6 @@ button.secondary:hover {
   color: #854d0e;
 }
 
-/* Result Filter Bar */
 .result-filter-toolbar {
   display: flex;
   align-items: center;
@@ -1945,7 +1913,6 @@ button.secondary:hover {
   border-color: var(--brand);
 }
 
-/* Review Cards */
 .mcq-review-card {
   background: #ffffff;
   border: 1px solid var(--line-strong);
@@ -2025,7 +1992,6 @@ button.secondary:hover {
   color: var(--accent-hover);
 }
 
-/* Phase 1 Palette */
 #p1-exam-palette {
   grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
   max-height: 380px;
@@ -2039,7 +2005,6 @@ button.secondary:hover {
   font-size: 13px;
 }
 
-/* Pagination Controls */
 .pagination-wrapper {
   margin: 16px 0 20px 0;
   display: flex;
@@ -2123,9 +2088,6 @@ button.secondary:hover {
   margin-bottom: 8px;
 }
 
-/* ============================================================
-   Phase-2 History: Test Review & Written Answers Inspection
-   ============================================================ */
 .btn-toggle-answer-review {
   background: var(--brand) !important;
   color: #ffffff !important;
@@ -2280,9 +2242,6 @@ button.secondary:hover {
   white-space: pre-wrap;
 }
 
-/* ============================================================
-   Button Proportion & UI Alignment Polish
-   ============================================================ */
 button, .rbi-btn, .btn-minimal-primary, .quick-action-pill {
   font-family: inherit;
   transition: background-color 0.15s var(--ease-out), border-color 0.15s var(--ease-out), color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out), opacity 0.15s var(--ease-out), transform 0.15s var(--ease-out);
@@ -2333,9 +2292,6 @@ button, .rbi-btn, .btn-minimal-primary, .quick-action-pill {
   border-radius: 6px !important;
 }
 
-/* ============================================================
-   Responsive Gutters
-   ============================================================ */
 @media (max-width: 1024px) {
   #app-header {
     padding: 12px 24px;
@@ -2368,9 +2324,6 @@ button, .rbi-btn, .btn-minimal-primary, .quick-action-pill {
 
 
 
-/* ============================================================
-   Shared page polish (all screens)
-   ============================================================ */
 .screen > h2 {
   margin: 0 0 18px 0;
   font-size: 1.35rem;
@@ -2439,9 +2392,6 @@ label.file-btn {
   white-space: nowrap;
 }
 
-/* ============================================================
-   Calendar & TODO
-   ============================================================ */
 .calendar-screen {
   --cal-accent: var(--brand);
   --cal-done: #10b981;
@@ -2461,7 +2411,6 @@ label.file-btn {
   margin-bottom: 16px;
 }
 
-/* Stats strip */
 .cal-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2530,7 +2479,6 @@ label.file-btn {
   transition: width 0.25s ease;
 }
 
-/* Two-column layout: big month grid + selected day panel */
 .cal-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 370px;
@@ -2626,7 +2574,6 @@ label.file-btn {
   gap: 6px;
 }
 
-/* Day cell */
 .cal-cell {
   position: relative;
   display: flex;
@@ -2895,7 +2842,6 @@ label.file-btn {
 .lg-ca { background: #ffffff; border-color: var(--line) !important; box-shadow: inset 0 3px 0 var(--cal-ca); }
 .lg-buffer { background: #ffffff; border-color: var(--line) !important; box-shadow: inset 0 3px 0 var(--cal-buffer); }
 
-/* Selected day panel */
 .day-panel {
   background: #ffffff;
   border: 1px solid var(--line);
@@ -3080,7 +3026,6 @@ label.file-btn {
   border-color: var(--danger-line);
 }
 
-/* TODO list */
 .todo-list {
   list-style: none;
   margin: 12px 0 0 0;
@@ -3350,7 +3295,6 @@ label.file-btn {
   background: var(--brand-hover);
 }
 
-/* Plan settings */
 .cal-settings {
   margin-top: 18px;
   background: #ffffff;
@@ -3448,7 +3392,6 @@ label.file-btn {
   color: var(--danger);
 }
 
-/* Edit TODO dialog */
 .todo-modal-card {
   max-width: 480px;
   text-align: left;
@@ -3482,7 +3425,6 @@ label.file-btn {
   margin: 0;
 }
 
-/* Responsive calendar */
 @media (max-width: 1180px) {
   .cal-layout {
     grid-template-columns: minmax(0, 1fr) 320px;
@@ -3581,9 +3523,6 @@ label.file-btn {
   }
 }
 
-/* ============================================================
-   Calendar: upcoming tests, day focus rows, routine tags
-   ============================================================ */
 .cal-upcoming {
   background: #ffffff;
   border: 1px solid var(--line);
@@ -3795,14 +3734,10 @@ label.file-btn {
   }
 }
 
-/* ============================================================
-   Page fixes: setup forms, lists, dialogs, result
-   ============================================================ */
 .checkbox-label {
   gap: 8px;
 }
 
-/* the drop zone's divider only makes sense when a status message follows it */
 .upload-drop-zone {
   padding-bottom: 0;
   border-bottom: none;
@@ -3894,7 +3829,6 @@ label.file-btn {
   color: var(--muted);
 }
 
-/* exam confirmation dialogs: the generic .modal-content width squeezed the table */
 .modal-content.rbi-modal-content {
   max-width: 640px;
   width: 94%;
@@ -3956,18 +3890,12 @@ label.file-btn {
   }
 }
 
-/* ============================================================================
-   AI evaluation (ai_eval.js): settings dialog, result assessment, history
-   ============================================================================ */
-
-/* Grade palette: A green · B blue · C amber · D orange · F red */
 .ai-g-a { --ring-color: var(--ok); --g-fg: var(--ok); --g-bg: var(--ok-soft); --g-bd: var(--ok-line); }
 .ai-g-b { --ring-color: var(--accent); --g-fg: var(--accent); --g-bg: var(--accent-soft); --g-bd: var(--accent-line); }
 .ai-g-c { --ring-color: var(--warn); --g-fg: var(--warn); --g-bg: var(--warn-soft); --g-bd: var(--warn-line); }
 .ai-g-d { --ring-color: #c2410c; --g-fg: #c2410c; --g-bg: #fff7ed; --g-bd: #fed7aa; }
 .ai-g-f { --ring-color: var(--danger); --g-fg: var(--danger); --g-bg: var(--danger-soft); --g-bd: var(--danger-line); }
 
-/* Header button + status dot */
 #app-header nav #nav-ai-settings {
   display: inline-flex;
   align-items: center;
@@ -3988,7 +3916,6 @@ label.file-btn {
   box-shadow: 0 0 0 2px var(--ok-soft);
 }
 
-/* Buttons */
 button.ai-btn-primary {
   display: inline-flex;
   align-items: center;
@@ -4091,7 +4018,6 @@ button.ai-link:hover {
   color: var(--warn);
 }
 
-/* Score ring */
 .ai-ring {
   --pct: 0;
   width: 84px;
@@ -4139,7 +4065,6 @@ button.ai-link:hover {
   font-size: 24px;
 }
 
-/* Spinner / waiting dot */
 .ai-spinner {
   width: 16px;
   height: 16px;
@@ -4167,7 +4092,6 @@ button.ai-link:hover {
   .ai-spinner { animation-duration: 2.4s; }
 }
 
-/* ---------- Result screen: panel ---------- */
 .ai-panel {
   background: #ffffff;
   border: 1px solid var(--line);
@@ -4386,7 +4310,6 @@ button.ai-link:hover {
   margin: 0;
 }
 
-/* Tables */
 .ai-table {
   width: 100%;
   border-collapse: collapse;
@@ -4474,7 +4397,6 @@ button.ai-link:hover {
   color: var(--ink);
 }
 
-/* ---------- Result screen: one assessment per question ---------- */
 .result-card {
   scroll-margin-top: 84px;
 }
@@ -4871,7 +4793,6 @@ details.ai-sec > summary:hover {
   border-left-color: var(--danger);
 }
 
-/* Raw prompt (kept for grading in another chatbot) */
 details.prompt-preview {
   margin-top: 10px;
 }
@@ -4898,7 +4819,6 @@ details.prompt-preview .txt-preview {
   flex: 1 1 100%;
 }
 
-/* ---------- History ---------- */
 .ai-hist {
   margin-top: 8px;
   padding: 8px 12px;
@@ -4940,7 +4860,6 @@ details.prompt-preview .txt-preview {
   margin-top: 10px;
 }
 
-/* ---------- AI Settings dialog ---------- */
 .modal-content.ai-settings-card {
   max-width: 580px;
   width: calc(100% - 32px);
@@ -5114,7 +5033,6 @@ label.ai-check input {
   flex: 1 1 auto;
 }
 
-/* ---------- Small screens ---------- */
 @media (max-width: 860px) {
   .ai-overall {
     grid-template-columns: 1fr;
@@ -5150,10 +5068,6 @@ label.ai-check input {
   }
 }
 
-/* ============================================================================
-   DESIGN SYSTEM - calm, Apple-like surfaces for every screen
-   (tokens are defined in :root at the top of this file)
-   ============================================================================ */
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -5175,7 +5089,6 @@ h1, h2, h3, h4, h5, h6 { color: var(--ink); letter-spacing: -0.015em; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* ---------- Buttons ---------- */
 button,
 .file-btn {
   font-family: inherit;
@@ -5249,7 +5162,6 @@ button.danger:hover { background: #fbe2e0; color: var(--danger); }
 }
 .btn-start-primary:hover { background: var(--brand-hover); }
 
-/* ---------- Form fields ---------- */
 label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
 
 input:not([type="checkbox"]):not([type="radio"]),
@@ -5287,7 +5199,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .error { color: var(--danger); font-size: 14px; }
 .info { background: var(--accent-soft); border-left: 3px solid var(--accent); color: var(--ink-2); border-radius: 10px; }
 
-/* ---------- Header: translucent bar, brand lockup, segmented control ---------- */
 #app-header {
   min-height: 60px;
   padding: 8px 48px;
@@ -5364,7 +5275,6 @@ input[type="radio"] { accent-color: var(--accent); }
 #app-header nav button:hover { background: rgba(0, 0, 0, 0.05); color: var(--ink); border: none; }
 #app-header nav button.active { background: rgba(0, 0, 0, 0.065); color: var(--ink); border: none; font-weight: 600; }
 
-/* ---------- Screens and titles ---------- */
 .screen { padding: 36px 48px 88px 48px; }
 
 .eyebrow {
@@ -5398,7 +5308,6 @@ input[type="radio"] { accent-color: var(--accent); }
   margin: 0 0 22px 0;
 }
 
-/* ---------- Cards ---------- */
 .minimal-upload-card,
 .minimal-accordion,
 .config-box,
@@ -5479,7 +5388,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .model-comparison-box { background: var(--fill); border: 1px solid var(--line); border-style: solid; border-radius: 12px; }
 .model-comparison-box p { white-space: pre-wrap; }
 
-/* small colour dots used instead of emoji markers */
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
 .dot-ok { background: var(--ok); }
 .dot-bad { background: var(--danger); }
@@ -5493,7 +5401,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .type-study { background: var(--gold); }
 .type-other { background: var(--muted-2); }
 
-/* ---------- Objective result scorecard ---------- */
 .result-scorecard { padding: 24px; }
 .stat-pill { border-radius: 12px; border: 1px solid var(--line); background: var(--fill); }
 .stat-pill.correct span::before,
@@ -5513,7 +5420,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .rf-btn { border-radius: 999px; }
 .rf-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
 
-/* ---------- Exam console (keeps TCS iON colour meanings) ---------- */
 #screen-exam,
 #screen-exam-p1 { background: var(--bg); padding-top: 20px; }
 
@@ -5570,18 +5476,15 @@ input[type="radio"] { accent-color: var(--accent); }
 #exam-answer { border-radius: 12px; font-size: 15.5px; line-height: 1.65; }
 .rbi-btn { border-radius: 10px; }
 
-/* ---------- Modals ---------- */
 .modal { background: rgba(0, 0, 0, 0.32); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .modal-content { border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); border: none; }
 
-/* ---------- Calendar touch-ups ---------- */
 .cal-stat,
 .cal-month,
 .cal-day-panel,
 .cal-upcoming,
 .cal-settings { border-radius: var(--radius); }
 
-/* ---------- Responsive ---------- */
 @media (max-width: 1024px) {
   #app-header { padding: 8px 24px; }
   .screen { padding: 28px 24px 72px 24px; }
@@ -5600,7 +5503,6 @@ input[type="radio"] { accent-color: var(--accent); }
   #app-header nav button { padding: 6px 9px; font-size: 13px; }
 }
 
-/* ---------- Refinements after the visual review ---------- */
 .result-card-header h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wc-pill {
   font-size: 12px;
@@ -5618,7 +5520,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .result-card .actions { gap: 6px; }
 .result-toolbar { gap: 8px; margin: 6px 0 18px 0; }
 
-/* History: hairline rows instead of a full grid; quiet actions, one primary */
 .history-table { border-collapse: collapse; border: none; }
 .history-table th,
 .history-table td { border: none !important; border-bottom: 1px solid var(--line) !important; background: transparent; }
@@ -5631,7 +5532,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .btn-copy-ans-mini,
 .btn-toggle-model-mini { border-radius: 999px; padding: 4px 10px; }
 
-/* Exam: one timer style, modern text in the answer box */
 #exam-timer,
 #p1-exam-timer {
   color: #fff;
@@ -5646,7 +5546,6 @@ input[type="radio"] { accent-color: var(--accent); }
 #p1-exam-timer.timer-danger { color: #ff9b94; }
 #exam-answer { font-family: var(--font); color: var(--ink); }
 
-/* Calendar: icon buttons */
 .todo-icon-btn svg { display: block; }
 .history-card-header .actions .btn-toggle-answer-review {
   background: #fff !important;
@@ -5655,12 +5554,6 @@ input[type="radio"] { accent-color: var(--accent); }
 }
 .history-card-header .actions .btn-toggle-answer-review:hover { background: var(--fill-2) !important; color: var(--ink) !important; }
 
-/* ============================================================================
-   Objective import check, test-type dialog, topic analysis, writing analysis,
-   calendar test TODOs (added Nov 2026)
-   ========================================================================== */
-
-/* ---------- Objective setup: answer-key check ---------- */
 .p1-check { margin: 18px 0 8px; display: flex; flex-direction: column; gap: 14px; }
 .p1-check-card {
   background: var(--card);
@@ -5721,7 +5614,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .p1-q-topic { font-size: 11px; color: var(--muted); }
 #btn-start-p1-test:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* ---------- Exam: more than one correct option ---------- */
 .mcq-multi-hint {
   margin: 0 0 8px;
   font-size: 12.5px;
@@ -5730,7 +5622,6 @@ input[type="radio"] { accent-color: var(--accent); }
 }
 #p1-exam-options-list.is-multi .mcq-option-item .opt-badge { border-radius: 5px; }
 
-/* ---------- Test-type dialog ---------- */
 .test-type-card { max-width: 460px; width: calc(100% - 32px); }
 .test-type-card h3 { margin: 0 0 4px; }
 .test-type-sub { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); min-height: 1em; }
@@ -5753,7 +5644,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .tt-option input:focus-visible + .tt-card { outline: 2px solid var(--accent); outline-offset: 2px; }
 .test-type-note { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
 
-/* ---------- Result screens ---------- */
 .btn-back-calendar { margin-bottom: 12px; }
 .rev-meta { margin-left: 8px; font-size: 12px; color: var(--muted); }
 .rev-badge { background: var(--fill-2); color: var(--ink-3); padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 12px; }
@@ -5764,7 +5654,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .rev-opt-tag.bad { color: var(--danger); }
 .rev-ai-why { border-left: 3px solid var(--accent); background: var(--accent-soft); }
 
-/* ---------- Objective: topic-wise analysis ---------- */
 .p1-analysis {
   background: var(--card);
   border: 1px solid var(--line);
@@ -5828,7 +5717,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .p1-why-list li { padding: 6px 0; border-bottom: 1px solid var(--fill-2); }
 .p1-why-list li p { margin: 2px 0 0; }
 
-/* ---------- Subjective: writing analysis + topic tables ---------- */
 .ai-wchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 8px; }
 .ai-wchip {
   font-size: 12px;
@@ -5858,7 +5746,6 @@ input[type="radio"] { accent-color: var(--accent); }
 .ai-topic-block { margin-top: 16px; }
 .ai-topic-block h4 { margin: 0 0 8px; font-size: 15px; }
 
-/* ---------- Calendar: test TODOs, tests taken, timetable buttons ---------- */
 .todo-auto {
   width: 22px;
   height: 22px;
@@ -5934,7 +5821,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
   .p1-topic-table th:nth-child(8), .p1-topic-table td:nth-child(8) { display: none; }
 }
 
-/* Shared passages, case studies and data tables (RC, caselets, DI) */
 .q-passage {
   background: var(--card);
   border: 1px solid var(--accent-line);
@@ -5996,8 +5882,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .q-passage-peek .q-passage-body { padding: 4px 12px 10px; font-size: 13.5px; max-height: 320px; overflow-y: auto; }
 .field-hint { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 4px; }
 
-/* Exam screens: the question, its passage and its tables grow to their full height (never a
-   scrollbar inside the question); the page scrolls, and the palette column stays in place. */
 #screen-exam .rbi-question-box,
 #screen-exam-p1 .rbi-question-box {
   max-height: none;
@@ -6014,7 +5898,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
   }
 }
 
-/* ---------- Subject / chapter folders (folders.js) ---------- */
 .folder-card { max-width: 500px; width: calc(100% - 32px); max-height: calc(100vh - 40px); overflow-y: auto; }
 .folder-card h3 { margin: 0 0 4px; }
 .folder-form { display: flex; flex-direction: column; gap: 12px; }
@@ -6044,7 +5927,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .folder-form label { align-items: stretch; }
 .folder-form .folder-radio { align-items: flex-start; }
 
-/* ---------- History: file explorer (folders.js) ---------- */
 .explorer {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -6197,7 +6079,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
   .ex-total { display: none; }
 }
 
-/* ---------- Exam warning toast (copy / paste blocked) ---------- */
 .exam-toast {
   position: fixed;
   top: 18px;
@@ -6219,7 +6100,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .exam-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
 .setup-note { margin: 0; font-size: 13px; color: var(--muted); }
 
-/* ---------- API keys dialog: one key, two model cards ---------- */
 .ai-session-note { font-size: 12.5px; color: var(--muted); margin: 0 0 12px; }
 .ai-keys { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
 .ai-key-block label { font-weight: 600; }
@@ -6251,7 +6131,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .ai-engine .ai-test-row { margin-top: 8px; }
 .ai-nav-dot.half { background: var(--warn); }
 
-/* ---------- Smooth screen and dialog transitions ---------- */
 .screen-enter { animation: screen-in var(--dur-med) var(--ease-out); }
 @keyframes screen-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .modal:not([hidden]) { animation: modal-fade var(--dur-fast) var(--ease-out); }
@@ -6263,7 +6142,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
   .exam-toast, .ex-tile { transition: none; }
 }
 
-/* ---------- Grading consistency: reference checklist ---------- */
 .ai-checklist td:nth-child(2) { text-align: center; width: 64px; }
 .ai-checklist td:nth-child(3) { width: 96px; }
 .ai-ck-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); }
@@ -6271,7 +6149,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .ai-ck-partial .ai-ck-tag { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
 .ai-ck-missing .ai-ck-tag { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-line); }
 
-/* ---------- History test cards ---------- */
 .history-card.tcard-host {
   background: var(--card);
   border: 1px solid var(--line);
@@ -6350,7 +6227,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
   .tcard-title { white-space: normal; }
 }
 
-/* ---------- History: performance by subject / chapter ---------- */
 .perf-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 16px 18px 12px; margin-bottom: 18px; }
 .perf-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
 .perf-head h3 { margin: 0; font-size: 16px; color: var(--ink); }
@@ -6442,7 +6318,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 
 .explorer { margin-bottom: 16px; }
 
-/* Phone: question cards on the New Test lists keep their text full width; the move / edit / remove buttons go below */
 @media (max-width: 640px) {
   .p1-question-list li { flex-wrap: wrap; }
   #setup-question-list li > div { flex-wrap: wrap; }
@@ -6452,14 +6327,12 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .perf-subject > summary { border-radius: 8px; }
 .perf-subject > summary:focus-visible { outline: none; box-shadow: var(--ring); }
 
-/* Objective upload card: questions + a separate answer-key file */
 .upload-buttons { display: flex; flex-direction: column; gap: 8px; align-items: stretch; flex-shrink: 0; }
 .upload-buttons label { text-align: center; justify-content: center; }
 @media (max-width: 640px) { .upload-buttons { width: 100%; } }
 .upload-buttons label.btn-minimal-secondary { background: var(--card) !important; color: var(--brand) !important; border: 1px solid var(--line-strong); box-shadow: none; }
 .upload-buttons label.btn-minimal-secondary:hover { background: var(--accent-soft) !important; color: var(--accent-hover) !important; border-color: var(--accent-line); }
 
-/* API keys dialog: reasoning tier per model (Low / Medium / High) */
 .ai-tier { display: flex; align-items: center; gap: 6px; margin: 4px 0 6px; flex-wrap: wrap; }
 .ai-tier[hidden] { display: none; }
 .ai-tier-label { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-right: 4px; }
@@ -6479,14 +6352,12 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .ai-tier-opt input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ai-tier-opt input:focus-visible + span { box-shadow: var(--ring); }
 
-/* Model answers: shown in full (no small inner scroll box) */
 .ai-model-answer { max-height: none; overflow: visible; }
 #q-model { min-height: 240px; resize: vertical; }
 .p1-chk-note { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
 .desc-ai-notes { margin: 6px 0 0; padding: 6px 10px 6px 26px; font-size: 12.5px; color: var(--ink-3); background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: 8px; }
 .desc-ai-notes li { margin: 2px 0; }
 
-/* AI work in the background: header pill + "finished" notice */
 .ai-bg-status {
   display: inline-flex;
   align-items: center;
@@ -6531,7 +6402,6 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .ai-done-close { background: none; border: 0; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px; box-shadow: none; }
 @media (max-width: 640px) { .ai-bg-status span:last-child { max-width: 150px; overflow: hidden; text-overflow: ellipsis; } }
 
-/* AI report: examiner checks and rubric rules */
 .ai-check-res { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); color: var(--muted); }
 .ai-check-res.is-yes { color: var(--ok); border-color: currentColor; }
 .ai-check-res.is-no { color: var(--danger); border-color: currentColor; }

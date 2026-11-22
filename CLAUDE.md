@@ -66,7 +66,7 @@ Phase-2 subjective (descriptive typing + AI grading), a Calendar/TODO built from
 **objective_ai.js** (~520): MCQ import checks (`mcqPrepareImported mcqLocalIssues mcqStatus mcqIssueReasons`, AI check `mcqVerifyQuestions`, batches of 20, 3 parallel) and objective topic analysis (`p1TopicStats p1RunAnalysis p1RenderAnalysis p1WhyNote`).
 **prompt.js**: `EVAL_PROMPT_TEMPLATE` and `COMBINED_HEADER_TEMPLATE`, filled via `fillTemplate`. RULES 1-7 (5: scale parameters/penalties to {{MARKS}}, 6: Indian/British spelling is correct, 7: quote verbatim); Section 3 = 3A red-pen log + 3B writing audit. Keep `JSON_CONTRACT` in ai_eval.js in step with it.
 **index.html**: all screens as `<section id="screen-*">`: `setup-p1 exam-p1 result-p1 history-p1 setup exam result history calendar`. `showScreen("setup")` picks the `-p1` variant when `state.phase === "phase1"`.
-**style.css** (~5.6k): tokens in `:root` at top; sections marked `/* ... */` (grep `^/\* ` for the index). AI result styles from ~3956.
+**style.css** (~5.6k): tokens in `:root` at top; no section comments (grep selectors). AI result styles from ~3956.
 
 ## localStorage keys
 `rbi_current_phase rbi_current_setup rbi_active_test rbi_history` (Phase-2) · `rbi_p1_setup rbi_p1_active_test rbi_p1_history` (Phase-1)
@@ -79,5 +79,5 @@ Phase-2 subjective (descriptive typing + AI grading), a Calendar/TODO built from
 - AI calls are slow (grading 1-4 min/answer; MCQ check ~1 min per 20 questions) and the free tier has a daily cap: keep live calls few. To test AI code paths without a key, put both engines on OpenRouter in an init script (`localStorage rbi_ai_settings = {engines:{verify:{provider:"openrouter",model:"x"},grade:{provider:"openrouter",model:"y"}}}`, `sessionStorage rbi_ai_session_keys = {openrouter:"sk-or-mock"}`), intercept `https://openrouter.ai/api/v1/chat/completions` and return canned JSON.
 
 ## Code style
-- One-line comment above each function explaining it. `"use strict"` files. Build HTML with template strings + `escapeHTML`.
+- No code comments in app.js, ai_eval.js, calendar.js, folders.js, auth.js, ai_config.js, globals.d.ts, index.html, style.css and the test-docs scripts; keep them comment-free. `"use strict"` files. Build HTML with template strings + `escapeHTML`.
 - Persist through `loadJSON`/`saveJSON`. Keep README.md in sync when features change.

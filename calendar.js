@@ -1,41 +1,16 @@
 "use strict";
 
-// ============================================================
-// CALENDAR & TODO MODULE (one calendar for the whole daily routine)
-// ------------------------------------------------------------
-// * The study PLAN (RBI_Study_Schedule.xlsx = schedule_data.js, or an
-//   imported spreadsheet) gives each day a Phase-2 topic, a Phase-1 topic
-//   and sometimes a current-affairs item.
-// * Daily routine = 3 exams, generated as TODOs for every plan day:
-//     1. Phase-2 subjective (descriptive) exam
-//     2. Phase-2 objective exam
-//     3. Phase-1 objective exam
-//   plus a current-affairs TODO on days the plan has one.
-// * Chapter tests, mix tests and current-affairs objective tests from the
-//   plan are tagged on the calendar and listed under "Upcoming tests".
-// * Plan TODOs are generated on the fly; only their done / hidden state is
-//   stored (keyed by plan day number), so moving the start date keeps progress.
-// * Your own TODOs are stored separately and can be added to any date.
-// * Starting an exam from a TODO ticks that TODO when the exam is submitted.
-// Depends on helpers from app.js: $, loadJSON, saveJSON, escapeHTML,
-// getLocalDateString, makeId, sanitizeDashes, downloadText, formatDuration,
-// parseXLSX, parseCSV, parseScheduleDate, setPhase, showScreen ...
-// ============================================================
-
 const CAL_KEYS = {
-  config: "rbi_plan_config",          // { startDate, source: "official" | "custom" | "none" }
-  customPlan: "rbi_plan_custom",      // [{ day, p2_subject, p2_topic, p1_subject, p1_topic, ca }]
-  todos: "rbi_todos",                 // your own TODOs
-  planState: "rbi_plan_todo_state",   // { done: { id: timestamp }, hidden: { id: 1 }, links: { id: { kind, testId } } }
-  migrated: "rbi_todo_migrated_v1",   // legacy "quests" schedule already converted
-  keysV2: "rbi_todo_keys_v2",         // plan TODO ids converted to the daily-routine format
-  typesV3: "rbi_todo_types_v3",       // TODO types converted to the test / study types
-  launch: "rbi_todo_launch"           // TODO that started the exam currently running
+  config: "rbi_plan_config",
+  customPlan: "rbi_plan_custom",
+  todos: "rbi_todos",
+  planState: "rbi_plan_todo_state",
+  migrated: "rbi_todo_migrated_v1",
+  keysV2: "rbi_todo_keys_v2",
+  typesV3: "rbi_todo_types_v3",
+  launch: "rbi_todo_launch"
 };
 
-// TODO types. Test types tick themselves when you submit that kind of test
-// (mode: "mcq" = objective test, "write" = subjective test, "" = either);
-// Study and Other are ticked by hand.
 const TODO_TYPES = [
   { value: "Objective Practice", kind: "obj", test: true, mode: "mcq" },
   { value: "Subjective Practice", kind: "subj", test: true, mode: "write" },
@@ -45,7 +20,6 @@ const TODO_TYPES = [
   { value: "Other", kind: "other", test: false, mode: "" }
 ];
 
-// Older TODO types -> current ones
 const CAL_LEGACY_TYPES = {
   "Descriptive writing": "Subjective Practice", "MCQ practice": "Objective Practice", "Mock test": "Mix Test",
   "Study": "Study", "Revision": "Study", "Current affairs": "Study", "Other": "Other"
@@ -55,12 +29,10 @@ function calTypeDef(type) {
   return TODO_TYPES.find(t => t.value === type) || TODO_TYPES[TODO_TYPES.length - 1];
 }
 
-// Is this a test TODO (completed automatically, never ticked by hand)?
 function calIsTestType(type) {
   return !!calTypeDef(type).test;
 }
 
-// The daily routine: id suffix, chip label, phase tag
 const CAL_ROUTINE = [
   { key: "p2sub", chip: "P2 Subj", tag: "P2" },
   { key: "p2obj", chip: "P2 Obj", tag: "P2" },
@@ -83,9 +55,6 @@ const cal = {
   editing: null
 };
 
-// ------------------------------------------------------------
-// Small date helpers (all dates are local "YYYY-MM-DD" strings)
-// ------------------------------------------------------------
 function calParse(dateStr) {
   const [y, m, d] = String(dateStr).split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1);
@@ -121,7 +90,6 @@ function calShortDate(dateStr) {
 }
 
 function calTypeIcon(type) {
-  // a small colour dot per TODO type (styled in style.css)
   const t = TODO_TYPES.find(x => x.value === type);
   return `<i class="type-dot type-${t ? t.kind : "other"}" aria-hidden="true"></i>`;
 }
@@ -130,14 +98,10 @@ function calPracticeForType(type) {
   return calTypeDef(type).mode || "";
 }
 
-// ------------------------------------------------------------
-// Persistence
-// ------------------------------------------------------------
 function calSaveConfig() { saveJSON(CAL_KEYS.config, cal.config); }
 function calSaveTodos() { saveJSON(CAL_KEYS.todos, cal.todos); }
 function calSavePlanState() { saveJSON(CAL_KEYS.planState, cal.planState); }
 
-// Load all calendar data once (and convert older data formats the first time)
 function calEnsureLoaded() {
   if (cal.loaded) return;
   const savedConfig = loadJSON(CAL_KEYS.config, null);
@@ -161,7 +125,6 @@ function calEnsureLoaded() {
   cal.loaded = true;
 }
 
-// Convert your own TODOs to the test / study types
 function calMigrateTypesV3() {
   cal.todos.forEach(t => {
     if (!TODO_TYPES.some(x => x.value === t.type)) t.type = CAL_LEGACY_TYPES[t.type] || "Other";
@@ -170,7 +133,6 @@ function calMigrateTypesV3() {
   saveJSON(CAL_KEYS.typesV3, true);
 }
 
-// Convert the old single "rbi_study_schedule" list (plan tasks + quests) into the new model
 function calMigrateLegacy(useLegacyStart) {
   const legacyStart = loadJSON("rbi_calendar_start_date", null);
   if (useLegacyStart && calIsValidDate(legacyStart)) cal.config.startDate = legacyStart;
@@ -198,7 +160,6 @@ function calMigrateLegacy(useLegacyStart) {
       const done = t.status === "completed";
       let m;
       if ((m = /^task-d(\d+)-(p1|p2|ca)-\d+$/.exec(id))) {
-        // Row from an imported multi-phase spreadsheet: rebuild the custom plan
         const day = Number(m[1]);
         const row = customRows[day] || (customRows[day] = { day, p2_subject: "", p2_topic: "", p1_subject: "", p1_topic: "", ca: "" });
         ["p2_subject", "p2_topic", "p1_subject", "p1_topic", "ca"].forEach(k => { if (t[k]) row[k] = sanitizeDashes(t[k]); });
@@ -212,7 +173,6 @@ function calMigrateLegacy(useLegacyStart) {
           if (map) markDone(t.dayNum, map);
         }
       } else {
-        // Anything the user created (quick-add quests, modal tasks, generic imports)
         cal.todos.push({
           id: makeId("todo"),
           date: calIsValidDate(t.date) ? t.date : calToday(),
@@ -239,7 +199,6 @@ function calMigrateLegacy(useLegacyStart) {
   saveJSON(CAL_KEYS.migrated, true);
 }
 
-// Convert plan TODO ids of the previous calendar version ("p2-d21-write") to "d21-p2sub"
 function calMigrateKeysV2() {
   const map = { "p2:write": "p2sub", "p2:quiz": "p2obj", "p1:practice": "p1obj", "p1:test": "p1obj", "p1:ca": "ca" };
   ["done", "hidden"].forEach(bucket => {
@@ -258,9 +217,6 @@ function calMigrateKeysV2() {
   saveJSON(CAL_KEYS.keysV2, true);
 }
 
-// ------------------------------------------------------------
-// Study plan
-// ------------------------------------------------------------
 function calPlanRows() {
   if (cal.config.source === "none") return [];
   if (cal.config.source === "custom" && cal.customPlan.length > 0) return cal.customPlan;
@@ -269,7 +225,6 @@ function calPlanRows() {
     : [];
 }
 
-// Map every plan row onto a calendar date (cached until the plan / start date changes)
 function calPlanIndex() {
   if (cal.planIndex) return cal.planIndex;
   const byDate = new Map();
@@ -293,7 +248,6 @@ function calInvalidatePlan() {
   cal.planIndex = null;
 }
 
-// Split a schedule topic like "Chapter Test (Ch 4): Objective Test + Subjective Test - X" into parts
 function parsePlanTopic(text) {
   const raw = sanitizeDashes(String(text || "")).replace(/\s+/g, " ").trim();
   if (!raw) return null;
@@ -321,7 +275,6 @@ function parsePlanTopic(text) {
   return { kind: "topic", label: "", focus: raw };
 }
 
-// Current-affairs plan item: either a reading day or an objective test day
 function parsePlanCA(text) {
   const raw = sanitizeDashes(String(text || "")).replace(/\s+/g, " ").trim();
   if (!raw) return null;
@@ -335,7 +288,6 @@ function calIsTestKind(kind) {
   return kind === "chapter-test" || kind === "mix-test" || kind === "ca-test";
 }
 
-// Compact test label: "Ch 4 test", "Mix 1-3 test", "CA test"
 function calShortTestLabel(kind, label) {
   const m = /\(ch\s*([^)]*)\)/i.exec(label || "");
   const range = m ? m[1].trim() : "";
@@ -346,14 +298,12 @@ function calShortTestLabel(kind, label) {
   return label || "";
 }
 
-// "Chapter Test (Ch 4)" -> "Ch 4", "Mix Test (Ch 1-3)" -> "Mix Ch 1-3"
 function calTestShortName(kind, label) {
   const m = /\(ch\s*([^)]*)\)/i.exec(label || "");
   if (!m) return label || "";
   return (kind === "mix-test" ? "Mix Ch " : "Ch ") + m[1].trim();
 }
 
-// Build the daily-routine TODOs for one plan day
 function calPlanTodos(date, row) {
   if (!row) return [];
   const day = Number(row.day);
@@ -378,7 +328,6 @@ function calPlanTodos(date, row) {
   const describe = (t) => (t.label ? `${t.focus} · ${t.label}` : t.focus);
   const testType = (t) => (t.kind === "mix-test" ? "Mix Test" : "Chapter Test");
 
-  // Phase-2: subjective + objective exam every day
   const p2IsTest = p2 && (p2.kind === "chapter-test" || p2.kind === "mix-test");
   const p2Short = p2IsTest ? calTestShortName(p2.kind, p2.label) : "";
   const p2Detail = p2 ? (p2IsTest ? p2.focus : describe(p2)) : "No Phase-2 topic today: revise previous chapters";
@@ -392,7 +341,6 @@ function calPlanTodos(date, row) {
     p2IsTest ? testType(p2) : "Objective Practice", p2Detail, p2Sub || "Phase-2", "mcq",
     p2IsTest ? p2.kind : "", p2IsTest ? p2.label : "");
 
-  // Phase-1: objective exam every day (a CA objective test counts when there is no Phase-1 topic)
   const p1IsTest = p1 && (p1.kind === "chapter-test" || p1.kind === "mix-test");
   if (p1) {
     add("p1obj", p1IsTest ? `Objective test · ${calTestShortName(p1.kind, p1.label)}` : "Phase-1 objective exam",
@@ -404,7 +352,6 @@ function calPlanTodos(date, row) {
     add("p1obj", "Phase-1 objective exam", "Objective Practice", "No Phase-1 topic today: mixed revision MCQs", "Phase-1", "mcq");
   }
 
-  // Current affairs (only when the plan has it)
   if (ca && ca.kind === "ca-read") {
     add("ca", "Read current affairs", "Study", ca.focus, "Current Affairs", "");
   } else if (ca && p1) {
@@ -413,7 +360,6 @@ function calPlanTodos(date, row) {
   return list;
 }
 
-// Tests scheduled on a plan day (independent of hidden / done state)
 function calPlanTests(row) {
   if (!row) return [];
   const tests = [];
@@ -426,10 +372,6 @@ function calPlanTests(row) {
   return tests;
 }
 
-// ------------------------------------------------------------
-// Exams taken (used to mark days and show scores)
-// ------------------------------------------------------------
-// Test histories, read once per calendar render (calContext clears the cache)
 let calHistCache = null;
 function calHistory(kind) {
   if (!calHistCache) calHistCache = {};
@@ -452,9 +394,8 @@ function calExamsByDate() {
   return map;
 }
 
-// Everything a render needs, computed once per render
 function calContext() {
-  calHistCache = null;   // fresh histories for every render / lookup
+  calHistCache = null;
   const manualByDate = new Map();
   for (const t of cal.todos) {
     const item = {
@@ -470,7 +411,6 @@ function calContext() {
   return { today: calToday(), plan: calPlanIndex(), manualByDate, exams: calExamsByDate(), dayCache: new Map() };
 }
 
-// All information about one day
 function calDayInfo(date, ctx) {
   if (ctx.dayCache.has(date)) return ctx.dayCache.get(date);
   const row = ctx.plan.byDate.get(date) || null;
@@ -490,7 +430,6 @@ function calDayInfo(date, ctx) {
   else if (tests.some(t => t.kind === "chapter-test")) category = "chapter";
   else if (tests.some(t => t.kind === "ca-test")) category = "ca";
   else if ((p2 && p2.kind === "buffer") || (p1 && p1.kind === "buffer")) category = "buffer";
-  // A day is complete when all its TODOs are ticked (a day without TODOs counts if a test was taken)
   const finished = todos.length > 0 ? done === todos.length : exams.length > 0;
   const info = {
     date, row, todos, done, exams, tests, p2, p1, ca, category, finished, hiddenCount,
@@ -502,7 +441,6 @@ function calDayInfo(date, ctx) {
   return info;
 }
 
-// Current / best streak of fully finished days (a missed day breaks the streak)
 function calStreak(ctx) {
   const dates = new Set();
   ctx.plan.byDate.forEach((_, d) => { if (d <= ctx.today) dates.add(d); });
@@ -542,7 +480,6 @@ function calStreak(ctx) {
   return { current, best: Math.max(best, current), todayDone: finished.has(ctx.today), examsTotal, examsDone };
 }
 
-// Next scheduled tests from today on
 function calUpcomingTests(ctx, limit) {
   const list = [];
   if (ctx.plan.totalDays === 0) return list;
@@ -556,9 +493,6 @@ function calUpcomingTests(ctx, limit) {
   return list.slice(0, limit);
 }
 
-// ------------------------------------------------------------
-// TODO actions
-// ------------------------------------------------------------
 function calFindManual(id) {
   return cal.todos.find(t => t.id === id) || null;
 }
@@ -614,31 +548,21 @@ function calRestoreHidden(dayNum) {
   calSavePlanState();
 }
 
-// Remember which TODO started an exam, so submitting the exam ticks exactly that TODO
 function calRememberLaunch(id, target) {
   if (id) saveJSON(CAL_KEYS.launch, { id, target, ts: Date.now() });
   else localStorage.removeItem(CAL_KEYS.launch);
 }
 
-// Is this MCQ test made of Phase-2 (ESI / Finance / Management) questions?
 function calIsPhase2McqTest(test) {
   const qs = (test && test.questions) || [];
   return qs.length > 0 && qs.every(q => /\b(ESI|Economic|Finance|Management|Phase-2)\b/i.test(String(q.subject || "")));
 }
 
-// Called by app.js when a test is submitted: kind = "write" (descriptive) or "mcq".
-// The test is linked to one TODO of the same test type: the TODO you started it from,
-// else an open TODO of today, else a new TODO is recorded for today. Objective tests
-// Called by app.js when a test is submitted: kind = "write" (descriptive) or "mcq".
-// The test is linked to one TODO of the type chosen when it started: the TODO you started it
-// from (if it has that type), else an open TODO of today, else a new TODO is recorded for today.
-// Objective tests complete the TODO at once; subjective tests complete it when every answer is graded.
 function autoCompleteTodoOnExam(kind, test) {
   calEnsureLoaded();
   if (!test) return;
   const type = test.testType || (kind === "write" ? "Subjective Practice" : "Objective Practice");
   let todo = calTodoForTest(kind, type, test);
-  // the "started from this TODO" note is used up by a test of its kind (or when it is a day old)
   const launch = loadJSON(CAL_KEYS.launch, null);
   if (launch && (launch.target === kind || Date.now() - (launch.ts || 0) >= 24 * 3600 * 1000)) localStorage.removeItem(CAL_KEYS.launch);
   if (!todo) {
@@ -653,14 +577,11 @@ function autoCompleteTodoOnExam(kind, test) {
   refreshCalendars();
 }
 
-// The TODO you pressed "Start" on, if that was less than a day ago and for this kind of test
 function calActiveLaunch(kind) {
   const launch = loadJSON(CAL_KEYS.launch, null);
   return launch && launch.target === kind && Date.now() - (launch.ts || 0) < 24 * 3600 * 1000 ? launch : null;
 }
 
-// The TODO a test of this kind and type completes: the TODO it was started from (when it has
-// this type), else an open TODO of today. null = a new TODO will be recorded.
 function calTodoForTest(kind, type, test) {
   const launch = calActiveLaunch(kind);
   if (launch) {
@@ -670,14 +591,12 @@ function calTodoForTest(kind, type, test) {
   return calFindOpenTestTodo(calToday(), type, kind, test);
 }
 
-// Title of the TODO a test would complete (shown in the "What kind of test is this?" dialog)
 function calPreviewTodo(kind, type, questions) {
   calEnsureLoaded();
   const t = calTodoForTest(kind, type, { questions: questions || [] });
   return t ? t.title : "";
 }
 
-// A TODO (plan or your own) by id, wherever it is in the calendar
 function calFindTodoById(id) {
   if (!id) return null;
   const manual = calFindManual(id);
@@ -691,13 +610,11 @@ function calFindTodoById(id) {
   return calPlanTodos(date, row).find(t => t.id === id) || null;
 }
 
-// An open test TODO of the given day for this test (same type, matching objective / subjective)
 function calFindOpenTestTodo(date, type, kind, test) {
   const ctx = calContext();
   const open = calDayInfo(date, ctx).todos.filter(t => !t.done && !t.link && t.type === type && (!t.mode || t.mode === kind));
   if (!open.length) return null;
   if (kind === "mcq" && open.length > 1) {
-    // Objective Practice: the Phase-2 exam for ESI / F&M questions, the Phase-1 exam otherwise
     const prefer = calIsPhase2McqTest(test) ? ["p2obj", "p1obj", "ca"] : ["p1obj", "ca", "p2obj"];
     for (const key of prefer) {
       const t = open.find(x => x.source === "plan" && x.key === key);
@@ -707,7 +624,6 @@ function calFindOpenTestTodo(date, type, kind, test) {
   return open.find(t => t.source === "plan") || open[0];
 }
 
-// Link a submitted test to a TODO (and tick it when the test is finished and scored)
 function calAttachExam(todo, kind, test) {
   const link = { kind, testId: test.id, at: Date.now() };
   const finished = kind === "mcq" || calTestFullyScored(test);
@@ -723,20 +639,17 @@ function calAttachExam(todo, kind, test) {
   }
 }
 
-// Every answer of a subjective test has a score (AI-graded or typed in History)
 function calTestFullyScored(test) {
   const qs = (test && test.questions) || [];
   const scores = (test && test.scores) || {};
   return qs.length > 0 && qs.every(q => scores[q.id] !== null && scores[q.id] !== undefined && scores[q.id] !== "" && !isNaN(scores[q.id]));
 }
 
-// Called by ai_eval.js / History when a score is written: tick the TODO once every answer is graded
 function calOnTestScored(kind, testId) {
   calEnsureLoaded();
   if (calReconcileLinks(testId)) refreshCalendars();
 }
 
-// Tick subjective-test TODOs whose test is now fully graded. Returns true if something changed.
 function calReconcileLinks(onlyTestId) {
   const history = loadJSON("rbi_history", []);
   const byId = new Map((Array.isArray(history) ? history : []).map(t => [t.id, t]));
@@ -752,7 +665,6 @@ function calReconcileLinks(onlyTestId) {
   return changed;
 }
 
-// The test a TODO is linked to, with its marks: { kind, test, scoreText, pending, missing }
 function calLinkedResult(link) {
   if (!link) return null;
   const test = calHistory(link.kind === "mcq" ? "mcq" : "write").find(t => t && t.id === link.testId) || null;
@@ -764,7 +676,6 @@ function calLinkedResult(link) {
   return { kind: "write", test, scoreText: r.text, pending: !r.complete };
 }
 
-// Marks of a subjective test: "18.5 / 25 marks", "waiting for grades (1 of 2 graded)" or "not graded yet"
 function calWriteScore(test) {
   const qs = test.questions || [];
   const scores = test.scores || {};
@@ -777,7 +688,6 @@ function calWriteScore(test) {
   return { complete, text: graded.length ? `waiting for grades (${graded.length} of ${qs.length} graded, ${fmt(total)} so far)` : "not graded yet: press AI Analysis on the result", total, max };
 }
 
-// Which test type to suggest when a test starts: the TODO it was started from, or today's open test TODO
 function calSuggestTestType(mode) {
   calEnsureLoaded();
   const launch = calActiveLaunch(mode);
@@ -793,9 +703,6 @@ function calSuggestTestType(mode) {
   return practice ? { type: practice.type, title: practice.title } : null;
 }
 
-// ------------------------------------------------------------
-// Rendering
-// ------------------------------------------------------------
 function calRoot() {
   return $("screen-calendar");
 }
@@ -806,7 +713,6 @@ function calTypeOptions(selected) {
   ).join("");
 }
 
-// Static page structure (built once, then parts are re-rendered)
 function calShellHTML() {
   return `
     <div class="setup-header cal-page-head">
@@ -851,7 +757,7 @@ function calShellHTML() {
         <span class="cal-settings-sub" data-role="plan-summary"></span>
       </summary>
       <div class="cal-settings-body">
-        <p class="cal-settings-note">Your timetable gives every day its 3 exam TODOs automatically (the built-in one is <strong>RBI_Study_Schedule.xlsx</strong>, 415 days). Uploading a timetable replaces the current one; removing it clears the plan TODOs. Your own TODOs and test history are never touched.</p>
+        <p class="cal-settings-note">Your timetable gives every day its 3 exam TODOs automatically (the built-in plan has 415 days). Uploading a timetable replaces the current one; removing it clears the plan TODOs. Your own TODOs and test history are never touched.</p>
         <div class="cal-settings-grid">
           <label>Plan start date (Day 1)
             <input type="date" data-role="start-date">
@@ -1089,7 +995,6 @@ function calTodoItemHTML(t) {
     t.subject ? `<span class="todo-subject">${escapeHTML(t.subject)}</span>` : "",
     t.source === "manual" ? `<span class="todo-src mine">${t.auto ? "From your test" : "My TODO"}</span>` : ""
   ].join("");
-  // Test TODOs have no checkbox: submitting the test ticks them
   const check = isTest
     ? `<span class="todo-auto ${t.done ? "done" : (t.link ? "pending" : "")}" title="${t.done ? "Done: completed by your test" : (t.link ? "Waiting for the AI grades of your test" : "Ticks itself when you submit this test")}" aria-label="${t.done ? "Done" : "Not done yet"}">${t.done ? '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ""}</span>`
     : `<label class="todo-check" title="${t.done ? "Mark as not done" : "Mark as done"}">
@@ -1224,7 +1129,6 @@ function calRenderSettings(root, ctx) {
   }
 }
 
-// Render (or refresh) the calendar screen
 function renderCalendar() {
   calEnsureLoaded();
   const root = calRoot();
@@ -1243,7 +1147,6 @@ function renderCalendar() {
   calRenderSettings(root, ctx);
 }
 
-// Re-render the calendar if it is on screen (no-op otherwise)
 function refreshCalendars() {
   const root = calRoot();
   if (root && !root.hidden && cal.built) renderCalendar();
@@ -1266,9 +1169,6 @@ function calSelectDate(date) {
   }
 }
 
-// ------------------------------------------------------------
-// Event wiring (one delegated listener set)
-// ------------------------------------------------------------
 function calWire(root) {
   root.addEventListener("click", (e) => {
     const cell = e.target.closest(".cal-cell");
@@ -1327,7 +1227,6 @@ function calWire(root) {
   root.addEventListener("change", (e) => {
     if (e.target.classList.contains("todo-checkbox")) {
       const t = calFindTodoById(e.target.dataset.id);
-      // Test TODOs are completed by the test itself, never by hand
       if (t && calIsTestType(t.type)) { renderCalendar(); return; }
       calSetTodoDone(e.target.dataset.id, e.target.checked);
       renderCalendar();
@@ -1355,7 +1254,6 @@ function calWire(root) {
   });
 }
 
-// Jump from a TODO to the matching test setup screen
 function calGoPractice(target, todoId) {
   calRememberLaunch(todoId, target);
   if (target === "mcq") {
@@ -1368,11 +1266,10 @@ function calGoPractice(target, todoId) {
   showScreen("setup");
 }
 
-// Open the full result page of a test taken (objective scorecard, or subjective result + AI assessment)
 function calReviewExam(kind, id) {
   if (kind === "mcq") {
     setPhase("phase1");
-    state.returnTo = "calendar";   // after setPhase, which shows the setup screen
+    state.returnTo = "calendar";
     reviewP1HistoricalTest(id);
     return;
   }
@@ -1385,9 +1282,6 @@ function calReviewExam(kind, id) {
   showScreen("result");
 }
 
-// ------------------------------------------------------------
-// Plan settings actions
-// ------------------------------------------------------------
 function calReadConfigInputs(root) {
   const startInput = root.querySelector('[data-role="start-date"]');
   const daysInput = root.querySelector('[data-role="days-finished"]');
@@ -1396,7 +1290,6 @@ function calReadConfigInputs(root) {
   return { start, days };
 }
 
-// Mark every plan TODO of days 1..N as done
 function calMarkDaysFinished(days) {
   if (days <= 0) return 0;
   let count = 0;
@@ -1495,8 +1388,6 @@ function calExportTodos(root) {
   downloadText(`RBI_My_TODOs_${calToday()}.csv`, lines.join("\n"));
 }
 
-// Import a spreadsheet: a "Day / Topic (Phase-1) / Topic (Phase-2)" sheet becomes the plan,
-// any other sheet with a Date + Task/Topic column is imported as your own TODOs.
 async function calImportFile(root, input) {
   const file = input.files && input.files[0];
   if (!file) return;
@@ -1595,9 +1486,6 @@ async function calImportFile(root, input) {
   }
 }
 
-// ------------------------------------------------------------
-// Edit TODO dialog
-// ------------------------------------------------------------
 function openTodoModal(id) {
   const modal = $("todo-modal");
   const form = $("todo-modal-form");
@@ -1669,7 +1557,6 @@ function saveTodoModal(e) {
   renderCalendar();
 }
 
-// Called once from app.js on DOMContentLoaded
 function initCalendar() {
   calEnsureLoaded();
   const form = $("todo-modal-form");
@@ -1686,7 +1573,6 @@ function initCalendar() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && modal && !modal.hidden) closeTodoModal();
   });
-  // Keep "today" correct if the app stays open past midnight
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refreshCalendars();
   });

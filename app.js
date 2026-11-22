@@ -1,27 +1,22 @@
 "use strict";
 
-// Shortcut for document.getElementById
 function $(id) { return document.getElementById(id); }
 
-// Remove all en-dashes and em-dashes across strings
 function sanitizeDashes(str) {
   if (!str) return "";
   return String(str).replace(/[\u2013\u2014\u2012\u2015]/g, "-");
 }
 
-// Count words: split on any whitespace, ignore empty pieces
 function countWords(text) {
   const t = (text || "").trim();
   if (t === "") return 0;
   return t.split(/\s+/).length;
 }
 
-// Make a unique id with a prefix
 function makeId(prefix) {
   return prefix + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
 }
 
-// Safe localStorage read
 function loadJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -29,13 +24,11 @@ function loadJSON(key, fallback) {
   } catch (e) { return fallback; }
 }
 
-// Safe localStorage write
 function saveJSON(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); }
   catch (e) { alert("Could not save data (storage full or blocked)."); }
 }
 
-// Seconds -> "MM:SS" (or "H:MM:SS" if >= 1 hour)
 function formatTime(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(s / 3600);
@@ -45,14 +38,11 @@ function formatTime(totalSeconds) {
   return h > 0 ? h + ":" + pad(m) + ":" + pad(sec) : pad(m) + ":" + pad(sec);
 }
 
-// Seconds -> "12 min 30 sec"
-// 754 s -> "00:12" (hh:mm)
 function formatHM(totalSeconds) {
   const m = Math.max(0, Math.round((Number(totalSeconds) || 0) / 60));
   return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
 }
 
-// A date as "22 Nov 2026 · 09:04"
 function formatDateHM(d) {
   const x = new Date(d);
   if (isNaN(x)) return "";
@@ -60,7 +50,6 @@ function formatDateHM(d) {
     String(x.getHours()).padStart(2, "0") + ":" + String(x.getMinutes()).padStart(2, "0");
 }
 
-// The round score dial of a History test card (pct null = not scored yet)
 function scoreRingHTML(pct, caption) {
   const tone = pct === null ? "none" : pct >= 60 ? "good" : pct >= 40 ? "mid" : "low";
   return `<div class="tcard-ring tone-${tone}" style="--pct:${pct === null ? 0 : Math.max(0, Math.min(100, pct))}"><span>${pct === null ? "–" : Math.round(pct) + "%"}</span></div>` +
@@ -72,22 +61,17 @@ function formatDuration(totalSeconds) {
   return Math.floor(s / 60) + " min " + (s % 60) + " sec";
 }
 
-// Replace every {{KEY}} in template with values[KEY]
 function fillTemplate(template, values) {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) =>
     values[key] !== undefined ? String(values[key]) : match);
 }
 
-// Escape text before putting it into innerHTML
 function escapeHTML(str) {
   return String(str)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-// Text that may hold a data table: runs of "cell | cell" lines (how DOCX and PDF tables are
-// read) become an HTML table, every other line stays exactly as written. No whitespace
-// between tags, because question boxes use white-space: pre-wrap.
 function richTextHTML(text) {
   const lines = String(text || "").split("\n");
   const isRow = l => /\s\|\s/.test(l) || /^\s*\|.+\|\s*$/.test(l);
@@ -104,7 +88,6 @@ function richTextHTML(text) {
     else if (rows.length) {
       const width = Math.max(...rows.map(r => r.length));
       const cellsHTML = (r, tag) => Array.from({ length: width }, (_, k) => `<${tag}>${escapeHTML(r[k] || "")}</${tag}>`).join("");
-      // the first row is a header unless it already holds figures ("A | 4,000 | 3,000")
       const head = !rows[0].slice(1).some(c => /^[-−+(]?[\d₹$]/.test(c));
       const body = head ? rows.slice(1) : rows;
       html += `<div class="rt-table-wrap"><table class="rt-table">${head ? `<thead><tr>${cellsHTML(rows[0], "th")}</tr></thead>` : ""}<tbody>${body.map(r => `<tr>${cellsHTML(r, "td")}</tr>`).join("")}</tbody></table></div>`;
@@ -125,18 +108,15 @@ function richTextHTML(text) {
   return html;
 }
 
-// A question's full text for prompts, exports and duplicate checks: its passage / table first
 function questionWithPassage(q) {
   return (q && q.passage ? q.passage + "\n\n" : "") + String((q && q.text) || "");
 }
 
-// The question as an AI prompt sees it: the passage / data it is based on, then the question
 function questionPromptText(q) {
   if (!q || !q.passage) return String((q && q.text) || "");
   return "[Passage / data this question is based on]\n" + q.passage + "\n\n[Question]\n" + String(q.text || "");
 }
 
-// After you edit a question's passage, questions that shared the old text get the new one
 function syncSharedPassage(list, edited, oldPassage) {
   if (!oldPassage || oldPassage === (edited.passage || "")) return 0;
   let n = 0;
@@ -149,7 +129,6 @@ function syncSharedPassage(list, edited, oldPassage) {
   return n;
 }
 
-// "passage", "case", "table" or "passage and table": what a shared block holds
 function passageKind(passage) {
   const lines = String(passage || "").split("\n").filter(l => l.trim());
   const rows = lines.filter(l => /\s\|\s/.test(l)).length;
@@ -158,7 +137,6 @@ function passageKind(passage) {
   return "passage";
 }
 
-// The passage / table above question i, with which questions of the list share it
 function passageBlockHTML(questions, i) {
   const q = questions[i];
   if (!q || !q.passage) return "";
@@ -171,12 +149,10 @@ function passageBlockHTML(questions, i) {
   return `<div class="q-passage-head">${escapeHTML(head)}</div><div class="q-passage-body">${richTextHTML(q.passage)}</div>`;
 }
 
-// Show (or hide) the passage slot of an exam screen for question i
 function renderPassageSlot(slotId, questions, i) {
   const slot = $(slotId);
   if (!slot) return;
   const html = passageBlockHTML(questions, i);
-  // the same passage as the previous question stays as it is (and keeps its scroll position)
   if (html && slot._passageHtml === html && !slot.hidden) return;
   slot._passageHtml = html;
   slot.hidden = !html;
@@ -184,7 +160,6 @@ function renderPassageSlot(slotId, questions, i) {
   slot.scrollTop = 0;
 }
 
-// Format local date as YYYY-MM-DD
 function getLocalDateString(dateInput) {
   const d = dateInput ? new Date(dateInput) : new Date();
   const year = d.getFullYear();
@@ -193,23 +168,19 @@ function getLocalDateString(dateInput) {
   return `${year}-${month}-${day}`;
 }
 
-// Generate file name for an individual question evaluation file
 function getQuestionFilename(test, question, index) {
   const dateStr = getLocalDateString(test.date);
   const paperClean = (question.paper || "General").replace(/&/g, "and").replace(/[^a-zA-Z0-9]/g, "");
   return `Practice_${dateStr}_Q${index + 1}_${paperClean}_${question.marks}m.txt`;
 }
 
-// Generate file name for the combined test evaluation file
 function getCombinedFilename(test) {
   const dateStr = getLocalDateString(test.date);
   return `Practice_${dateStr}_FullTest.txt`;
 }
 
-// Show one screen, hide all others
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.hidden = true);
-  // "Back to calendar" only on a result opened from the calendar
   if (name !== "result") state.returnTo = "";
   document.querySelectorAll(".btn-back-calendar").forEach(b => { b.hidden = !(name === "result" && state.returnTo === "calendar"); });
   let targetId = "screen-" + name;
@@ -219,7 +190,6 @@ function showScreen(name) {
   const target = $(targetId) || $(name) || $("screen-" + name);
   if (target) {
     target.hidden = false;
-    // a short fade-in instead of an abrupt jump
     target.classList.remove("screen-enter");
     void target.offsetWidth;
     target.classList.add("screen-enter");
@@ -231,7 +201,6 @@ function showScreen(name) {
     header.style.display = isExam ? "none" : "";
   }
 
-  // Update navigation button active class
   document.querySelectorAll("#app-header nav button").forEach(btn => btn.classList.remove("active"));
   const activeNavBtn = $("nav-" + name);
   if (activeNavBtn) activeNavBtn.classList.add("active");
@@ -243,7 +212,6 @@ function showScreen(name) {
   window.scrollTo(0, 0);
 }
 
-// Download text as a .txt file
 function downloadText(filename, text) {
   const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -256,7 +224,6 @@ function downloadText(filename, text) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// Copy text to clipboard, with fallback for file:// pages
 async function copyText(text, button) {
   try {
     await navigator.clipboard.writeText(text);
@@ -275,7 +242,6 @@ async function copyText(text, button) {
   }
 }
 
-// Read a number input; empty / invalid / negative -> fallback (0 is a valid value)
 function readNumberInput(id, fallback, min = 0) {
   const el = $(id);
   if (!el || String(el.value).trim() === "") return fallback;
@@ -283,7 +249,6 @@ function readNumberInput(id, fallback, min = 0) {
   return Number.isFinite(n) && n >= min ? n : fallback;
 }
 
-// Make sure a <select> offers the given value (e.g. 12 marks from an imported file), then select it
 function selectValueEnsuringOption(selectId, value, labelSuffix = "") {
   const sel = $(selectId);
   if (!sel || value === undefined || value === null || value === "") return;
@@ -297,26 +262,23 @@ function selectValueEnsuringOption(selectId, value, labelSuffix = "") {
   sel.value = v;
 }
 
-// Default word limit for given marks
 function defaultWordLimit(marks) {
   return Number(marks) === 15 ? 600 : 400;
 }
 
-// Global application state
 const state = {
   phase: loadJSON("rbi_current_phase", "phase1"),
   setup: loadJSON("rbi_current_setup", { totalMinutes: 30, questions: [] }),
-  test: null,          // active Test object during the Phase 2 exam
-  currentIndex: 0,     // which question is on screen
-  timerId: null,       // setInterval id
-  endTime: 0,          // Date.now() value when time ends
-  questionShownAt: 0,  // Date.now() when current question was shown
-  lastAutoSave: 0,     // timestamp of last throttled exam autosave
-  autoSaveTimer: null, // save shortly after typing stops
-  lastResultTest: null, // test object currently being viewed on Phase 2 result screen
-  setup_page: 1,       // current page for Phase 2 setup questions list
+  test: null,
+  currentIndex: 0,
+  timerId: null,
+  endTime: 0,
+  questionShownAt: 0,
+  lastAutoSave: 0,
+  autoSaveTimer: null,
+  lastResultTest: null,
+  setup_page: 1,
 
-  // Phase 1 (Objective / MCQs) state
   p1_setup: loadJSON("rbi_p1_setup", {
     totalMinutes: 120,
     positiveMarks: 1.0,
@@ -330,16 +292,14 @@ const state = {
   p1_questionShownAt: 0,
   p1_lastAutoSave: 0,
   p1_lastResultTest: null,
-  wantAICheck: "",        // "p1" / "p2": AI Check was pressed before a key was set
+  wantAICheck: "",
   p1_resultFilter: "all",
-  p1_resultPage: 1,      // page of the result / history question review
-  p1_setup_page: 1     // current page for Phase 1 setup questions list
+  p1_resultPage: 1,
+  p1_setup_page: 1
 };
 
-// Questions per page on the setup lists and in result / history reviews
 const QUESTIONS_PER_PAGE = 20;
 
-// Render reusable pagination controls (20 items per page; hidden if totalPages <= 1)
 function renderPaginationControls({ containerId, currentPage, totalPages, totalItems, onPageChange }) {
   const container = $(containerId);
   if (!container) return;
@@ -410,7 +370,6 @@ function setPhase(phase) {
     }
   }
 
-  // Detect current active screen to stay on the same screen context
   const curScreen = document.querySelector(".screen:not([hidden])");
   let activeScreenType = "setup";
   if (curScreen && curScreen.id) {
@@ -431,12 +390,10 @@ function setPhase(phase) {
 }
 
 
-// Persist the current setup into localStorage
 function saveSetup() {
   saveJSON("rbi_current_setup", state.setup);
 }
 
-// Reset the question input form to its initial blank state
 function resetQuestionForm() {
   $("question-form").reset();
   if ($("q-model")) $("q-model").style.height = "";
@@ -449,7 +406,6 @@ function resetQuestionForm() {
   if (cancel) cancel.hidden = true;
 }
 
-// Update the visibility and count of the batch delete button based on checkbox selection
 function updateSetupBatchDeleteState() {
   const checkboxes = document.querySelectorAll("#setup-question-list .q-select-check");
   const checked = document.querySelectorAll("#setup-question-list .q-select-check:checked");
@@ -469,7 +425,6 @@ function updateSetupBatchDeleteState() {
   }
 }
 
-// Toggle selection of all question checkboxes in the setup screen
 function handleSelectAllSetup(event) {
   const checked = event.target.checked;
   const checkboxes = document.querySelectorAll("#setup-question-list .q-select-check");
@@ -477,7 +432,6 @@ function handleSelectAllSetup(event) {
   updateSetupBatchDeleteState();
 }
 
-// Delete all questions currently checked in the setup list
 function handleDeleteSelectedSetup() {
   const checked = document.querySelectorAll("#setup-question-list .q-select-check:checked");
   const idsToDelete = new Set(Array.from(checked).map(cb => cb.dataset.id));
@@ -490,7 +444,6 @@ function handleDeleteSelectedSetup() {
   }
 }
 
-// Remove all questions from the current test setup after confirmation
 function handleDeleteAllSetup() {
   if (!state.setup.questions || state.setup.questions.length === 0) return;
   if (confirm(`Remove all ${state.setup.questions.length} question(s) from this test?`)) {
@@ -500,7 +453,6 @@ function handleDeleteAllSetup() {
   }
 }
 
-// Render the list of configured questions in the setup screen
 function renderSetupList() {
   const list = $("setup-question-list");
   if (!list) return;
@@ -605,14 +557,12 @@ function renderSetupList() {
   updateSetupBatchDeleteState();
 }
 
-// Populate the setup form with an existing question for editing
 function editSetupQuestion(id) {
   const q = state.setup.questions.find(item => item.id === id);
   if (!q) return;
   fillQuestionForm(q);
 }
 
-// Load a descriptive question into the manual form for editing
 function fillQuestionForm(q) {
   const acc = $("p2-manual-accordion");
   if (acc) acc.open = true;
@@ -632,7 +582,6 @@ function fillQuestionForm(q) {
   $("q-text").focus();
 }
 
-// Remove a question from the current test setup after confirmation
 function deleteSetupQuestion(id) {
   if (confirm("Remove this question from the test?")) {
     state.setup.questions = state.setup.questions.filter(item => item.id !== id);
@@ -641,7 +590,6 @@ function deleteSetupQuestion(id) {
   }
 }
 
-// Move a question up one position in the test sequence
 function moveUpSetupQuestion(id) {
   const idx = state.setup.questions.findIndex(item => item.id === id);
   if (idx > 0) {
@@ -653,7 +601,6 @@ function moveUpSetupQuestion(id) {
   }
 }
 
-// Move a question down one position in the test sequence
 function moveDownSetupQuestion(id) {
   const idx = state.setup.questions.findIndex(item => item.id === id);
   if (idx >= 0 && idx < state.setup.questions.length - 1) {
@@ -665,7 +612,6 @@ function moveDownSetupQuestion(id) {
   }
 }
 
-// Handle adding or updating a question from the setup form
 function handleQuestionFormSubmit(event) {
   event.preventDefault();
   const errorElem = $("setup-error");
@@ -693,7 +639,7 @@ function handleQuestionFormSubmit(event) {
     marks,
     wordLimit,
     modelAnswer,
-    check: { ai: null, user: "ok" }     // typed or corrected by you
+    check: { ai: null, user: "ok" }
   };
   if (passage) questionObj.passage = passage;
 
@@ -702,7 +648,6 @@ function handleQuestionFormSubmit(event) {
     if (idx >= 0) {
       const prev = state.setup.questions[idx];
       const old = prev.passage || "";
-      // keep what the form does not show: the subject / chapter folder and the marking checklist
       if (prev.folder) questionObj.folder = prev.folder;
       if (prev.scheme) questionObj.scheme = prev.scheme;
       state.setup.questions[idx] = questionObj;
@@ -720,7 +665,6 @@ function handleQuestionFormSubmit(event) {
   $("q-text").focus();
 }
 
-// Validate setup inputs and begin the exam
 async function handleStartTestClick() {
   const errorElem = $("setup-error");
   errorElem.textContent = "";
@@ -753,7 +697,6 @@ async function handleStartTestClick() {
   startTest(testType);
 }
 
-// Initialize a new test session and transition to the exam screen
 function startTest(testType) {
   const totalMinutes = state.setup.totalMinutes || 30;
   const questionsCopy = JSON.parse(JSON.stringify(state.setup.questions));
@@ -769,7 +712,7 @@ function startTest(testType) {
     scores[q.id] = null;
   });
 
-  const blockPaste = true;       // copy and paste are always blocked in the answer box
+  const blockPaste = true;
   saveSetup();
 
   const test = {
@@ -816,7 +759,6 @@ function startTest(testType) {
   window.onbeforeunload = () => "Test in progress";
 }
 
-// Countdown timer loop checking remaining test time against the target timestamp
 function tick() {
   if (!state.test) return;
   const remaining = Math.round((state.endTime - Date.now()) / 1000);
@@ -837,7 +779,6 @@ function tick() {
   }
 }
 
-// Display a specific question during the exam and load its saved answer
 function showQuestion(index) {
   if (!state.test || !state.test.questions[index]) return;
 
@@ -846,7 +787,7 @@ function showQuestion(index) {
   }
 
   state.currentIndex = index;
-  state.test.currentIndex = index;          // a reload resumes on this question
+  state.test.currentIndex = index;
   state.questionShownAt = Date.now();
 
   state.visitedQuestions = state.visitedQuestions || new Set([0]);
@@ -869,7 +810,7 @@ function showQuestion(index) {
 
   const candRoll = document.querySelector("#screen-exam .cand-roll");
   if (candRoll) {
-    candRoll.innerHTML = `Roll No: <strong>RBI-2026-P2</strong> | Paper: <strong>${escapeHTML(q.paper || "General")}</strong>`;
+    candRoll.innerHTML = `Roll No: <strong>EXAM-2026-P2</strong> | Paper: <strong>${escapeHTML(q.paper || "General")}</strong>`;
   }
 
   const ans = state.test.answers[q.id] || { text: "", wordCount: 0, secondsSpent: 0 };
@@ -890,7 +831,6 @@ function showQuestion(index) {
   updateExamSummary();
 }
 
-// Put the cursor at the end of the answer box (only works once the exam screen is visible)
 function focusExamAnswer() {
   const ta = $("exam-answer");
   if (!ta || !state.test) return;
@@ -898,7 +838,6 @@ function focusExamAnswer() {
   ta.setSelectionRange(ta.value.length, ta.value.length);
 }
 
-// Persist the current answer text and accumulate elapsed time for active question
 function storeCurrentAnswer() {
   if (!state.test || state.currentIndex < 0 || state.currentIndex >= state.test.questions.length) return;
   const currentQ = state.test.questions[state.currentIndex];
@@ -929,7 +868,6 @@ function storeCurrentAnswer() {
   saveJSON("rbi_active_test", state.test);
 }
 
-// Handle typing input in the exam textarea with throttled autosave
 function handleAnswerInput() {
   if (!state.test) return;
   const currentQ = state.test.questions[state.currentIndex];
@@ -963,7 +901,6 @@ function handleAnswerInput() {
   state.autoSaveTimer = setTimeout(() => { if (state.test) saveJSON("rbi_active_test", state.test); }, 700);
 }
 
-// Update the live word counter and apply visual threshold warning styles
 function updateWordCount() {
   if (!state.test) return;
   const currentQ = state.test.questions[state.currentIndex];
@@ -1008,7 +945,6 @@ function updateWordCount() {
   updateExamSummary();
 }
 
-// Render question navigation palette buttons showing answered status and words typed
 function renderPalette() {
   const palette = $("exam-palette");
   if (!palette || !state.test) return;
@@ -1053,7 +989,6 @@ function renderPalette() {
   updateExamSummary();
 }
 
-// Update status counts across legend, sidebar summary, and submit confirmation modal
 function updateExamSummary() {
   if (!state.test) return;
   const questions = state.test.questions;
@@ -1101,7 +1036,6 @@ function updateExamSummary() {
   const modRev = $("modal-sum-marked"); if (modRev) modRev.textContent = markedReview;
 }
 
-// A short warning that slides in at the top of the screen and fades out by itself
 function showExamWarning(message) {
   let toast = $("exam-toast");
   if (!toast) {
@@ -1113,13 +1047,12 @@ function showExamWarning(message) {
   }
   toast.textContent = message;
   toast.classList.remove("is-visible");
-  void toast.offsetWidth;            // restart the animation for a repeated warning
+  void toast.offsetWidth;
   toast.classList.add("is-visible");
   clearTimeout(showExamWarning.timer);
   showExamWarning.timer = setTimeout(() => toast.classList.remove("is-visible"), 2600);
 }
 
-// Copy, cut, paste and drag-and-drop are never allowed in the answer box (as in the real exam)
 function handlePasteOrDrop(e) {
   if (!state.test) return;
   e.preventDefault();
@@ -1129,8 +1062,6 @@ function handlePasteOrDrop(e) {
     : "Pasting is not allowed in the exam. Type your answer yourself.");
 }
 
-// After an exam the New Test page starts empty (the questions live on in History),
-// and History opens in the folder this test belongs to
 function clearSetupAfterExam(kind, test) {
   if (kind === "mcq") {
     state.p1_setup.questions = [];
@@ -1145,7 +1076,6 @@ function clearSetupAfterExam(kind, test) {
   if (typeof historyOpenFolderOf === "function") historyOpenFolderOf(test, kind === "mcq" ? "p1" : "p2");
 }
 
-// Finalize the test, calculate time spent, and archive the attempt to history
 function finishTest(auto) {
   if (state.timerId) {
     clearInterval(state.timerId);
@@ -1154,8 +1084,6 @@ function finishTest(auto) {
   clearTimeout(state.autoSaveTimer);
 
   if (!state.test) return;
-  // Only read the textarea when the exam screen is actually live (not when finishing a
-  // test restored from storage after a reload, where the textarea is still empty).
   if (state.questionShownAt > 0) storeCurrentAnswer();
 
   const test = state.test;
@@ -1196,11 +1124,9 @@ function finishTest(auto) {
   renderResult(test);
   showScreen("result");
 
-  // Grade the answers with AI straight away (only when an API key is set up - see ai_eval.js)
   if (window.AIEval) AIEval.autoEvaluate(test);
 }
 
-// Check for and resume an interrupted test on page load
 function checkResumeActiveTest() {
   const p1Active = loadJSON("rbi_p1_active_test", null);
   const p2Active = loadJSON("rbi_active_test", null);
@@ -1248,7 +1174,6 @@ function checkResumeActiveTest() {
   }
 }
 
-// Resume an active exam without resetting answers
 function resumeExam() {
   const last = Number(state.test.currentIndex);
   const index = Number.isInteger(last) && last >= 0 && last < state.test.questions.length ? last : 0;
@@ -1275,7 +1200,6 @@ function resumeExam() {
   window.onbeforeunload = () => "Test in progress";
 }
 
-// Generate the complete evaluation prompt text for an individual question
 function buildQuestionText(test, question, index) {
   const ans = (test.answers && test.answers[question.id]) || { text: "", wordCount: 0, secondsSpent: 0 };
   const wordCount = ans.wordCount || 0;
@@ -1302,7 +1226,6 @@ function buildQuestionText(test, question, index) {
   return "QUESTION " + (index + 1) + " OF " + test.questions.length + "\n" + filled;
 }
 
-// Assemble the combined evaluation text containing all questions in the test
 function buildCombinedText(test) {
   const values = {
     DATE: new Date(test.date).toLocaleString(),
@@ -1321,7 +1244,6 @@ function buildCombinedText(test) {
   return parts.join("\n\n");
 }
 
-// Render test results, evaluation prompt previews, and download/copy options
 function renderResult(test) {
   state.lastResultTest = test;
 
@@ -1381,11 +1303,9 @@ function renderResult(test) {
     list.appendChild(card);
   });
 
-  // AI assessment panel + one assessment per question (ai_eval.js)
   if (window.AIEval) AIEval.renderResultScreen(test);
 }
 
-// Calculate the number of consecutive practice days ending today or yesterday
 function calculateStreak(history) {
   if (!history || history.length === 0) return 0;
 
@@ -1426,11 +1346,9 @@ function calculateStreak(history) {
   return streak;
 }
 
-// Render historical metrics summary cards including streak, tests, and averages
 function renderHistoryStats(history) {
   const statsElem = $("history-stats");
   if (!statsElem) return;
-  // subject- and chapter-wise bars instead of averages
   if (typeof renderPerformanceChart === "function") { renderPerformanceChart(statsElem, history, "write"); return; }
 
   const totalTests = history.length;
@@ -1498,7 +1416,6 @@ function renderHistoryStats(history) {
   `;
 }
 
-// Render the complete history screen with summary statistics and past tests
 function renderHistory() {
   const history = loadJSON("rbi_history", []);
   const listElem = $("history-list");
@@ -1652,15 +1569,10 @@ function renderHistory() {
 
     cardsById.set(t.id, card);
   });
-  // Subject > Chapter tests > chapter > Full / Partial chapter, and Subject > Mix tests
   if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, history, t => cardsById.get(t.id), "p2");
   else { listElem.innerHTML = ""; history.forEach(t => listElem.appendChild(cardsById.get(t.id))); }
 }
 
-// ---- AI work in the background ---------------------------------------------
-// Grading, the objective analysis and the AI Checks keep running while you use other screens.
-// A pill in the header shows what is running; History and the calendar update as soon as a
-// mark is written; a notice says when the work is finished.
 let aiBgTimer = null;
 
 function aiBackgroundWork() {
@@ -1673,7 +1585,6 @@ function aiBackgroundWork() {
   return items;
 }
 
-// The header pill (shown on every screen while AI works in the background)
 function updateAIBackgroundStatus() {
   const el = $("ai-bg-status");
   if (!el) return;
@@ -1691,7 +1602,6 @@ function updateAIBackgroundStatus() {
   }
 }
 
-// Open the screen that belongs to a piece of AI work
 function openAIWork(kind, testId) {
   if (kind === "grading" || kind === "result") {
     const t = loadJSON("rbi_history", []).find(x => x.id === testId);
@@ -1711,7 +1621,6 @@ function openAIWork(kind, testId) {
   }
 }
 
-// A notice in the corner with an optional "Open" button (never shown during an exam)
 function showAINotice(text, kind, testId) {
   const inExam = !($("screen-exam") || {}).hidden || !($("screen-exam-p1") || {}).hidden;
   if (inExam) return;
@@ -1738,7 +1647,6 @@ function showAINotice(text, kind, testId) {
   showAINotice.timer = setTimeout(() => box.classList.remove("is-visible"), 15000);
 }
 
-// A mark was written in the background: refresh History and the calendar if they are on screen
 function refreshAfterGrade(testId) {
   const hist = $("screen-history");
   if (hist && !hist.hidden) {
@@ -1797,9 +1705,7 @@ function wireAIBackground() {
   if (pill) pill.addEventListener("click", () => openAIWork(pill.dataset.kind, pill.dataset.testId));
 }
 
-// Score summary badge of one descriptive test in History
 function historyScoreBadgeHTML(t) {
-  // marks over the answers that have a score (the same basis as "Performance by subject")
   let total = 0;
   let max = 0;
   let graded = 0;
@@ -1820,7 +1726,6 @@ function historyScoreBadgeHTML(t) {
     : scoreRingHTML(null, `${words} words<br>not graded yet`);
 }
 
-// Update and persist a candidate score assigned to a specific historical question
 function handleScoreChange(testId, qid, newScoreVal) {
   const history = loadJSON("rbi_history", []);
   const test = history.find(t => t.id === testId);
@@ -1839,17 +1744,14 @@ function handleScoreChange(testId, qid, newScoreVal) {
   saveJSON("rbi_history", history);
   renderHistoryStats(history);
 
-  // Sync inputs with same testId and qid (table and expanded review)
   document.querySelectorAll(`.score-input[data-test-id="${testId}"][data-qid="${qid}"]`).forEach(inp => {
     inp.value = (test.scores[qid] !== null && test.scores[qid] !== undefined) ? test.scores[qid] : "";
   });
   const badge = document.querySelector(`#history-card-${CSS.escape(testId)} .history-score-slot`);
   if (badge) badge.innerHTML = historyScoreBadgeHTML(test);
-  // All answers scored: the calendar ticks this test's TODO and shows its marks
   if (typeof calOnTestScored === "function") calOnTestScored("write", testId);
 }
 
-// Load questions from an old test into the setup screen for re-practice
 function retakeTest(testId) {
   const history = loadJSON("rbi_history", []);
   const test = history.find(t => t.id === testId);
@@ -1862,7 +1764,6 @@ function retakeTest(testId) {
   showScreen("setup");
 }
 
-// Delete a single practice test from history after confirmation
 function deleteTest(testId) {
   if (confirm("Delete this practice test from history?")) {
     let history = loadJSON("rbi_history", []);
@@ -1873,7 +1774,6 @@ function deleteTest(testId) {
   }
 }
 
-// Permanently delete all test history after two-step verification
 function clearAllHistory() {
   if (confirm("Are you sure you want to delete all practice history? This cannot be undone.")) {
     const confirmation = prompt("Type DELETE to confirm");
@@ -1885,7 +1785,6 @@ function clearAllHistory() {
   }
 }
 
-// Safe concurrent stream decompression helper preventing WHATWG stream backpressure deadlocks
 async function decompressBuffer(data, format = "deflate-raw") {
   const ds = new DecompressionStream(format);
   const writer = ds.writable.getWriter();
@@ -1925,28 +1824,15 @@ async function decompressBuffer(data, format = "deflate-raw") {
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// DOCX import: the document body as clean text lines
-// ---------------------------------------------------------------------------
-// - Page headers/footers live in separate parts of the file and are never read.
-// - Word's automatic numbering and bullets are rebuilt ("1.", "a)", "•"); nested
-//   list levels are indented with 3 spaces per level.
-// - Tables become one line per row ("cell | cell"); a single-cell "box" keeps its
-//   paragraphs as separate lines.
-// - Tabs and line breaks inside a paragraph are kept; tracked deletions, field
-//   codes and duplicate fallback copies of text boxes are skipped.
-
 const DOCX_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const DOCX_M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math";
 
-// Read selected entries of a ZIP archive as UTF-8 text
 async function readZipTextEntries(arrayBuffer, wantedNames) {
   const bytes = new Uint8Array(arrayBuffer);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const decoder = new TextDecoder("utf-8");
   const found = {};
 
-  // 1. Central directory (authoritative: sizes are right even when data descriptors are used)
   let eocd = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
     if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
@@ -1969,7 +1855,6 @@ async function readZipTextEntries(arrayBuffer, wantedNames) {
     }
   }
 
-  // 2. Damaged central directory: scan the local file headers instead
   if (!Object.keys(found).length) {
     let off = 0;
     while (off + 30 <= bytes.length) {
@@ -2009,7 +1894,6 @@ async function readZipTextEntries(arrayBuffer, wantedNames) {
   return out;
 }
 
-// Inflate raw DEFLATE data; if the stream ends with stray bytes, keep everything decoded so far
 async function inflateTolerant(raw) {
   try {
     return await decompressBuffer(raw, "deflate-raw");
@@ -2022,7 +1906,7 @@ async function inflateTolerant(raw) {
         if (done) break;
         chunks.push(value);
       }
-    } catch (_) { /* keep the decoded part */ }
+    } catch (_) {}
     if (!chunks.length) throw err;
     const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
     let pos = 0;
@@ -2053,7 +1937,6 @@ function docxAttr(el, localName) {
   return el.getAttributeNS(DOCX_W_NS, localName) || el.getAttribute("w:" + localName) || "";
 }
 
-// Symbol / Wingdings characters (w:sym and private-use bullet glyphs)
 const DOCX_SYMBOL_MAP = { 0xAE: "→", 0xAC: "←", 0xAD: "↑", 0xAF: "↓", 0xDE: "⇒", 0xDC: "⇐", 0xB3: "≥", 0xA3: "≤", 0xB4: "×", 0xB8: "÷", 0xB1: "±", 0xB9: "≠", 0xBB: "≈", 0xB7: "•", 0xB0: "°", 0xA5: "∞", 0xD6: "√", 0x44: "Δ", 0x53: "Σ", 0x70: "π", 0x61: "α", 0x62: "β", 0x6D: "μ" };
 const DOCX_WINGDINGS_MAP = { 0xFC: "✓", 0xFB: "✗", 0xFE: "☑", 0xA7: "▪", 0x6C: "●", 0x6E: "■", 0xD8: "➢", 0xE8: "➔", 0xF0: "⇨", 0x9F: "•" };
 
@@ -2131,7 +2014,6 @@ function docxFormatNumber(n, fmt) {
   }
 }
 
-// Convert word/document.xml (+ numbering and styles) into plain text lines
 function docxXmlToText(documentXml, numberingXml, stylesXml) {
   const doc = docxParseXml(documentXml);
   const numbering = docxParseNumbering(numberingXml);
@@ -2187,7 +2069,6 @@ function docxXmlToText(documentXml, numberingXml, stylesXml) {
     .replace(/[ \t]+/g, " ")
     .trim();
 
-  // Text of one paragraph, plus any text boxes found inside it
   function paragraphLines(p) {
     const parts = [];
     const boxes = [];
@@ -2203,7 +2084,6 @@ function docxXmlToText(documentXml, numberingXml, stylesXml) {
         if (n === "sym") { parts.push(docxSymbolChar(parseInt(docxAttr(ch, "char") || "0", 16), docxAttr(ch, "font"))); continue; }
         if (n === "txbxContent") { boxes.push(ch); continue; }
         if (n === "AlternateContent") {
-          // Text boxes are stored twice (modern + legacy copy): read only one of them
           const pick = docxKids(ch).find(k => k.localName === "Choice") || docxKids(ch).find(k => k.localName === "Fallback");
           if (pick) walk(pick);
           continue;
@@ -2212,7 +2092,6 @@ function docxXmlToText(documentXml, numberingXml, stylesXml) {
       }
     })(p);
 
-    // Numbering: on the paragraph itself, or inherited from its style (e.g. "List Bullet")
     const pPr = docxChild(p, "pPr");
     const styleId = docxAttr(pPr && docxChild(pPr, "pStyle"), "val");
     const numPr = pPr && docxChild(pPr, "numPr");
@@ -2255,7 +2134,6 @@ function docxXmlToText(documentXml, numberingXml, stylesXml) {
     return out;
   }
 
-  // Elements with a given local name, looking through wrapper elements (content controls)
   function childrenThrough(el, localName) {
     const out = [];
     for (const ch of docxKids(el)) {
@@ -2271,7 +2149,7 @@ function docxXmlToText(documentXml, numberingXml, stylesXml) {
       const cells = childrenThrough(tr, "tc").map(tc => blockLines(tc).map(l => l.trim()));
       const filled = cells.filter(c => c.length);
       if (!filled.length) continue;
-      if (cells.length === 1 || filled.length === 1) out.push(...filled[0]);   // a text "box"
+      if (cells.length === 1 || filled.length === 1) out.push(...filled[0]);
       else out.push(cells.map(c => c.join(" ")).join(" | "));
     }
     return out;
@@ -2282,7 +2160,6 @@ function docxXmlToText(documentXml, numberingXml, stylesXml) {
   return blockLines(body).join("\n");
 }
 
-// Extract the document body of a DOCX file as plain text lines
 async function extractDocxText(arrayBuffer) {
   const parts = await readZipTextEntries(arrayBuffer, ["word/document.xml", "word/numbering.xml", "word/styles.xml"]);
   if (!parts["word/document.xml"]) {
@@ -2290,14 +2167,6 @@ async function extractDocxText(arrayBuffer) {
   }
   return docxXmlToText(parts["word/document.xml"], parts["word/numbering.xml"], parts["word/styles.xml"]);
 }
-
-// ---------------------------------------------------------------------------
-// PDF import (Mozilla pdf.js, vendored in vendor/pdfjs and loaded on first use)
-// ---------------------------------------------------------------------------
-// Text is read through each font's character map (so Word / LibreOffice / Chrome
-// PDFs come out as real text), lines are rebuilt from text positions, wrapped lines
-// are joined back into paragraphs, and running headers, footers and page numbers
-// are removed by their position on the page (top/bottom band, repeated on most pages).
 
 let pdfJsLoading = null;
 
@@ -2312,8 +2181,6 @@ function loadPdfJs() {
     s.onerror = () => reject(new Error("The PDF reader (vendor/pdfjs/pdf.min.js) could not be loaded."));
     document.head.appendChild(s);
   }).then((lib) => {
-    // Runs in a Web Worker when the site is served over http(s); on a file:// page
-    // browsers block workers and pdf.js reads the PDF on the page itself.
     lib.GlobalWorkerOptions.workerSrc = base + "pdf.worker.min.js";
     return lib;
   }).catch((err) => {
@@ -2323,7 +2190,6 @@ function loadPdfJs() {
   return pdfJsLoading;
 }
 
-// Group pdf.js text items of one page into visual lines (reading order kept)
 function pdfItemsToLines(items, pageNo) {
   const lines = [];
   let cur = null;
@@ -2342,11 +2208,9 @@ function pdfItemsToLines(items, pageNo) {
         cur = { page: pageNo, x, y, xEnd: visible ? x + width : x, size, text: it.str, sizeChars: {}, pieces: [{ x, xEnd: visible ? x + width : x, text: it.str }] };
       } else {
         const gap = x - cur.xEnd;
-        // a wide gap inside a line may be a table column ("2023-24      40,000      1,200")
         const piece = cur.pieces[cur.pieces.length - 1];
         if (visible && gap > Math.max(cur.size, size) * 2.5) cur.pieces.push({ x, xEnd: x + width, text: it.str });
         else { piece.text += (gap > size * 0.15 && !/\s$/.test(piece.text) && !/^\s/.test(it.str) ? " " : "") + it.str; if (visible) piece.xEnd = Math.max(piece.xEnd, x + width); }
-        // A word gap - or a narrower one after a label such as "100." / "[a]" (the tab after it shrinks)
         const needsSpace = gap > size * 0.15 || (gap > size * 0.05 && /[.):\]]$/.test(cur.text));
         if (needsSpace && !/\s$/.test(cur.text) && !/^\s/.test(it.str)) cur.text += " ";
         cur.text += it.str;
@@ -2362,15 +2226,10 @@ function pdfItemsToLines(items, pageNo) {
   }
   if (cur) lines.push(cur);
   const clean = t => t.replace(/[●•]/g, "•").replace(/[   ]/g, " ").replace(/[–—]/g, "-").replace(/\s+/g, " ").trim();
-  // A data row ("2023-24 | 40,000 | 1,200 | 72%"): three or more cells split by wide gaps.
-  // Not answer-key rows ("1   c   Moderate"), number grids ("1  2  3  4") or a label
-  // followed by its tab ("1.   It has six members", "(a)   ...  (b)   ...").
   const isDataRow = ps => {
     const cells = ps.map(p => clean(p.text)).filter(Boolean);
     if (cells.length < 3 || cells.length !== ps.length) return false;
-    // a lone answer letter after the first cell ("1 | c | Moderate"); "A | 4,000 | 3,000" is a row label
     if (cells.slice(1).some(c => /^[\(\[]?[a-eA-E](?:\s*,\s*[a-eA-E])*[\)\]]?(?:\s|$)/.test(c)) || cells.some(c => /^[\(\[]?[a-eA-E][\)\].]\s/.test(c))) return false;
-    // "12 | ... | a long explanation": an answer-key row, not data
     if (/^\d{1,3}$/.test(cells[0]) && cells.some(c => c.length > 60)) return false;
     if (cells.every(c => /^\d{1,3}$/.test(c))) return false;
     if (/^(?:[\(\[]?(?:[a-zA-Z]|\d{1,3}|[ivxIVX]{1,4})[\)\].:]|Q(?:uestion)?\s*\.?\s*\d{1,4}\s*[.):\-]?|•)$/.test(cells[0])) return false;
@@ -2395,9 +2254,6 @@ function pdfItemsToLines(items, pageNo) {
     .filter(l => l.text);
 }
 
-// Merge consecutive pieces that share a baseline into one row, so table cells drawn
-// one after another become "cell | cell" like DOCX tables. Drawing order is kept:
-// re-sorting by position would interleave the lines of cells that wrap.
 function pdfMergeRows(lines) {
   const rows = [];
   for (const l of lines) {
@@ -2413,8 +2269,6 @@ function pdfMergeRows(lines) {
   return rows;
 }
 
-// Remove running headers/footers and page numbers: lines in the top or bottom band of a
-// page whose text (digits ignored) repeats on many pages, plus bare page numbers there.
 function pdfRemovePageFurniture(pages) {
   const BAND = 0.1;
   const PAGE_NO = /^(?:-\s*)?(?:page\s*)?\d{1,4}(?:\s*(?:of|\/)\s*\d{1,4})?(?:\s*-)?$|^\d{1,4}\s*\|\s*page$|^page\s*\|\s*\d{1,4}$/i;
@@ -2427,13 +2281,10 @@ function pdfRemovePageFurniture(pages) {
     seen.forEach(k => { counts[k] = (counts[k] || 0) + 1; });
   });
   const minPages = Math.max(2, Math.ceil(pages.length * 0.3));
-  // "... - Page 3" / "Page 3 of 10" at the end of a header or footer line
   const ENDS_WITH_PAGE = /(?:^|[\s\-|–])page\s*\d{1,4}(?:\s*(?:of|\/)\s*\d{1,4})?\s*$/i;
   pages.forEach(p => {
     p.lines = p.lines.filter(l => !(inBand(l, p) && (PAGE_NO.test(l.text) || ENDS_WITH_PAGE.test(l.text) || (pages.length >= 2 && counts[key(l)] >= minPages))));
   });
-  // A one-page PDF has nothing to compare with: a header/footer is the top-most / bottom-most
-  // line, sitting in the margin band and set apart from the body by a clear gap.
   if (pages.length === 1) {
     const p = pages[0];
     const byY = p.lines.slice().sort((a, b) => b.y - a.y);
@@ -2448,19 +2299,13 @@ function pdfRemovePageFurniture(pages) {
   }
 }
 
-// Join wrapped lines back into paragraphs. A line continues the previous one when the
-// previous line stopped only because this line's first word did not fit before the
-// right margin (how word processors wrap). Bullets, options, statements ("I.") and
-// new questions always start a new line; so does a heading (larger than body text).
 function pdfLinesToParagraphs(pages) {
   const NEW_BLOCK = /^(?:[•◦▪‣\-*–]\s|\(?\d{1,3}[.)](?:\s|(?=[A-Z“"‘(]))|\(?[a-zA-Z][.)]\s|\[[a-eA-E]\]|\([a-eA-E]\)|Q\s*[.\-]?\s*\d+|Question\s+\d+|[IVX]{1,4}\.\s|(?:Model\s+)?Answer\s*[:.\-]|Ans\s*[:.\-]|Explanation\s*[:.\-]|Directions?\s*(?:\(|:|for\b))/;
   const LIST_START = /^(?:[•◦▪‣\-*–]\s|\(?\d{1,3}[.)]\s|\(?[a-zA-Z][.)]\s|\[[a-eA-E]\]|\([a-eA-E]\)|[IVX]{1,4}\.\s)/;
-  // "...by 2029." + "Which of the statements..." is a new paragraph, not a wrapped line
   const SENTENCE_END = /[.?!]["”’)\]]*$/;
   const STARTS_SENTENCE = /^["“‘(]?[A-Z0-9]/;
   const all = pages.flatMap(p => p.lines);
   if (!all.length) return [];
-  // Body text size and the right edge of the text column, measured across the document
   const sizes = all.map(l => l.size).sort((a, b) => a - b);
   const bodySize = sizes[Math.floor(sizes.length / 2)];
   const ends = all.filter(l => Math.abs(l.size - bodySize) <= 2).map(l => l.xEnd).sort((a, b) => a - b);
@@ -2470,7 +2315,7 @@ function pdfLinesToParagraphs(pages) {
 
   const out = [];
   let prev = null;
-  let paraStart = null;   // first line of the paragraph being built
+  let paraStart = null;
   pages.forEach(p => {
     p.lines.forEach((l, i) => {
       let join = false;
@@ -2481,18 +2326,15 @@ function pdfLinesToParagraphs(pages) {
         const wrapped = prev.xEnd + charW * (firstWord.length + 1) >= right - charW * 1.5;
         const nextLine = prev.page === l.page
           ? prev.y - l.y > 0 && prev.y - l.y <= Math.max(prev.size, l.size) * 1.9
-          : i === 0;   // a paragraph running over onto the next page
-        // A line at the hanging indent of a bullet/numbered item continues that item
+          : i === 0;
         const hanging = paraStart && LIST_START.test(paraStart.text) && l.x >= paraStart.x + 4;
         const newSentence = SENTENCE_END.test(prev.text) && STARTS_SENTENCE.test(l.text);
         join = wrapped && nextLine && (!newSentence || hanging);
       }
       if (join) {
         const last = out.length - 1;
-        // "3,500-" + "5,000 km": the line broke after a hyphen inside a word - no space
         out[last] += /\S-$/.test(out[last]) && /^[\w₹$]/.test(l.text) ? l.text : " " + l.text;
       } else {
-        // Nested bullet/numbered items keep a visible indent (3 spaces per level)
         const isListItem = /^(?:[•◦▪‣\-*–]\s|\(?\d{1,3}[.)]\s|\(?[a-z][.)]\s)/.test(l.text);
         const level = Math.max(0, Math.min(3, Math.round((l.x - left) / 18) - 1));
         out.push((isListItem && level > 0 ? "   ".repeat(level) : "") + l.text);
@@ -2504,14 +2346,13 @@ function pdfLinesToParagraphs(pages) {
   return out;
 }
 
-// Extract the text of a PDF file as plain lines (one paragraph per line)
 async function extractPdfText(arrayBuffer) {
   const pdfjsLib = await loadPdfJs();
   let pdf;
   try {
     pdf = await pdfjsLib.getDocument({
       data: new Uint8Array(arrayBuffer),
-      isEvalSupported: false,   // never compile font code (CVE-2024-4367)
+      isEvalSupported: false,
       disableFontFace: true,
       useSystemFonts: false,
       stopAtErrors: false,
@@ -2540,37 +2381,30 @@ async function extractPdfText(arrayBuffer) {
   }
 }
 
-// Determine if a line is a running header, footer, page number, watermark, or metadata banner
 function isHeaderOrFooterLine(line, repetitiveSet = null) {
   if (!line || !line.trim()) return true;
   const trimmed = line.trim();
 
-  // 1. Repetitive running header or footer
   if (repetitiveSet && repetitiveSet.has(trimmed.toLowerCase())) return true;
 
-  // 2. Page numbers and pagination markers
   if (/^(?:page\s*\-*\s*\d+(?:\s*(?:of|\/)\s*\d+)?|\d+\s*(?:of|\/)\s*\d+|\-*\s*\d+\s*\-*|\[\s*\d+\s*\]|p\s*[\.\-]?\s*\d+)$/i.test(trimmed)) return true;
   if (/^page\s*\d+$/i.test(trimmed) || /^\d+\s*\|\s*page$/i.test(trimmed) || /^page\s*\|\s*\d+$/i.test(trimmed)) return true;
   if (/^\d{1,3}$/.test(trimmed)) return true;
 
-  // 3. Web URLs and coaching watermarks
   if (/^(?:https?:\/\/|www\.)\S+$/i.test(trimmed)) return true;
   if (/\b(?:www\.[a-z0-9\-]+\.[a-z]{2,}|[a-z0-9\-]+\.(?:com|in|org|co\.in))\b/i.test(trimmed) && trimmed.length < 80) return true;
 
-  // 4. Section banners and exam headers
   if (/^(?:RBI\s*Grade\s*B(?:\s*\d{4})?|Reserve\s*Bank\s*of\s*India|Phase\s*[\-:]?[I|1|2|II\d]+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed)) return true;
   if (/^(?:Mock\s*Test(?:\s*[A-Z0-9]+)?|Test\s*Series|Practice\s*Set(?:\s*[A-Z0-9]+)?|Practice\s*Paper(?:\s*[A-Z0-9]+)?|Sample\s*Paper(?:\s*[A-Z0-9]+)?|Exercise(?:\s*[A-Z0-9]+)?|Set\s*[\-:]?\s*[A-Z0-9]+|Section\s*[\-:]?\s*[A-Z0-9]+|Paper\s*[\-:]?\s*[I|1|2|II\d]+|Part\s*[\-:]?\s*[A-Z0-9]+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 100) return true;
   if (/^(?:Chapter\s*[\-:]?\s*\d+|Ch\s*[\-:]?\s*\d+|Unit\s*[\-:]?\s*\d+)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 100) return true;
   if (/^(?:Economic\s*(?:&|and)\s*Social\s*Issues(?:\s*\(ESI\))?|Finance\s*(?:&|and)\s*Management(?:\s*\(F&M\))?|English\s*Descriptive|General\s*Awareness|Quantitative\s*Aptitude|Reasoning\s*Ability|English\s*Language)(?:\s*[\-:]\s*.*)?$/i.test(trimmed) && !/\?$/.test(trimmed) && trimmed.length < 100) return true;
 
-  // 5. Exam instructions and metadata banner lines
   if (/^(?:Time\s*Allowed|Maximum\s*Marks|Total\s*Marks|Total\s*Time|Duration|Instructions?|Note|Important\s*Instructions?)\s*[:\.\-]/i.test(trimmed) && trimmed.length < 80) return true;
   if (/^(?:All\s*questions\s*are\s*compulsory|Read\s*the\s*following\s*instructions\s*carefully)/i.test(trimmed)) return true;
 
   return false;
 }
 
-// Chapter / unit / section / practice-set headings and exam banners (never "Note: ..." content)
 function isSectionBannerLine(line) {
   const t = String(line || "").trim();
   if (!t || /\?$/.test(t) || t.length > 100) return false;
@@ -2579,14 +2413,12 @@ function isSectionBannerLine(line) {
     /^(?:Chapter|Ch|Unit|Section|Part|Practice\s*Set|Practice\s*Paper|Mock\s*Test|Test\s*Series|Sample\s*Paper|Exercise|Paper)\s*[\-:]?\s*[A-Z0-9]+(?:\s*[\-:]\s*.*)?$/i.test(t);
 }
 
-// Clean descriptive question lines and strip extraneous title/banner lines
 function cleanDescriptiveQuestion(lines, currentTopic = "") {
   if (!lines || lines.length === 0) return { text: "", topic: currentTopic };
   let topic = currentTopic;
   const filtered = lines.filter(l => l.trim().length > 0 && !isHeaderOrFooterLine(l));
   if (filtered.length === 0) return { text: "", topic };
 
-  // If first line is a title or header banner rather than a question prompt:
   if (filtered.length > 1) {
     const first = filtered[0].trim();
     const isDirectiveOrQuestion = /^(?:discuss|explain|analyze|critically|evaluate|what|how|why|which|elaborate|describe|write|elucidate|highlight|examine)\b/i.test(first) || /\?$/.test(first);
@@ -2607,7 +2439,6 @@ function cleanDescriptiveQuestion(lines, currentTopic = "") {
   return { text: filtered.join("\n").trim(), topic };
 }
 
-// Clean MCQ prompt lines and strip extraneous section headers or page banners
 function cleanMCQPrompt(lines) {
   if (!lines || lines.length === 0) return "";
   let clean = lines.filter(l => l.trim().length > 0 && !isHeaderOrFooterLine(l));
@@ -2624,7 +2455,6 @@ function cleanMCQPrompt(lines) {
   return clean.filter(l => l.trim().length > 0).join("\n").trim();
 }
 
-// Does a line read like a question (rather than a point inside an answer)?
 function looksLikeQuestionLine(line) {
   const t = String(line || "").replace(/^\s*(?:Q(?:uestion)?\s*[\.\-]?\s*)?\d+\s*[\.\):\-]\s*/i, "");
   if (/\?\s*(?:\(?\s*\d+\s*marks?\s*\)?)?\s*$/i.test(t)) return true;
@@ -2633,8 +2463,6 @@ function looksLikeQuestionLine(line) {
   return /^(?:["“'‘(]\s*)?(?:discuss|explain|analy[sz]e|critically|examine|evaluate|assess|describe|elucidate|elaborate|comment|write|highlight|enumerate|suggest|what|why|how|which|who|when|where|identify|outline|state|define|compare|differentiate|distinguish|justify|illustrate|bring\s+out|trace|give|list|mention|in\s+the\s+(?:light|context)|do\s+you|to\s+what\s+extent)\b/i.test(t);
 }
 
-// Join model-answer lines: list items and table rows stay on consecutive lines,
-// other paragraphs are separated by a blank line.
 function joinAnswerLines(lines) {
   const isItem = l => /^\s*(?:[•◦▪‣\-*]|\(?\d{1,3}[.)]|\(?[a-z][.)]|\(?[ivx]{1,5}[.)])\s/i.test(l) || / \| /.test(l);
   let out = "";
@@ -2644,15 +2472,8 @@ function joinAnswerLines(lines) {
   return out.replace(/^\n+/, "").replace(/\s+$/, "");
 }
 
-// Parse raw document text into structured question objects with paper, marks, and model answers
-// The line that opens a shared passage, case or data table for several questions:
-// "Read the following passage carefully and answer the questions given below",
-// "Study the table below and answer Questions 6 to 10", "Case Study 2: ...", "Passage 1".
-// A lone "Consider the following statements and answer the question" is not one.
 const PASSAGE_HEADING_RE = /^(?:Case\s*Study|Caselet|Case\s*let|Passage|Reading\s+Comprehension|Comprehension|Data\s+Interpretation\s+Set|DI\s+Set)\s*(?:[-#]?\s*(?:\d{1,2}|[IVX]{1,4}|[A-H]))?\s*(?:[:.\-]\s*.{0,120})?$/i;
-// "Directions: choose the correct answer for each question" names no passage, so it is not one
 const PASSAGE_LEAD_RE = /^(?:Directions?\b.{0,120}?\b(?:passage|paragraph|extract|excerpt|case|caselet|table|data|graph|chart|information|report|text|article|arrangement|puzzle)s?\b|(?:Read|Study|Go\s+through|Refer\s+to|Look\s+at|Examine|Analy[sz]e|Based\s+on|On\s+the\s+basis\s+of|Use|Consider)\b.{0,90}?\b(?:passage|paragraph|extract|excerpt|case|caselet|table|data|graph|chart|information|report|text|article)s?\b)/i;
-// An explicit instruction to answer questions on a passage ("answer the questions that follow", "Questions 3 and 4")
 const PASSAGE_INSTRUCTION_RE = /\b(?:answer|attempt)\b.{0,60}\bquestions?\b|\bquestions?\b.{0,40}\b(?:that\s+follow|follows?|given\s+below|below|based\s+on)\b|\bQ(?:s|uestions?)?\.?\s*\d{1,3}\s*(?:-|to|and|&)\s*(?:Q\.?\s*)?\d{1,3}/i;
 const PASSAGE_MANY_RE = /\bquestions\b|\bQ(?:s|uestions)?\.?\s*(?:No\.?\s*)?\d{1,4}\s*(?:-|to|and|&)\s*\d{1,4}|\(\s*\d{1,4}\s*(?:-|to)\s*\d{1,4}\s*\)/i;
 function isPassageIntro(line) {
@@ -2663,22 +2484,14 @@ function isPassageIntro(line) {
 
 function parseQuestionsAndAnswers(rawText) {
   if (!rawText || !rawText.trim()) return [];
-  // a file converted to the clean format is read by its labels
   if (isCleanFormat(rawText)) return parseCleanFormat(rawText).desc;
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  // origLines keep leading spaces (indentation of nested bullets) for model answers;
-  // rawLines are trimmed and used for detection.
   const origLines = text.split("\n").map(l => l.replace(/\s+$/, ""));
   const rawLines = origLines.map(l => l.trim());
-  // "Answer:", "Ans.", "Model Answer -" or the word alone on a line - but not "Answering..." / "Solutions include..."
   const ANSWER_RE = /^(?:(?:Model\s+)?Answer|Ans|Solution|Reference\s+Answer)\b\s*(?:[:\.\-]\s*|$)(.*)$/i;
-  // Running headers/footers are never in this text: DOCX keeps them in separate parts and
-  // the PDF reader removes them by position. So nothing that repeats (e.g. a "Conclusion"
-  // heading in every answer) is thrown away here.
   const repHeaders = null;
 
-  // Check document-level metadata from the first few lines
   let docDefaultPaper = "Other";
   let docDefaultTopic = "";
   const headerPreview = rawLines.slice(0, 15).join(" ");
@@ -2686,7 +2499,6 @@ function parseQuestionsAndAnswers(rawText) {
   else if (/\bFinance\b/i.test(headerPreview)) docDefaultPaper = "Finance";
   else if (/\bManagement\b/i.test(headerPreview)) docDefaultPaper = "Management";
   else if (/\bEnglish(?:\s+Descriptive)?\b/i.test(headerPreview)) docDefaultPaper = "English Descriptive";
-  // An economics title ("National Income: Answer Writing") - the title lines only, not question text
   else if (/\b(?:national income|GDP|GVA|inflation|fiscal|monetary policy|economy|economic growth)\b/i.test(rawLines.filter(Boolean).slice(0, 2).join(" "))) docDefaultPaper = "ESI";
 
   for (let i = 0; i < Math.min(5, rawLines.length); i++) {
@@ -2707,7 +2519,6 @@ function parseQuestionsAndAnswers(rawText) {
   }
 
   const qNumRegex = /^(?:Question\s*(\d+)|Q\s*[\.\-]?\s*(\d+))\s*[\.\:\)\-]?/i;
-  // "Question (15 Marks, 600 Words): Explain ..." - marks / words in brackets, no number
   const UNNUMBERED_Q_RE = /^Question\s*[\(\[]\s*(\d{1,2})\s*marks?\s*(?:[,;|\/\-]\s*(\d{2,4})\s*words?\s*)?[\)\]]\s*[:.\-]?\s*(.*)$/i;
   const rawQuestionStarts = [];
 
@@ -2722,11 +2533,8 @@ function parseQuestionsAndAnswers(rawText) {
     } else if (/^(?:Question|Q)\s*[:\.\-]/i.test(line) || UNNUMBERED_Q_RE.test(line)) {
       let j = i - 1;
       while (j >= 0 && (!rawLines[j] || isHeaderOrFooterLine(rawLines[j], repHeaders))) j--;
-      // "Q1. GDP and Welfare" + "Question (15 Marks, 600 Words): ..." is ONE question: the second line is its metadata
       const prevStart = rawQuestionStarts[rawQuestionStarts.length - 1];
       if (UNNUMBERED_Q_RE.test(line) && prevStart && prevStart.lineIndex === j) continue;
-      // "Question (15 Marks, 600 Words): ..." under a topic heading: the heading starts the question
-      // (not a bullet, a numbered point or a table row that ends the previous answer)
       let start = i;
       if (UNNUMBERED_Q_RE.test(line) && j >= 0 && rawLines[j].length <= 120 && !/[.?:;,]$/.test(rawLines[j]) &&
           !/^(?:[•◦▪‣\-*]|\d+[.)])\s/.test(rawLines[j]) && !rawLines[j].includes(" | ")) start = j;
@@ -2734,7 +2542,6 @@ function parseQuestionsAndAnswers(rawText) {
     }
   }
 
-  // Deduplicate consecutive starts with the same question number (e.g. "Q1." followed by "QUESTION 1")
   const questionStarts = [];
   for (const qs of rawQuestionStarts) {
     const last = questionStarts[questionStarts.length - 1];
@@ -2744,10 +2551,6 @@ function parseQuestionsAndAnswers(rawText) {
     questionStarts.push(qs);
   }
 
-  // Fallback: questions numbered only "1.", "2." ... (typed, or Word auto-numbering).
-  // Numbered points inside an answer restart at 1 - after such a restart, the next
-  // number only starts a question if the line reads like one. Indented (nested)
-  // items are never questions.
   if (questionStarts.length === 0) {
     let expected = null;
     let restarted = false;
@@ -2767,7 +2570,6 @@ function parseQuestionsAndAnswers(rawText) {
     }
   }
 
-  // Fallback for single question with explicit Answer: marker or directive verb
   if (questionStarts.length === 0) {
     let firstContentIdx = 0;
     while (firstContentIdx < rawLines.length && (!rawLines[firstContentIdx] || isHeaderOrFooterLine(rawLines[firstContentIdx], repHeaders))) {
@@ -2778,32 +2580,23 @@ function parseQuestionsAndAnswers(rawText) {
     }
   }
 
-  // Shared passages / case studies / data tables ("Read the case below and answer Questions
-  // 3 to 5"): from the intro line to the next question. They are cut out of the previous
-  // answer and shown above every question they cover (the range in the intro, otherwise
-  // the following questions up to the next passage or section banner).
   const passages = [];
   for (let i = 0; i < rawLines.length; i++) {
     if (!isPassageIntro(rawLines[i]) || ANSWER_RE.test(rawLines[i])) continue;
     const nextK = questionStarts.findIndex(st => st.lineIndex > i);
     if (nextK < 0 || questionStarts.some(st => st.lineIndex === i)) continue;
-    // right under a question's own number it is that question's text ("Q1. (15 marks)" / "Read the case ...")
     const owner = nextK > 0 ? questionStarts[nextK - 1] : null;
     if (owner && rawLines.slice(owner.lineIndex + 1, i).filter(Boolean).length === 0) continue;
     const end = questionStarts[nextK].lineIndex;
     const idx = [];
     for (let j = i; j < end; j++) if (rawLines[j]) idx.push(j);
     while (idx.length > 1 && isSectionBannerLine(rawLines[idx[idx.length - 1]])) idx.pop();
-    // a passage block never holds an answer: then the line was part of an answer
     if (idx.length < 2 || idx.some(j => ANSWER_RE.test(rawLines[j]))) continue;
-    // after a question (inside its answer), "Case Study: ..." is a section of that answer unless
-    // the block tells you to answer questions on it
     if (owner && !idx.some(j => PASSAGE_INSTRUCTION_RE.test(rawLines[j]))) continue;
     const r = rawLines[i].match(/\b(?:Q(?:s|uestions?)?\.?\s*(?:No\.?\s*)?)(\d{1,3})\s*(?:-|to|and|&)\s*(?:Q\.?\s*)?(\d{1,3})\b/i) || rawLines[i].match(/\(\s*(\d{1,3})\s*(?:-|to)\s*(\d{1,3})\s*\)/);
     passages.push({ start: i, end, firstK: nextK, text: idx.map(j => rawLines[j]).join("\n"), from: r ? Number(r[1]) : null, to: r ? Number(r[2]) : null });
     i = end - 1;
   }
-  // which passage (if any) each question uses
   const passageFor = questionStarts.map(() => "");
   passages.forEach((ps, n) => {
     const stop = n + 1 < passages.length ? passages[n + 1].firstK : questionStarts.length;
@@ -2812,7 +2605,6 @@ function parseQuestionsAndAnswers(rawText) {
       if (ps.from !== null && num !== null && num !== undefined) {
         if (num < ps.from || num > ps.to) { if (num > ps.to) break; continue; }
       } else if (k > ps.firstK) {
-        // no range given: stop at a section banner between the questions
         const gap = rawLines.slice(questionStarts[k - 1].lineIndex, questionStarts[k].lineIndex);
         if (gap.some(l => l && isSectionBannerLine(l))) break;
       }
@@ -2829,7 +2621,6 @@ function parseQuestionsAndAnswers(rawText) {
     if (cut) endIdx = cut.start;
     const blockIdx = [];
     for (let i = startIdx; i < endIdx; i++) if (rawLines[i]) blockIdx.push(i);
-    // A section banner between two questions ("Chapter 2", "Practice Set B") is not part of the answer
     while (blockIdx.length > 1 && isSectionBannerLine(rawLines[blockIdx[blockIdx.length - 1]])) blockIdx.pop();
     const blockLines = blockIdx.map(i => rawLines[i]);
 
@@ -2844,19 +2635,16 @@ function parseQuestionsAndAnswers(rawText) {
     const aLines = [];
     let inAnswer = false;
 
-    // Check if there is an explicit Answer: / Ans: marker in this question block
     const hasExplicitAnswer = blockLines.some(l => ANSWER_RE.test(l));
 
     for (let i = 0; i < blockLines.length; i++) {
       const line = blockLines[i];
-      const answerLine = origLines[blockIdx[i]]; // keeps nested-bullet indentation
+      const answerLine = origLines[blockIdx[i]];
 
-      // A topic heading right above "Question (15 Marks, 600 Words): ..."
       if (i === 0 && qLines.length === 0 && !inAnswer && blockLines[1] && UNNUMBERED_Q_RE.test(blockLines[1]) && !UNNUMBERED_Q_RE.test(line)) {
         topic = line.replace(/^(?:Q(?:uestion)?\s*[.\-]?\s*\d+\s*[.):\-]\s*)/i, "").trim() || line;
         continue;
       }
-      // "Question (15 Marks, 600 Words): Explain ..."
       const unq = !inAnswer && qLines.length === 0 ? line.match(UNNUMBERED_Q_RE) : null;
       if (unq) {
         marks = Number(unq[1]);
@@ -2865,7 +2653,6 @@ function parseQuestionsAndAnswers(rawText) {
         continue;
       }
 
-      // Check for inline metadata e.g. "QUESTION 1     15 MARKS     600 WORDS"
       if (/^Q(?:uestion)?\s*\.?\s*\d+\s*[:.\-]?\s*[\(\[]?\s*\d+\s*marks?\s*[\)\]]?\s*(?:[|,\-·•]?\s*[\(\[]?\s*\d+\s*words?\s*[\)\]]?)?\s*$/i.test(line)) {
         const mMarks = line.match(/(\d+)\s*MARKS/i);
         if (mMarks) marks = Number(mMarks[1]);
@@ -2875,7 +2662,6 @@ function parseQuestionsAndAnswers(rawText) {
         continue;
       }
 
-      // Topic header e.g. "Q1. GDP and Welfare" - but "Q1. Discuss the role of RBI..." is the question itself
       const topicHeaderMatch = line.match(/^(?:Q(?:uestion)?\s*[\.\-]?\s*)\d+\s*[\.\):\-]\s*(.+)/i);
       if (topicHeaderMatch && qLines.length === 0 && !inAnswer) {
         const rest = topicHeaderMatch[1].trim();
@@ -2886,7 +2672,6 @@ function parseQuestionsAndAnswers(rawText) {
         }
       }
 
-      // Check standard metadata lines: "Marks: 10", "Paper: Finance", "Topic: ...", "Word limit: 400"
       const marksMatch = line.match(/^(?:Marks?|Maximum\s+marks?)\s*[:\.\-]?\s*(\d+)/i);
       if (marksMatch && !inAnswer) {
         marks = Number(marksMatch[1]);
@@ -2917,7 +2702,6 @@ function parseQuestionsAndAnswers(rawText) {
         continue;
       }
 
-      // Check for explicit Answer start
       const ansMatch = line.match(ANSWER_RE);
       if (ansMatch) {
         inAnswer = true;
@@ -2933,7 +2717,6 @@ function parseQuestionsAndAnswers(rawText) {
           aLines.push(answerLine);
         }
       } else {
-        // No explicit Answer marker in document: first non-metadata paragraph is Question prompt, rest is Model Answer
         if (qLines.length === 0) {
           const cleanQ = line.replace(/^(?:\(\d+\)|\[\d+\]|(?:Question|Q)\s*[\.\-]?\s*\d+|\d+)\s*[\.\:\)\-\]]*\s*/i, "").replace(/^[\.\:\)\-\]\s]+/, "");
           if (cleanQ) qLines.push(cleanQ);
@@ -2944,7 +2727,6 @@ function parseQuestionsAndAnswers(rawText) {
     }
 
     const cleaned = cleanDescriptiveQuestion(qLines, topic);
-    // Marks written inside the question: "... (15 marks)" / "[10 Marks]" (the text itself is kept)
     const inlineMarks = cleaned.text.match(/[\(\[]\s*(\d{1,2})\s*marks?\s*[\)\]]/i);
     if (inlineMarks && marks === 10 && wordLimit === 400) {
       marks = Number(inlineMarks[1]);
@@ -2952,7 +2734,6 @@ function parseQuestionsAndAnswers(rawText) {
     }
     const questionText = cleaned.text;
     topic = cleaned.topic;
-    // The model answer exactly as written in the file (headings, bullets, table rows, order)
     const modelAnswer = joinAnswerLines(aLines);
 
     if (questionText || modelAnswer) {
@@ -2971,17 +2752,12 @@ function parseQuestionsAndAnswers(rawText) {
   return results;
 }
 
-// A textarea that grows to show all of its text, so a long model answer never needs its own scrollbar
 function autoGrowTextarea(el) {
   if (!el) return;
   el.style.height = "auto";
   el.style.height = (el.scrollHeight + 4) + "px";
 }
 
-// The app's own extraction check, before any AI: is the question and its model answer word for
-// word in the file, and what follows the answer there (normally the next question)? The AI
-// Check uses this to tell a faithful extraction (whose text simply ends where the file's does)
-// from a broken one (cut off or merged with another question).
 function descMarkSource(questions, rawText) {
   const norm = v => String(v || "").replace(/\s+/g, " ").trim();
   const R = norm(rawText);
@@ -2998,7 +2774,6 @@ function descMarkSource(questions, rawText) {
   });
 }
 
-// Read an uploaded DOCX or PDF file, extract its questions, and insert them into the target list
 async function handleDocImport(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
@@ -3031,10 +2806,7 @@ async function handleDocImport(event) {
       throw new Error("No readable text found in the document.");
     }
 
-    // An MCQ file (options [a]-[e]) must not be imported as descriptive questions.
-    // Descriptive files parse to 0 MCQs, so 3 is a safe threshold.
     const mcqLike = parseMCQDocument(rawText, inferMCQSubject(rawText)).filter(q => (q.options || []).length >= 4);
-    // a clean-format file can hold both kinds: this screen takes its descriptive part
     const cleanBoth = isCleanFormat(rawText) && parseQuestionsAndAnswers(rawText).length > 0;
     if (mcqLike.length >= 3 && !cleanBoth) {
       if (statusElem) statusElem.textContent = "";
@@ -3052,10 +2824,8 @@ async function handleDocImport(event) {
       throw new Error("Could not detect any questions in the file.");
     }
 
-    // before any AI looks at them: is each question and model answer word for word in the file?
     descMarkSource(parsedQuestions, rawText);
 
-    // which subject / chapter the file belongs to (History is sorted into these folders)
     if (typeof askFileFolder === "function") {
       if (statusElem) statusElem.textContent = "";
       const folder = await askFileFolder(file.name, rawText, parsedQuestions[0].paper, parsedQuestions.length);
@@ -3073,7 +2843,6 @@ async function handleDocImport(event) {
     });
     saveSetup();
     renderSetupList();
-    // the AI Check runs only when you press "AI Check"
 
     if (statusElem) {
       statusElem.textContent = `Added ${parsedQuestions.length} question(s) from ${file.name}.` +
@@ -3092,16 +2861,6 @@ async function handleDocImport(event) {
   }
 }
 
-// ==========================================
-// PHASE 1: OBJECTIVE / MCQ TEST FUNCTIONS
-// ==========================================
-
-// ---- MCQ document parser --------------------------------------------------
-// Every question keeps its own number (and set), and the answer key is matched
-// by that number - never by position - so one unreadable question can no longer
-// shift every later answer onto the wrong question.
-
-// "c", "(c)", "[C]", "a, e", "(a) and (d)", "ade" -> "c" / "ae" / "ad" / "ade" ("" if not an answer)
 function normalizeMCQAnswer(raw) {
   const s = String(raw || "").trim().replace(/[.;]$/, "");
   if (!s) return "";
@@ -3111,16 +2870,14 @@ function normalizeMCQAnswer(raw) {
   const packed = /^[a-eA-E]{2,5}$/;
   if (!sep.test(s) && !packed.test(s)) return "";
   const letters = s.toLowerCase().replace(/\band\b/g, " ").match(/[a-e]/g) || [];
-  if (packed.test(s) && new Set(letters).size !== letters.length) return "";   // "dead", "add" are words
+  if (packed.test(s) && new Set(letters).size !== letters.length) return "";
   return [...new Set(letters)].sort().join("");
 }
 
-// "ae" -> "A, E" (for display)
 function formatMCQAnswer(ans) {
   return String(ans || "").toUpperCase().split("").join(", ");
 }
 
-// Does this MCQ expect more than one option?
 function isMultiAnswerMCQ(q) {
   const text = String((q && q.text) || "");
   return String((q && q.correctAnswer) || "").length > 1 ||
@@ -3128,7 +2885,6 @@ function isMultiAnswerMCQ(q) {
     /\b(?:one or more|more than one|all (?:the )?(?:correct|applicable)) (?:options?|answers?|statements?)\b.{0,20}\b(?:may|can|could|are|is) be (?:correct|right|true)|select all that apply/i.test(text);
 }
 
-// Option labels in a line: (a) [a] a) a. - each style ("family") and case counted separately
 function mcqFindLabels(line, allowed) {
   const defs = {
     paren: /\(([a-eA-E])\)/g,
@@ -3146,8 +2902,6 @@ function mcqFindLabels(line, allowed) {
       const fam = id + (ch === ch.toLowerCase() ? "-l" : "-u");
       if (allowed && !allowed.has(fam)) continue;
       const start = m.index + (spaced ? m[1].length : 0);
-      // "Column B", "Part A)", "List II (A)" are not options
-      // (capitalised words only: "[d] list [e] withdraw" are real options)
       if (/\b(?:Column|Section|Part|Table|Schedule|Figure|Group|Row|List|Statement|Type|Set)\s*$/.test(line.slice(Math.max(0, start - 12), start))) continue;
       out.push({ label: ch.toLowerCase(), start, end: m.index + m[0].length, fam });
     }
@@ -3155,26 +2909,22 @@ function mcqFindLabels(line, allowed) {
   return out.sort((a, b) => a.start - b.start);
 }
 
-// Which option styles does this document use? (so "A. Simon Kuznets" in a match-list
-// is not read as option A in a paper whose options are written "(a)")
 function mcqOptionFamilies(lines) {
   const score = {};
   for (const line of lines) {
     const labels = mcqFindLabels(line, null);
     if (!labels.length) continue;
     if (labels[0].start === 0 && labels[0].label === "a") score[labels[0].fam] = (score[labels[0].fam] || 0) + 2;
-    // a chain a -> b -> c of one style on one line
     for (const fam of new Set(labels.map(l => l.fam))) {
       const seq = labels.filter(l => l.fam === fam).map(l => l.label).join("");
       if (seq.includes("abc")) score[fam] = (score[fam] || 0) + 1;
     }
   }
   const max = Math.max(0, ...Object.values(score));
-  if (max === 0) return null;                       // nothing found: allow every style
+  if (max === 0) return null;
   return new Set(Object.keys(score).filter(f => score[f] >= Math.max(2, max * 0.25)));
 }
 
-// Split a line into question text + options. expected = the next option letter of the question.
 function mcqSplitOptions(line, allowed, expected) {
   const labels = mcqFindLabels(line, allowed);
   if (!labels.length) return null;
@@ -3198,7 +2948,6 @@ function mcqSplitOptions(line, allowed, expected) {
     if (!ok) return null;
     return { stem: "", opts: toOpts(chainFrom(0)) };
   }
-  // Options written after the question on the same line: "Who ...? (a) X (b) Y (c) Z (d) W"
   if (expected === "a") {
     for (let i = 0; i < labels.length; i++) {
       if (labels[i].label !== "a") continue;
@@ -3209,34 +2958,27 @@ function mcqSplitOptions(line, allowed, expected) {
   return null;
 }
 
-// Parse the answer-key part of an MCQ document into entries keyed by "set:number"
-// Split a document's lines into the questions and its answer-key section ("Answer Key",
-// "Answers", "Answers & Explanations"...). keyOnly: a file that is only an answer key.
 function mcqSplitKeySection(allLines, keyOnly) {
   const NOTE_RE = /^(?:Note|N\.\s?B\.|Hint)\s*[:.\-]/i;
   const ANSWER_SECTION_RE = /^(?:answer\s*keys?|answers|solutions|answers?\s*(?:&|and|with)\s*(?:explanations?|solutions?|reasons?)|answer\s*keys?\s*(?:&|and|with)\s*(?:explanations?|solutions?|reasons?))\s*:?$/i;
   let ansKeyIdx = -1;
   let ansKeyRest = "";
   for (let i = 0; i < allLines.length; i++) {
-    const inline = allLines[i].match(/^(?:answer\s*keys?|answers)\s*:\s*(.+)$/i);   // "Answers: 1-a, 2-c, ..."
+    const inline = allLines[i].match(/^(?:answer\s*keys?|answers)\s*:\s*(.+)$/i);
     if (ANSWER_SECTION_RE.test(allLines[i]) || inline) {
       ansKeyIdx = i;
       ansKeyRest = inline ? inline[1] : "";
       break;
     }
   }
-  // an answer-key file without such a heading is all key
   const qLines = ansKeyIdx !== -1 ? allLines.slice(0, ansKeyIdx) : (keyOnly ? [] : allLines);
   const keyPart = ansKeyIdx !== -1 ? (ansKeyRest ? [ansKeyRest] : []).concat(allLines.slice(ansKeyIdx + 1)) : (keyOnly ? allLines : []);
   const aLines = keyPart
-    // a bare number is a page number - unless an answer follows it ("158" / "a, b, d, e" from a wrapped table cell)
     .filter((l, i, arr) => !isHeaderOrFooterLine(l) || /^(?:practice\s*set|set|section|part|exercise)\b/i.test(l) || NOTE_RE.test(l) ||
       (/^\d{1,4}$/.test(l) && /^[\(\[]?[a-eA-E][\)\]]?(?:[\s,&\/]+[\(\[]?[a-eA-E][\)\]]?)*,?$|^[a-e]{2,5}$/.test(arr[i + 1] || "")));
   return { qLines, aLines };
 }
 
-// A separate answer-key file ("Answer Key" grid and / or "Answers with Explanations"):
-// the key of every question number it lists, as parseMCQAnswerKey returns it
 function parseAnswerKeyFile(rawText) {
   const allLines = String(rawText || "").replace(/\r\n?/g, "\n").split("\n").map(l => l.trim()).filter(Boolean);
   const { aLines } = mcqSplitKeySection(allLines, true);
@@ -3244,16 +2986,16 @@ function parseAnswerKeyFile(rawText) {
 }
 
 function parseMCQAnswerKey(lines, multiSection) {
-  lines = lines.slice();   // a flattened header line is split in place below
+  lines = lines.slice();
   const entries = new Map();
   const order = [];
   let aSection = 0;
   let setHeaders = 0;
   let maxSeen = 0;
-  let cur = null;        // entry that receives the explanation lines that follow it
-  let header = null;     // column roles from a "Q | Answer | Level | Why" header row
-  let sawLevel = false;  // the key has a difficulty-level column
-  let flatHead = null;   // columns of a header a PDF flattened into text: { after: ["skip" | "level" | "expl"...] }
+  let cur = null;
+  let header = null;
+  let sawLevel = false;
+  let flatHead = null;
   const FLAT_HEAD_WORD = /^(?:Q\.?|Q\.?No\.?|No\.?|S\.?No\.?|Questions?|Answers?|Ans\.?|Key|Level|Difficulty|Marks?|Topic|Why|Reasons?|Explanations?|Solutions?|Remarks?)$/i;
   const flatRole = (w) => (/^(?:Q\.?|Q\.?No\.?|No\.?|S\.?No\.?|Questions?)$/i.test(w) ? "q" : /^(?:Answers?|Ans\.?|Key)$/i.test(w) ? "ans"
     : /^(?:Level|Difficulty)$/i.test(w) ? "level" : /^(?:Why|Reasons?|Explanations?|Solutions?|Remarks?)$/i.test(w) ? "expl" : "skip");
@@ -3270,8 +3012,6 @@ function parseMCQAnswerKey(lines, multiSection) {
 
   const put = (num, ans, extra) => {
     if (!ans || !num) return null;
-    // Without set headers, numbering that restarts at 1 means the next set (only when the
-    // questions themselves come in several sets - CH-1 lists one set twice: grid + table)
     if (multiSection && !setHeaders && num === 1 && maxSeen > 1 && entries.has(aSection + ":1")) {
       aSection++;
       maxSeen = 0;
@@ -3294,8 +3034,6 @@ function parseMCQAnswerKey(lines, multiSection) {
     }
     return e;
   };
-  // "1. c 2. a 3. b", "1-a, 2-c", a PDF-flattened grid "1 b 2 d 7 abd" (multi-answer keys are
-  // packed letters) or a flattened table that still starts with its header "Q.No. Answer 1 c 2 b"
   const pairsIn = (p) => {
     const line = p.replace(/^(?:Q(?:uestion)?s?\.?\s*(?:No\.?)?|S\.?\s*No\.?)\s*(?:Answers?|Ans\.?|Key)\s+(?=\d)/i, "");
     const re = /(?:^|[\s,;])(?:Q\.?\s*)?(\d{1,4})\s*[.:\-)]?\s*[\(\[]?([a-e](?:,\s?[a-e]){1,4}|[a-eA-E]|[a-e]{2,5})[\)\]]?(?=$|[\s;]|,\s)/g;
@@ -3308,13 +3046,11 @@ function parseMCQAnswerKey(lines, multiSection) {
     const ans = normalizeMCQAnswer(m[2]);
     return ans ? { num: parseInt(m[1], 10), ans } : null;
   };
-  // "Q.1) [c] Impulsive", "1. (b) Because ...", "Q12 Answer: (a), (d)", "5 - c"
   const singleLine = (p) => {
     const m = p.match(/^(?:Q(?:uestion)?\s*[.\-]?\s*)?(\d{1,4})\s*[.:\-)\]]*\s*(?:(?:Ans(?:wer)?|Correct(?:\s*(?:answer|option))?|Key)\s*[:.\-]?\s*)?(?:Option\s*)?((?:[\(\[][a-eA-E][\)\]]|\b[a-eA-E]\b)(?:\s*(?:,|&|and|\/)\s*(?:[\(\[][a-eA-E][\)\]]|\b[a-eA-E]\b))*)(?:\s*[.:\-)]\s*|\s+|$)(.*)$/);
     if (!m) return null;
     const token = m[2];
     const rest = (m[3] || "").trim();
-    // "2. A tax on ..." is a numbered explanation line, not "Q2 = (a)"
     if (/^[A-E]$/.test(token) && /^[a-z]/.test(rest)) return null;
     const ans = normalizeMCQAnswer(token);
     return ans ? { num: parseInt(m[1], 10), ans, rest } : null;
@@ -3324,28 +3060,23 @@ function parseMCQAnswerKey(lines, multiSection) {
   for (let i = 0; i < lines.length; i++) {
     const p = lines[i];
 
-    // A multi-answer cell wrapped by a PDF: "112 a, b," + "d, e"
     if (/^(?:Q\.?\s*)?\d{1,4}\s+[\(\[]?[a-e][\)\]]?(?:\s*,\s*[\(\[]?[a-e][\)\]]?)*\s*,$/.test(p)) {
       let joined = p;
       while (i + 1 < lines.length && /^[\(\[]?[a-e][\)\]]?(?:\s*,\s*[\(\[]?[a-e][\)\]]?)*\s*,?$/.test(lines[i + 1].trim()) && /,$/.test(joined)) joined += " " + lines[++i].trim();
       const one = singleLine(joined.replace(/,$/, ""));
       if (one) { cur = put(one.num, one.ans); continue; }
     }
-    // "Hard 2 holds if ..." - the level column, then the explanation, on one line
     if (cur && sawLevel && !cur.level && !cur.explanation.length) {
       const lm = p.match(/^(Easy|Moderate|Medium|Hard|Difficult|Tough)\s+(.+)$/);
       if (lm) { cur.level = lm[1]; cur.explanation.push(lm[2]); continue; }
     }
 
-    // A table flattened by a PDF repeats its header in pieces on every page: "Q", "Answe", "r", "Level Why"
     if (!p.includes("|") && p.length <= 24 && /^(?:q|q\.?\s*no\.?|s\.?\s*no\.?|answe?|r|answers?|ans\.?|level|why|explanations?|(?:answer\s+)?level\s+(?:why|reasons?|explanations?|solutions?))$/i.test(p)) continue;
-    // A narrow table column splits the level word: "Moderat" + "e"
     if (cur && !cur.level && !cur.explanation.length) {
       const joined = (p + (lines[i + 1] || "")).trim();
       if (LEVEL.test(p)) { cur.level = p; sawLevel = true; continue; }
       if (p.length < 10 && LEVEL.test(joined)) { cur.level = joined; sawLevel = true; i++; continue; }
     }
-    // A cell wrapped by a PDF: "154" then "ade", or "158" then "a, b," then "d, e"
     if (/^\d{1,4}$/.test(p)) {
       let k = 1;
       let ans = "";
@@ -3361,8 +3092,6 @@ function parseMCQAnswerKey(lines, multiSection) {
       }
     }
 
-    // "Q.No. Answer Marks Explanation 1 b 1 CRR is ..." - a table header flattened by a PDF, with
-    // (part of) the first row on the same line: remember the columns and read the rest of the line again
     if (!p.includes("|")) {
       const words = p.split(/\s+/);
       let n = 0;
@@ -3376,7 +3105,6 @@ function parseMCQAnswerKey(lines, multiSection) {
       }
     }
 
-    // Set headers ("Practice Set B") start the answers of the next set
     if (SET_RE.test(p) && p.length < 100 && !/[.?]$/.test(p)) {
       if (setHeaders > 0 || entries.size > 0) aSection = multiSection ? aSection + (entries.size ? 1 : 0) : 0;
       if (!multiSection) aSection = 0;
@@ -3389,7 +3117,6 @@ function parseMCQAnswerKey(lines, multiSection) {
 
     if (p.includes("|")) {
       const cells = p.split("|").map(c => c.trim());
-      // Header row naming the columns
       const roles = cells.map(c => Object.keys(HEAD).find(k => HEAD[k].test(c)) || "");
       if (roles.includes("ans") && roles.includes("q") && !cells.some(c => /^\d+$/.test(c)) &&
           roles.filter(Boolean).length >= Math.max(2, Math.ceil(cells.length / 2))) {
@@ -3397,9 +3124,7 @@ function parseMCQAnswerKey(lines, multiSection) {
         cur = null;
         continue;
       }
-      // "Questions | 1 | 2 | 3 ..." header of a range table
       if (HEAD.q.test(cells[0]) && cells.slice(1).every(c => /^\d+$/.test(c) || !c)) continue;
-      // "1 to 10 | a | e | b | ..."
       const range = cells[0].match(/^(?:Q\.?\s*)?(\d+)\s*(?:to|-)\s*(?:Q\.?\s*)?(\d+)$/i);
       if (range) {
         const startQ = parseInt(range[1], 10);
@@ -3407,20 +3132,17 @@ function parseMCQAnswerKey(lines, multiSection) {
         cur = null;
         continue;
       }
-      // Grid of "1 e | 2 c | 3 a ..." (empty trailing cells allowed)
       const filled = cells.filter(Boolean);
       if (filled.length >= 2 && filled.every(c => cellPair(c))) {
         filled.forEach(c => { const cp = cellPair(c); put(cp.num, cp.ans); });
         cur = null;
         continue;
       }
-      // Pairs in separate cells: "1 | c | 2 | a"
       if (filled.length >= 2 && filled.length % 2 === 0 && filled.every((c, k) => (k % 2 === 0 ? NUM.test(c) : normalizeMCQAnswer(c)))) {
         for (let k = 0; k < filled.length; k += 2) put(parseInt(filled[k].replace(/\D/g, ""), 10), normalizeMCQAnswer(filled[k + 1]));
         cur = null;
         continue;
       }
-      // A row of a "Q | Answer | Level | Why" table
       if (header && NUM.test(cells[header.q] || "") && normalizeMCQAnswer(cells[header.ans] || "")) {
         const expl = header.expl.map(k => cells[k] || "").filter(Boolean).join(" | ");
         cur = put(parseInt(cells[header.q].replace(/\D/g, ""), 10), normalizeMCQAnswer(cells[header.ans]), {
@@ -3430,7 +3152,6 @@ function parseMCQAnswerKey(lines, multiSection) {
         });
         continue;
       }
-      // Same row without a header: "1 | e | Easy | Why ..."
       if (NUM.test(cells[0]) && cells.length >= 2 && normalizeMCQAnswer(cells[1])) {
         const rest = cells.slice(2);
         const level = rest.find(c => LEVEL.test(c)) || "";
@@ -3440,12 +3161,10 @@ function parseMCQAnswerKey(lines, multiSection) {
         });
         continue;
       }
-      // Any other table row belongs to the current explanation ("Word | Meaning | Opposite")
       if (cur) cur.explanation.push(p);
       continue;
     }
 
-    // A range table flattened by a PDF: "1 to 10 a e b d d b e c e c"
     const flat = p.match(/^(\d+)\s*to\s*(\d+)\s+((?:[a-eA-E](?:\s+|$))+)$/i);
     if (flat) {
       const startQ = parseInt(flat[1], 10);
@@ -3453,7 +3172,6 @@ function parseMCQAnswerKey(lines, multiSection) {
       cur = null;
       continue;
     }
-    // "1 to 10" followed by one answer letter per line
     const rangeOnly = p.match(/^(\d+)\s+to\s+(\d+)$/i);
     if (rangeOnly) {
       let n = parseInt(rangeOnly[1], 10);
@@ -3464,17 +3182,14 @@ function parseMCQAnswerKey(lines, multiSection) {
       cur = null;
       continue;
     }
-    // A line holding only answers: "1. c  2. a  3. b" / "1-a, 2-c" / a flattened grid "1 e 2 c"
     const pairs = pairsIn(p);
     if (pairs) {
       pairs.forEach(m => put(parseInt(m[1], 10), m[2]));
       cur = null;
       continue;
     }
-    // One answer per line, possibly followed by its explanation
     const one = singleLine(p);
     if (one && flatHead) {
-      // a row under a flattened header: drop the extra columns (marks...) before the explanation
       let rest = one.rest;
       let level = "";
       for (const role of flatHead.after) {
@@ -3488,9 +3203,7 @@ function parseMCQAnswerKey(lines, multiSection) {
       continue;
     }
     if (one) {
-      // "1 e Easy" / "1 e Easy Indian embassies ...": a flattened "Q | Answer | Level | Why" row
       const lv = one.rest.match(/^(Easy|Moderate|Medium|Hard|Difficult|Tough)(?:\s+(?=[A-Z0-9(“"‘])|$)(.*)$/);
-      // "1 c Moderat" + "e": the level word split by a narrow PDF column
       if (!lv && one.rest && one.rest.length < 10 && LEVEL.test(one.rest + (lines[i + 1] || "").trim())) {
         cur = put(one.num, one.ans, { level: one.rest + lines[i + 1].trim() });
         sawLevel = true;
@@ -3500,8 +3213,6 @@ function parseMCQAnswerKey(lines, multiSection) {
       cur = put(one.num, one.ans, lv ? { level: lv[1], explanation: lv[2] } : (one.rest ? { explanation: one.rest } : null));
       continue;
     }
-    // Headings between key formats ("Quick Check", "Answers with Reasons") are not explanations;
-    // a short explanation line without a full stop ("Real GDP = Nominal GDP / Deflator") still is
     const KEY_HEADING = /^(?:quick\s*check|answers?(?:\s+(?:with|and|&)\s+\w+)?|answer\s*keys?|(?:detailed\s+)?(?:explanations?|solutions?)|reasons?|level\s+split\b.*)$/i;
     if (p.length <= 80 && !/[.?:;,)]$/.test(p) && (!cur || KEY_HEADING.test(p)) && (i + 1 >= lines.length || startsEntry(lines[i + 1]))) {
       cur = null;
@@ -3512,15 +3223,6 @@ function parseMCQAnswerKey(lines, multiSection) {
   return { entries, order };
 }
 
-// ---- Clean format: files converted with the AI prompt in AI_CONVERT_PROMPT.md ----------
-// A file whose header holds the line "Format: RBI-PRACTICE-V1" labels every part, so it is
-// read by those labels instead of the layout heuristics:
-//   Type: Objective / Type: Descriptive    the kind of questions below it (one file may hold both)
-//   Topic: <name>                          objective: heading over the questions below it;
-//                                          descriptive: the line under the question's number
-//   Directions (Q6-Q10): <instruction>     shared passage / table / case (the lines below it) for Q6-Q10
-//   Q12. <question> / (a) ... (e) / Answer: (b) or (a), (c) / Level: Easy / Explanation: ...
-//   Q3. (15 Marks, 600 Words) / Topic: ... / <question> / Answer: / <model answer>
 const CLEAN_FORMAT_RE = /^Format\s*:\s*RBI[\s-]*PRACTICE[\s-]*V\s*1\b/i;
 const CLEAN_Q_RE = /^(?:Q|Question)\s*\.?\s*(\d{1,4})\s*[.):]\s*(.*)$/i;
 const CLEAN_TYPE_RE = /^Type\s*:\s*(Objective|MCQs?|Descriptive|Subjective)\b/i;
@@ -3530,21 +3232,17 @@ const CLEAN_OPT_RE = /^(?:[\(\[]([a-eA-E])[\)\]]\s*|([a-eA-E])[.)]\s+)(.*)$/;
 const CLEAN_ANS_RE = /^(?:Correct\s+)?(?:Answer|Ans)\b\s*(?:is\s*)?[:.\-]\s*(.*)$/i;
 const CLEAN_LEVEL_RE = /^(?:Level|Difficulty)\s*[:.\-]\s*(Easy|Moderate|Medium|Hard|Difficult|Tough|Very\s+Hard)\s*\.?$/i;
 const CLEAN_EXPL_RE = /^(?:Explanation|Solution|Exp)\s*(?:[:.\-]\s*(.*))?$/i;
-// "(15 Marks, 600 Words)", "[10 Marks]", "15 Marks 600 Words", "(600 Words, 15 Marks)" + the text after it
 const CLEAN_MARKS_RE = /^[\(\[]?\s*((?:\d{1,4}\s*(?:Marks?|Words?)\b[\s,;|\/\-]*){1,2})[\)\]]?\s*[:.\-]?\s*(.*)$/i;
 const CLEAN_DESC_ANS_RE = /^(?:(?:Model|Reference|Suggested)\s+)?Answer\s*(?::\s*(.*))?$/i;
 
-// A line as the labels see it: without Markdown heading / bold markers ("**Answer:** (b)")
 function cleanLabelView(line) {
   return String(line || "").replace(/\*\*/g, "").replace(/^\s*#{1,6}\s+/, "").trim();
 }
 
-// Was this file converted to the clean format? ("Format: RBI-PRACTICE-V1" near the top)
 function isCleanFormat(rawText) {
   return String(rawText || "").split("\n", 40).map(cleanLabelView).filter(Boolean).slice(0, 15).some(l => CLEAN_FORMAT_RE.test(l));
 }
 
-// "(b)", "B", "Option C", "(a), (c) and (d)" -> { letters: "b" / "acd", rest: the text after them }
 function cleanAnswerLetters(value) {
   const s = String(value || "").trim().replace(/^options?\s*/i, "");
   const m = s.match(/^((?:[\(\[]?[a-eA-E][\)\]]?)(?:\s*(?:,|&|\/|\+|\band\b)?\s*[\(\[]?[a-eA-E][\)\]]?)*)(?=$|[\s.,;:)\]\-])\s*[.,;:\-]?\s*(.*)$/);
@@ -3553,14 +3251,10 @@ function cleanAnswerLetters(value) {
   return { letters, rest: m[2].trim() };
 }
 
-// Read a clean-format file: { mcq, desc }. mcq is shaped like parseMCQDocument's result (with
-// .meta), desc like parseQuestionsAndAnswers'. Question, option, explanation and answer lines
-// are kept exactly as written; only the labels are taken off.
 function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
   const lines = String(rawText || "").replace(/\r\n?/g, "\n").split("\n")
     .map(l => ({ orig: l.replace(/\s+$/, ""), t: l.trim(), v: cleanLabelView(l) }))
     .filter(l => l.t);
-  // header: line 1 is the title ("Chapter 1: National Income"), then "Subject:", "Type:", "Format:"
   const first = lines.length ? lines[0].v : "";
   const title = /^(?:Format|Type|Subject|Topic|Directions?)\b/i.test(first) || CLEAN_Q_RE.test(first) ? "" : first;
   const ch = title.match(/^(?:Chapter|Ch)\s*[-.:]?\s*\d{1,3}\s*[-:.]\s*(.+)$/i);
@@ -3569,7 +3263,6 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
   const paperOf = s => (/\besi\b|econom/i.test(s) ? "ESI" : /finance/i.test(s) ? "Finance" : /management/i.test(s) ? "Management" : /english/i.test(s) ? "English Descriptive" : "");
   const paper = paperOf(subjectLine) || paperOf(title) || "Other";
   const kindOf = v => { const m = v.match(CLEAN_TYPE_RE); return m ? (/^(?:objective|mcq)/i.test(m[1]) ? "mcq" : "desc") : ""; };
-  // without a "Type:" line the labels tell: MCQ answers are option letters, descriptive questions carry marks
   const guessKind = () => {
     const letterAnswers = lines.filter(l => { const m = l.v.match(CLEAN_ANS_RE); return m && cleanAnswerLetters(m[1]).letters; }).length;
     const marked = lines.filter(l => { const m = l.v.match(CLEAN_Q_RE); return m && CLEAN_MARKS_RE.test(m[2]); }).length;
@@ -3579,14 +3272,13 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
 
   const mcq = [];
   const desc = [];
-  let topic = "";        // objective: the heading over the questions that follow
-  let nextTopic = "";    // descriptive: a "Topic:" line written above its question
-  let passage = null;    // { from, to, open, lines, reading }
-  let block = null;      // the question being read
+  let topic = "";
+  let nextTopic = "";
+  let passage = null;
+  let block = null;
   let section = 0;
   let lastNum = 0;
 
-  // An objective block: question lines, the options, then Answer / Level / Explanation
   const mcqOf = (b) => {
     const L = b.lines;
     const optOf = l => { const m = l.v.match(CLEAN_OPT_RE); return m ? { label: (m[1] || m[2]).toLowerCase(), text: m[3].trim() } : null; };
@@ -3594,8 +3286,6 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
     const firstA = L.findIndex(l => { const o = optOf(l); return !!o && o.label === "a"; });
     let end = L.findIndex((l, i) => i > firstA && isTail(l));
     if (end < 0) end = L.length;
-    // the options are the last "(a) (b) ..." run before the answer: a statement list
-    // "(a) ... (d)" inside the question stays question text
     let ia = -1;
     for (let i = end - 1; i >= 0; i--) { const o = optOf(L[i]); if (o && o.label === "a") { ia = i; break; } }
     const stem = (b.rest ? [b.rest] : []).concat(L.slice(0, ia >= 0 ? ia : end).map(l => l.t));
@@ -3608,10 +3298,9 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
         for (let c = prev.charCodeAt(0) + 1; c < o.label.charCodeAt(0); c++) skipped.push(String.fromCharCode(c));
         options.push(o);
       } else if (options.length) {
-        options[options.length - 1].text += "\n" + L[i].t;   // an option that runs over two lines
+        options[options.length - 1].text += "\n" + L[i].t;
       }
     }
-    // "(a) X (b) Y (c) Z (d) W" on one line, or after the question on its own line
     if (options.length <= 1) {
       const src = options.length ? "(a) " + options[0].text : stem[stem.length - 1] || "";
       const sp = mcqSplitOptions(src, null, "a");
@@ -3631,12 +3320,10 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
       if (!gotAnswer && (m = v.match(CLEAN_ANS_RE))) {
         gotAnswer = true;
         let value = m[1];
-        // "Answer:" with the letter on the next line
         const next = L[i + 1] ? cleanAnswerLetters(L[i + 1].v) : null;
         if (!value.trim() && next && next.letters && !next.rest) value = L[++i].v;
         const a = cleanAnswerLetters(value);
         answer = a.letters;
-        // text after the letter starts the explanation; an answer written as words is kept, not guessed
         if (a.rest && !/^not\s+(?:given|available|known)\b/i.test(a.rest)) expl.push(a.letters ? a.rest : "Answer: " + a.rest);
         continue;
       }
@@ -3664,12 +3351,10 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
     return q;
   };
 
-  // A descriptive block: "(15 Marks, 600 Words)" on the number line, question lines, "Answer:", the model answer
   const descOf = (b) => {
     let marks = 0;
     let words = 0;
     let rest = b.rest;
-    // the marks / word limit in "(15 Marks, 600 Words)" (either order)
     const meta = (s) => {
       const m = s.match(CLEAN_MARKS_RE);
       if (!m) return null;
@@ -3692,7 +3377,6 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
       if ((m = l.v.match(/^(?:Word\s*limit|Words?)\s*[:.\-]\s*(\d{2,4})\s*(?:words?)?\s*$/i))) { words = Number(m[1]); continue; }
       qLines.push(l.t);
     }
-    // no "Answer:" line: the first paragraph is the question, the rest its model answer
     if (!inAnswer && qLines.length > 1) aLines.push(...qLines.splice(1));
     marks = marks || 10;
     let modelAnswer = joinAnswerLines(aLines);
@@ -3711,12 +3395,11 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
   const begin = (num, rest) => {
     finish();
     if (kind === "mcq") {
-      if (num === 1 && lastNum > 1) section++;      // numbering starts again: the next set
+      if (num === 1 && lastNum > 1) section++;
       lastNum = num;
     }
     let shared = "";
     if (passage) {
-      // the block sits right above its first question: a range that misses that question was mistyped
       if (passage.reading && !passage.open && (num < passage.from || num > passage.to)) {
         passage.to = num + Math.abs(passage.to - passage.from);
         passage.from = num;
@@ -3747,7 +3430,6 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
     if (tm) {
       const name = sanitizeDashes(tm[1].trim());
       if ((block ? block.kind : kind) === "mcq") {
-        // right under the question's number (before its options) it names that question's topic
         if (block && !block.sawOption) { block.topic = name; topic = name; continue; }
         finish();
         topic = name;
@@ -3755,7 +3437,6 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
         continue;
       }
       if (block && !block.inAnswer) { block.topic = name; continue; }
-      // after an answer, a "Topic:" line just above the next question (or its passage) is that question's
       const next = lines[i + 1];
       if (!block || !next || CLEAN_Q_RE.test(next.v) || CLEAN_DIR_RE.test(next.v)) { nextTopic = name; continue; }
     }
@@ -3766,7 +3447,6 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
       continue;
     }
     if (passage && passage.reading) passage.lines.push(L.t);
-    // anything else before the first question is the file header (title, "Subject:", "Format:")
   }
   finish();
 
@@ -3788,24 +3468,17 @@ function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
   return { mcq, desc };
 }
 
-// Parse plain text from DOCX or PDF into MCQ objects with options and answer keys.
-// The returned array also carries .meta: { topics, missingNumbers, orphanKeys, sections }.
 function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   if (!rawText || !rawText.trim()) return [];
-  // a file converted to the clean format is read by its labels
   if (isCleanFormat(rawText)) return parseCleanFormat(rawText, defaultSubject).mcq;
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const allLines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
 
-  // "Note: ..." inside a question or an explanation is content (only before the first question is it a paper banner)
   const NOTE_RE = /^(?:Note|N\.\s?B\.|Hint)\s*[:.\-]/i;
 
-  // 1. The answer key section ("Answer Key", "Answers", "Answers & Explanations"...)
   const { qLines, aLines } = mcqSplitKeySection(allLines);
 
-  // 2. How questions are numbered: "Q1" / "Q.1)" / "Question 1:" or plain "1." / "1)"
-  // (a PDF can drop the tab after the number: "Q100India's GDP ...")
   const Q_RE = /^Q(?:uestion)?\s*[.\-]?\s*(\d{1,4})(?:\s*[.):\-\]]+\s*|\s+|(?=[A-Z“"‘(\[]))(?=\S)/i;
   const N_RE = /^(\d{1,4})\s*[.)](?:\s+|(?=[A-Z“"‘(\[]))/;
   const qCount = qLines.filter(l => Q_RE.test(l)).length;
@@ -3828,12 +3501,12 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   const questions = [];
   const topics = [];
   let cur = null;
-  let pending = [];          // lines after a question's options: headings, or the text of an un-numbered question
+  let pending = [];
   let topic = "";
   let chapter = "";
   let section = 0;
   let lastNum = 0;
-  let context = null;        // shared passage: "Directions (Q.1 to Q.3): ..." -> { from, to, left, lines }
+  let context = null;
   let collectingContext = false;
   let inExpl = false;
 
@@ -3841,18 +3514,13 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     topic = t;
     if (t && !topics.includes(t)) topics.push(t);
   };
-  // Generic titles ("Questions", "Spotlight Question Bank ...") are not topics
   const isGenericTitle = (l) => /^(?:questions?|mcqs?|objective questions|practice questions|questions?\s*(?:&|and)\s*answers)$/i.test(l) || /question\s*bank/i.test(l) || l === allLines[0];
   const isHeading = (l) => titleLike(l) && !l.includes("|") && !/^[\(\[]?[a-eA-E][\)\].]\s/.test(l);
-  // Lines read after a question's options and before the next numbered question:
-  // headings set the topic, other text (a data table, "Use the table below for Q137
-  // and Q138") is a preface for the next question(s). Returns the preface lines.
   const takePending = () => {
     const preface = [];
     for (const l of pending) {
       if (isSectionLine(l)) { setTopic(""); preface.length = 0; closeOpenPassage(); continue; }
       if (isHeading(l) && !preface.length && !isPassageIntro(l)) {
-        // before the first question only a numbered / "Topic:" heading names a topic (not the file's title lines)
         if (!isGenericTitle(l) && (questions.length || cur || /^(?:topic\b|\d{1,2}(?:\.\d{1,2})*\s*[.)]?\s+\S)/i.test(l))) { setTopic(headingTopic(l)); closeOpenPassage(); }
         continue;
       }
@@ -3861,7 +3529,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     pending = [];
     return preface;
   };
-  // Pending lines inside an option list / explanation simply continue it
   const continuePending = () => {
     for (const l of pending) {
       if (!cur || !cur.opts.length) continue;
@@ -3870,9 +3537,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     }
     pending = [];
   };
-  // A passage without a question range ("Read the passage and answer the questions") lasts
-  // until the next passage, set, topic heading or a question with its own preface
-  // (a heading read before the last question of the set is finalized ends it after that question)
   const closeOpenPassage = (now) => {
     if (context && context.open) {
       if (now) context = null; else context.closing = true;
@@ -3885,8 +3549,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     if (cur.number !== null && lines.length) lines[0] = stripNumber(lines[0]);
     const keep = l => l.trim().length > 0 && (!isHeaderOrFooterLine(l) || NOTE_RE.test(l));
     const cleanText = lines.filter(keep).join("\n").trim();
-    // the shared passage / data table (and this question's own preface) are kept apart from
-    // the question, so the exam can show them above every question that uses them
     let passageLines = [];
     if (context) {
       const n = cur.number;
@@ -3919,19 +3581,16 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     const preface = takePending();
     finalize();
     if (num !== null) {
-      if (num === 1 && lastNum > 1) { section++; closeOpenPassage(true); }        // numbering restarts: the next set
+      if (num === 1 && lastNum > 1) { section++; closeOpenPassage(true); }
       lastNum = num;
     }
     cur = { number: num, section, topic, lines: firstLine ? [firstLine] : [], opts: [], explanation: [], inlineAnswer: "", skipped: [], preface: [] };
-    // "Directions: Answer the following questions." with no real passage under it (no table and
-    // under ~60 characters of text) is just this question's preface, not shared by every question
     const openBody = context && context.open ? context.lines.slice(1) : [];
     if (context && context.open && context.left === Infinity && (openBody.length === 0 || (openBody.join(" ").length < 60 && !openBody.some(l => / \| /.test(l))))) {
       cur.preface = context.lines;
       context = null;
     }
     if (preface.length) {
-      // "Use the table below for Q137 and Q138": the preface belongs to every question of the range
       const r = preface.map(l => l.match(RANGE_FOR_RE)).find(Boolean);
       const from = r ? parseInt(r[1], 10) : NaN;
       const to = r ? parseInt(r[2], 10) : NaN;
@@ -3951,10 +3610,8 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     if (!cur) return num;
     if (cur.opts.length >= 2) {
       if (useQ) return num;
-      // plain numbering: the next number, a small gap, or a restart at 1
       return (num > (cur.number || 0) && num <= (cur.number || 0) + 5) || num === 1 ? num : null;
     }
-    // no options yet: only the very next number, and not inside a "1. ... 2. ..." statement list
     if (num !== (cur.number || 0) + 1) return null;
     if (!useQ && cur.lines.some((x, k) => k > 0 && /^1\s*[.)]\s/.test(x))) return null;
     if (!useQ && /:$/.test(cur.lines[cur.lines.length - 1] || "")) return null;
@@ -3964,18 +3621,15 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   for (let idx = 0; idx < qLines.length; idx++) {
     let p = qLines[idx];
 
-    // A PDF can glue the number to a figure: "Q1432022-23 was chosen ..." is Q143 + "2022-23 ..."
     if (useQ && cur && cur.number !== null && cur.opts.length >= 2 && !Q_RE.test(p)) {
       const glued = p.match(/^Q(?:uestion)?\s*[.\-]?\s*(\d{2,8})(.*)$/i);
       const next = String(cur.number + 1);
       if (glued && glued[1].length > next.length && glued[1].startsWith(next)) p = "Q" + next + " " + glued[1].slice(next.length) + glued[2];
     }
 
-    // Running banners / page artefacts are never content (set & part banners start a new topic)
     if (isHeaderOrFooterLine(p) && !(NOTE_RE.test(p) && (cur || questions.length))) {
       if (!cur || cur.opts.length) {
         if (isSectionLine(p)) { takePending(); setTopic(""); }
-        // a set / part / subject banner ("General Awareness") ends a passage that had no range
         if (isSectionLine(p) || /^(?:Economic\s*(?:&|and)\s*Social\s*Issues|Finance\s*(?:&|and)\s*Management|English\s*(?:Descriptive|Language)|General\s*Awareness|Quantitative\s*Aptitude|Reasoning(?:\s*Ability)?|Section|Part|Set)\b/i.test(p)) closeOpenPassage();
         const ch = p.match(CHAPTER_RE);
         if (ch && !chapter) chapter = sanitizeDashes(ch[1] || p);
@@ -3983,7 +3637,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       continue;
     }
 
-    // "Directions (Q.1 to Q.3): Read the passage..." starts a shared passage
     const dir = p.match(DIRECTIONS_RE);
     if (dir) {
       takePending();
@@ -3993,8 +3646,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       collectingContext = true;
       continue;
     }
-    // "Read the following passage and answer the questions (6 to 10)", "Case Study 2",
-    // "Study the table below ...": a shared passage / table for the questions that follow
     if (!collectingContext && (!cur || cur.opts.length >= 2) && isPassageIntro(p) && !(inExpl && !PASSAGE_INSTRUCTION_RE.test(p))) {
       takePending();
       finalize();
@@ -4015,13 +3666,11 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
         continue;
       }
       collectingContext = false;
-      // Un-numbered question: its stem was read as the last line of the passage
       if (!startsQ && context.lines.length > 1 && !(opt && opt.stem)) {
         begin(null, context.lines.pop());
       }
     }
 
-    // "Answer: (c)" / "Ans. b" under a question - not "Answer each question..."
     const ia = p.match(INLINE_ANS_RE);
     const iaAns = ia ? normalizeMCQAnswer(ia[1]) : "";
     if (iaAns && (target() || (!cur && questions.length))) {
@@ -4036,12 +3685,11 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       inExpl = true;
       continue;
     }
-    // "Explanation: ..." / "Solution: ..." under a question
     const ex = p.match(EXPL_RE);
     if (ex && (target() || (!cur && questions.length))) {
       continuePending();
       const t = target();
-      const text = /^notes?\b/i.test(p) ? p : (ex[1] || "");      // "Note: ..." keeps its label
+      const text = /^notes?\b/i.test(p) ? p : (ex[1] || "");
       if (t) t.explanation.push(text);
       else {
         const last = questions[questions.length - 1];
@@ -4051,11 +3699,9 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       continue;
     }
 
-    // A new numbered question
     const num = isQuestionStart(p);
     if (num !== null) {
       begin(num, p);
-      // "1. Who ...? (a) X (b) Y (c) Z (d) W": the options are on the question line
       const sp = mcqSplitOptions(p, allowed, "a");
       if (sp && sp.stem && sp.opts.length) {
         cur.lines = [sp.stem];
@@ -4064,11 +3710,9 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       continue;
     }
 
-    // Options (one per line, or several on one line)
     const expected = cur ? String.fromCharCode(97 + (cur.opts.length ? cur.opts[cur.opts.length - 1].label.charCodeAt(0) - 96 : 0)) : "a";
     const split = mcqSplitOptions(p, allowed, cur && cur.opts.length ? expected : "a");
     if (split && split.opts.length && cur && cur.opts.length && inExpl && !(split.opts[0].label === "a" && pending.length)) {
-      // options never follow the answer / explanation of the same question: this is explanation text
       continuePending();
       cur.explanation.push(p);
       continue;
@@ -4076,7 +3720,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     if (split && split.opts.length) {
       const restart = split.opts[0].label === "a";
       if (!cur || (restart && cur.opts.length)) {
-        // An un-numbered question: the lines read since the last option are its text
         const stem = pending.filter(l => !isSectionLine(l));
         const firstEver = !cur && questions.length === 0;
         pending = [];
@@ -4097,7 +3740,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       continue;
     }
 
-    // Anything else: question text, explanation text, a heading, or text after the options
     if (cur && cur.opts.length === 0) {
       cur.lines.push(p);
     } else if (cur && inExpl && !titleLike(p)) {
@@ -4109,7 +3751,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   takePending();
   finalize();
 
-  // 3. The answer key, matched by set + question number
   const numbered = questions.filter(q => q.number !== null);
   if (numbered.length === 0) questions.forEach((q, i) => { q.number = i + 1; });
   const sections = new Set(questions.map(q => q.section)).size;
@@ -4139,17 +3780,14 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     delete q._skipped;
   });
 
-  // Questions the numbering says should exist but were not found, and keys without a question
   const missingNumbers = [];
   for (let s = 0; s < sections; s++) {
     const nums = questions.filter(q => q.section === s && q.number !== null).map(q => q.number);
     if (!nums.length) continue;
     const have = new Set(nums);
-    // a file that starts in the middle (Q22 to Q36) is a slice: count from its first question
     const first = Math.min(...nums);
     for (let n = first <= 3 ? 1 : first; n <= Math.max(...nums); n++) if (!have.has(n)) missingNumbers.push({ section: s, number: n });
   }
-  // keys for numbers outside a slice belong to questions that are not in this file: drop them quietly
   const sliceRange = (sec) => {
     const nums = questions.filter(q => q.section === sec && q.number !== null).map(q => q.number);
     return nums.length ? [Math.min(...nums) <= 3 ? 1 : Math.min(...nums), Math.max(...nums)] : null;
@@ -4165,7 +3803,6 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   return questions;
 }
 
-// Handle importing DOCX / PDF files for Phase 1
 async function handleP1DocImport(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
@@ -4213,13 +3850,10 @@ async function handleP1DocImport(event) {
     if (!parsedQuestions || parsedQuestions.length === 0) {
       throw new Error("Could not detect any MCQs with options in the file.");
     }
-    // Numbered questions whose options could not be read are kept, so they show up
-    // under "Needs attention" instead of silently disappearing
     const broken = parsedAll.filter(q => (q.options || []).length < 2 && q.number !== null && parsedQuestions.length >= 3);
     const keep = parsedAll.filter(q => parsedQuestions.includes(q) || broken.includes(q));
     const docTitle = rawText.split("\n").map(l => l.trim()).find(Boolean) || "";
     keep.forEach(q => { if (!q.chapter) q.chapter = sanitizeDashes(docTitle).slice(0, 120); });
-    // which subject / chapter the file belongs to (History is sorted into these folders)
     if (typeof askFileFolder === "function") {
       if (statusElem) statusElem.textContent = "";
       const folder = await askFileFolder(file.name, rawText, inferMCQSubject(rawText), keep.length);
@@ -4241,7 +3875,6 @@ async function handleP1DocImport(event) {
   }
 }
 
-// Read a DOCX / PDF file into plain text lines (same readers as the question import)
 async function readDocumentText(file) {
   const arrayBuffer = file.arrayBuffer ? await file.arrayBuffer() : await new Promise((res, rej) => {
     const r = new FileReader();
@@ -4255,9 +3888,6 @@ async function readDocumentText(file) {
   throw new Error("Unsupported format. Please upload a .docx or .pdf file.");
 }
 
-// "Upload answer key & explanations": a separate key file (e.g. the answers of all 100 questions)
-// fills in the answer, explanation and level of only the questions in this test, matched by the
-// question's number in its file (Q22...). Every other entry of the key file is ignored.
 async function handleP1KeyImport(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
@@ -4294,13 +3924,11 @@ async function handleP1KeyImport(event) {
       if (expl && !q.explanation) { q.explanation = expl; filledExpl++; }
       if (e.level && !q.level) q.level = e.level;
       if (e.topic && !q.topic) q.topic = sanitizeDashes(e.topic);
-      // redo the checks that depend on the key; keep the others (duplicate number, skipped option...)
       const keyCodes = ["no-key", "key-not-in-options", "empty-text", "few-options", "empty-option"];
       const fresh = mcqLocalIssues(Object.assign({}, q, { parseIssues: [] }), null);
       const seen = new Set();
       q.check.local = old.filter(i => !keyCodes.includes(i.code)).concat(fresh, extra)
         .filter(i => (seen.has(i.code + i.msg) ? false : seen.add(i.code + i.msg)));
-      // the AI checks the question again, now with its key
       if (q.check.user !== "ok") q.check.ai = null;
     });
     const stillMissing = questions.filter(q => !q.correctAnswer).length;
@@ -4319,9 +3947,7 @@ async function handleP1KeyImport(event) {
   }
 }
 
-// Guess the MCQ subject from the document heading (e.g. "Ch-2: Antonyms & Synonyms" -> English)
 function inferMCQSubject(rawText) {
-  // Only the title lines: question / option text must not influence the subject
   const head = String(rawText || "").split("\n").map(l => l.trim()).filter(Boolean).slice(0, 2).join(" ").toLowerCase();
   const has = (re) => re.test(head);
   if (has(/\b(spotlight|current affairs|general awareness|pib|monthly|weekly|news)\b/)) return "General Awareness";
@@ -4333,18 +3959,15 @@ function inferMCQSubject(rawText) {
   return "General Awareness";
 }
 
-// Add imported MCQs to today's objective test, run the local checks and start the AI check
 function addImportedMCQs(parsedQuestions, fileName, meta) {
   meta = meta || {};
   mcqPrepareImported(parsedQuestions);
   const fresh = parsedQuestions.filter(q => !state.p1_setup.questions.some(sq => questionWithPassage(sq) === questionWithPassage(q) && JSON.stringify(sq.options) === JSON.stringify(q.options)));
   fresh.forEach(q => { q.sourceFile = fileName; });
   state.p1_setup.questions = state.p1_setup.questions.concat(fresh);
-  // Topics found in the file (used by the AI check to label "mixed" questions)
   const topics = new Set(state.p1_setup.topics || []);
   (meta.topics || []).forEach(t => t && topics.add(t));
   state.p1_setup.topics = [...topics];
-  // What could not be matched: question numbers missing in the file, answer keys without a question
   const sets = meta.sections || 1;
   const label = (x) => (sets > 1 ? `Set ${x.section + 1} Q${x.number}` : `Q${x.number}`);
   const notes = (state.p1_setup.importNotes || []).filter(n => n.file !== fileName);
@@ -4371,11 +3994,8 @@ function addImportedMCQs(parsedQuestions, fileName, meta) {
     statusElem.textContent = `Imported ${fresh.length} MCQs (${subject}) from ${fileName}: ${withAns} with an answer key${skipped ? `, ${skipped} already in this test` : ""}.`;
     setTimeout(() => { statusElem.textContent = ""; }, 8000);
   }
-  // Check the answer keys with AI straight away
-  // the AI Check runs only when you press "AI Check" (no automatic check on import)
 }
 
-// Render the Phase-1 setup: check summary, "Needs attention" and the questions that are ready
 function renderP1SetupList() {
   const list = $("setup-p1-question-list");
   const countElem = $("setup-p1-count");
@@ -4386,7 +4006,6 @@ function renderP1SetupList() {
   const ready = questions.filter(q => mcqStatus(q) !== "issue");
   if (countElem) countElem.textContent = ready.length;
 
-  // Show the saved test settings (they used to reset to 120 / 1.00 / 0.25 on every load)
   const minEl = $("setup-p1-minutes");
   const posEl = $("setup-p1-positive");
   const negEl = $("setup-p1-negative");
@@ -4425,7 +4044,6 @@ function renderP1SetupList() {
   list.innerHTML = pageQuestions.map((q, localIdx) => {
     const pos = startIndex + localIdx;
     const st = mcqStatus(q);
-    // No answer key here: the key stays hidden until the result screen
     const optsPreview = (q.options || []).map(o =>
       `<span class="opt-pill"><strong>[${escapeHTML(String(o.label).toUpperCase())}]</strong> ${escapeHTML(o.text || "")}</span>`).join("");
     return `
@@ -4466,7 +4084,6 @@ function renderP1SetupList() {
   updateP1SetupBatchDeleteState();
 }
 
-// Answer-key summary, AI check status and the "Needs attention" list
 function renderP1CheckPanel() {
   const box = $("setup-p1-check");
   if (!box) return;
@@ -4478,7 +4095,6 @@ function renderP1CheckPanel() {
     return;
   }
   box.hidden = false;
-  // the question's place in this test, plus its number in the file when that differs (Q1 = file Q22)
   const label = q => { const pos = questions.indexOf(q) + 1; return q.number != null && q.number !== pos ? `Q${pos} (file Q${q.number})` : `Q${pos}`; };
   const noKey = questions.filter(q => !q.correctAnswer);
   const issues = questions.filter(q => mcqStatus(q) === "issue");
@@ -4572,24 +4188,20 @@ function renderP1CheckPanel() {
   `;
 }
 
-// Start button: disabled while the AI is checking; shows how many questions go into the exam
 function updateP1StartButton() {
   const btn = $("btn-start-p1-test");
   if (!btn) return;
   const questions = state.p1_setup.questions || [];
-  // questions not checked by AI (the check is optional) and failed checks can join after a warning
   const n = questions.filter(q => { const st = mcqStatus(q); return st === "ok" || st === "failed" || st === "unchecked"; }).length;
   btn.disabled = mcqVerify.running || questions.some(q => mcqStatus(q) === "pending");
   btn.textContent = mcqVerify.running ? "Checking questions with AI…" : (n ? `Start Objective Test (${n} question${n === 1 ? "" : "s"})` : "Start Objective Test");
 }
 
-// Called by ai_eval.js after API keys are saved
 function onAISettingsSaved() {
   const setup = $("screen-setup-p1");
   if (setup && !setup.hidden) renderP1SetupList();
   const setup2 = $("screen-setup");
   if (setup2 && !setup2.hidden) renderSetupList();
-  // "AI Check" was pressed before a key was set: run that check now
   if (window.AIEval && AIEval.isReady("check") && state.wantAICheck) {
     const which = state.wantAICheck;
     state.wantAICheck = "";
@@ -4601,7 +4213,6 @@ function onAISettingsSaved() {
   }
 }
 
-// Buttons of the check panel and of "Needs attention"
 function handleP1CheckClick(e) {
   const run = e.target.closest("[data-p1-check]");
   if (run) {
@@ -4609,7 +4220,6 @@ function handleP1CheckClick(e) {
     if (a === "run") mcqVerifyQuestions();
     else if (a === "retry-failed") mcqVerifyQuestions((state.p1_setup.questions || []).filter(q => mcqStatus(q) === "failed"));
     else if (a === "run-all") {
-      // check everything again (questions you approved or fixed yourself keep your decision)
       const all = (state.p1_setup.questions || []).filter(q => q.check && !q.check.user);
       if (all.length > 40 && !confirm(`Check all ${all.length} questions with AI again? This takes about ${Math.max(1, Math.round(all.length / 20 / 3))} minute(s) and uses part of the daily free AI limit.`)) return;
       mcqVerifyQuestions(all);
@@ -4643,7 +4253,6 @@ function handleP1CheckClick(e) {
   renderP1SetupList();
 }
 
-// Load a question into the manual form for correction
 function startP1EditQuestion(q) {
   state.p1_editingId = q.id;
   const set = (id, v) => { const el = $(id); if (el) el.value = v == null ? "" : v; };
@@ -4669,7 +4278,6 @@ function startP1EditQuestion(q) {
   $("p1-question-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-// Update the batch delete button count and visibility in Phase-1 Setup
 function updateP1SetupBatchDeleteState() {
   const checkboxes = document.querySelectorAll("#setup-p1-question-list .p1-q-select-check");
   const checked = document.querySelectorAll("#setup-p1-question-list .p1-q-select-check:checked");
@@ -4689,7 +4297,6 @@ function updateP1SetupBatchDeleteState() {
   }
 }
 
-// Select/deselect all questions in Phase-1 Setup
 function handleP1SelectAllSetup(e) {
   const checked = e.target.checked;
   document.querySelectorAll("#setup-p1-question-list .p1-q-select-check").forEach(cb => {
@@ -4698,7 +4305,6 @@ function handleP1SelectAllSetup(e) {
   updateP1SetupBatchDeleteState();
 }
 
-// Delete checked questions from Phase-1 Setup
 function handleP1DeleteSelectedSetup() {
   const checked = document.querySelectorAll("#setup-p1-question-list .p1-q-select-check:checked");
   if (checked.length === 0) return;
@@ -4711,7 +4317,6 @@ function handleP1DeleteSelectedSetup() {
   renderP1SetupList();
 }
 
-// Delete all questions from Phase-1 Setup
 function handleP1DeleteAllSetup() {
   if (state.p1_setup.questions.length === 0) return;
   if (!confirm("Are you sure you want to remove all questions from this test?")) return;
@@ -4723,7 +4328,6 @@ function handleP1DeleteAllSetup() {
   renderP1SetupList();
 }
 
-// Add a manual MCQ to Phase-1 Setup (or save a corrected one from "Needs attention")
 function handleP1QuestionFormSubmit(e) {
   e.preventDefault();
   const subject = $("p1-q-subject").value || "General Awareness";
@@ -4764,7 +4368,6 @@ function handleP1QuestionFormSubmit(e) {
   const editing = state.p1_editingId ? state.p1_setup.questions.find(q => q.id === state.p1_editingId) : null;
 
   if (editing) {
-    // You corrected it yourself, so it counts as checked
     const oldPassage = editing.passage || "";
     Object.assign(editing, { subject, topic, text, options, correctAnswer: correct, explanation });
     if (passage) editing.passage = passage; else delete editing.passage;
@@ -4801,7 +4404,6 @@ function handleP1QuestionFormSubmit(e) {
   if (!editing) $("p1-q-text")?.focus();
 }
 
-// Start the Phase-1 objective exam (only questions that passed the checks go in)
 async function startP1Exam() {
   const errElem = $("setup-p1-error");
   if (errElem) errElem.textContent = "";
@@ -4894,7 +4496,6 @@ async function startP1Exam() {
   showScreen("exam");
 }
 
-// Test types you pick when a test starts (they decide which TODO the test completes)
 const TEST_TYPE_CHOICES = {
   mcq: [
     { value: "Objective Practice", hint: "Your daily objective (MCQ) exam" },
@@ -4908,8 +4509,6 @@ const TEST_TYPE_CHOICES = {
   ]
 };
 
-// Ask which kind of test this is. Resolves to the type, or null if cancelled.
-// info: { count, left, questions } - the line under the title says which TODO the chosen type will complete.
 function askTestType(mode, info) {
   return new Promise(resolve => {
     const modal = $("test-type-modal");
@@ -4958,7 +4557,6 @@ function askTestType(mode, info) {
   });
 }
 
-// Start countdown timer for Phase-1
 function startP1ExamTimer() {
   if (state.p1_timerId) clearInterval(state.p1_timerId);
 
@@ -4997,10 +4595,8 @@ function startP1ExamTimer() {
   }, 1000);
 }
 
-// Accumulate elapsed seconds for active question
 function saveCurrentP1QuestionTime() {
   if (!state.p1_test || state.p1_questionShownAt <= 0) return;
-  // Keep fractions of a second; rounding every save to whole seconds lost most of the time
   const elapsed = (Date.now() - state.p1_questionShownAt) / 1000;
   const idx = state.p1_currentIndex;
   if (state.p1_test.times && state.p1_test.times[idx] !== undefined) {
@@ -5011,7 +4607,6 @@ function saveCurrentP1QuestionTime() {
   saveJSON("rbi_p1_active_test", state.p1_test);
 }
 
-// Display question on Phase-1 console
 function showP1Question(index) {
   if (!state.p1_test || !state.p1_test.questions[index]) return;
 
@@ -5064,19 +4659,16 @@ function showP1Question(index) {
   renderP1Palette();
   updateP1ExamSummary();
   saveJSON("rbi_p1_active_test", state.p1_test);
-  // a long question / passage scrolls the page: bring the next question's top back into view
   const qBox = $("p1-exam-qpos");
   if (qBox && qBox.getBoundingClientRect().top < 0) qBox.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-// Select an option for active question
 function selectP1Option(optLabel) {
   if (!state.p1_test) return;
   const idx = state.p1_currentIndex;
   const q = state.p1_test.questions[idx];
   const label = optLabel.toLowerCase();
   if (isMultiAnswerMCQ(q)) {
-    // Multi-answer question: each click toggles one option
     const set = new Set(String(state.p1_test.answers[idx] || "").split("").filter(Boolean));
     if (set.has(label)) set.delete(label); else set.add(label);
     state.p1_test.answers[idx] = set.size ? [...set].sort().join("") : null;
@@ -5100,7 +4692,6 @@ function selectP1Option(optLabel) {
   saveJSON("rbi_p1_active_test", state.p1_test);
 }
 
-// Clear selected option
 function clearP1Option() {
   if (!state.p1_test) return;
   const idx = state.p1_currentIndex;
@@ -5117,7 +4708,6 @@ function clearP1Option() {
   saveJSON("rbi_p1_active_test", state.p1_test);
 }
 
-// Mark for Review & Next
 function markP1ForReview() {
   if (!state.p1_test) return;
   saveCurrentP1QuestionTime();
@@ -5138,7 +4728,6 @@ function markP1ForReview() {
   }
 }
 
-// Save & Next
 function saveAndNextP1() {
   if (!state.p1_test) return;
   saveCurrentP1QuestionTime();
@@ -5159,14 +4748,12 @@ function saveAndNextP1() {
   }
 }
 
-// Navigate to previous question
 function prevP1Question() {
   if (!state.p1_test || state.p1_currentIndex <= 0) return;
   saveCurrentP1QuestionTime();
   showP1Question(state.p1_currentIndex - 1);
 }
 
-// Render TCS iON 5-color Question Palette
 function renderP1Palette() {
   const palette = $("p1-exam-palette");
   if (!palette || !state.p1_test) return;
@@ -5187,7 +4774,6 @@ function renderP1Palette() {
   palette.innerHTML = buttonsHtml.join("");
 }
 
-// Update exam summary counters
 function updateP1ExamSummary() {
   if (!state.p1_test) return;
 
@@ -5223,7 +4809,6 @@ function updateP1ExamSummary() {
   if ($("p1-modal-marked")) $("p1-modal-marked").textContent = marked;
 }
 
-// Open submission confirmation modal
 function openP1SubmitModal() {
   saveCurrentP1QuestionTime();
   updateP1ExamSummary();
@@ -5231,13 +4816,11 @@ function openP1SubmitModal() {
   if (modal) modal.hidden = false;
 }
 
-// Close submission confirmation modal
 function closeP1SubmitModal() {
   const modal = $("p1-confirm-submit");
   if (modal) modal.hidden = true;
 }
 
-// Calculate scores and finalize Phase-1 exam
 function finishP1Test(auto = false) {
   if (!state.p1_test) return;
 
@@ -5251,7 +4834,7 @@ function finishP1Test(auto = false) {
 
   const test = state.p1_test;
   const pos = test.positiveMarks || 1.0;
-  const neg = Number(test.negativeMarks ?? 0.25);     // 0 = no negative marking (|| would turn it into 0.25)
+  const neg = Number(test.negativeMarks ?? 0.25);
 
   let correctCount = 0;
   let incorrectCount = 0;
@@ -5285,7 +4868,6 @@ function finishP1Test(auto = false) {
   test.accuracy = Number(accuracy);
   test.completedAt = Date.now();
   const totalSec = (test.totalMinutes || 25) * 60;
-  // Real time used = from start until submit (capped at the time limit)
   const started = Number(test.date) || test.completedAt;
   test.timeSpent = Math.max(0, Math.min(totalSec, Math.round((test.completedAt - started) / 1000)));
   test.durationSeconds = test.timeSpent;
@@ -5317,11 +4899,9 @@ function finishP1Test(auto = false) {
 
   renderP1Result(test);
   showScreen("result");
-  // Explain the weak topics with AI straight away (only when an API key is set up)
   if (typeof p1AutoAnalysis === "function") p1AutoAnalysis(test);
 }
 
-// Render Phase-1 Result Scorecard and review
 function renderP1Result(test) {
   if (!test) return;
 
@@ -5333,7 +4913,6 @@ function renderP1Result(test) {
   if ($("p1-stat-unattempted")) $("p1-stat-unattempted").textContent = test.unattemptedCount;
   if ($("p1-stat-time")) $("p1-stat-time").textContent = formatHM(test.timeSpent || 0);
 
-  // Filter counts + always start on "All questions"
   const total = (test.questions || []).length;
   if ($("rf-count-all")) $("rf-count-all").textContent = total;
   if ($("rf-count-correct")) $("rf-count-correct").textContent = test.correctCount || 0;
@@ -5350,7 +4929,6 @@ function renderP1Result(test) {
   if (typeof p1RenderAnalysis === "function") p1RenderAnalysis(test);
 }
 
-// Render list of question review cards with filters
 function renderP1ResultReviewList() {
   const container = $("p1-result-list");
   if (!container || !state.p1_lastResultTest) return;
@@ -5358,7 +4936,6 @@ function renderP1ResultReviewList() {
   const test = state.p1_lastResultTest;
   const filter = state.p1_resultFilter || "all";
   const cardsHtml = [];
-  // questions that match the filter, 20 per page
   const matches = [];
   test.questions.forEach((q, i) => {
     const ua = test.answers[i] ? String(test.answers[i]).toLowerCase().trim() : null;
@@ -5453,7 +5030,6 @@ function renderP1ResultReviewList() {
   }
 }
 
-// Download text file with Phase-1 exam scorecard, topic-wise analysis and questions review
 function downloadP1Result(test) {
   if (!test) return;
 
@@ -5519,7 +5095,6 @@ function downloadP1Result(test) {
   downloadText(filename, lines.join("\n"));
 }
 
-// Render Phase-1 History
 function renderP1History() {
   const statsElem = $("p1-history-stats");
   const listElem = $("p1-history-list");
@@ -5532,7 +5107,6 @@ function renderP1History() {
 
   if (history.length === 0) {
     if (statsElem) statsElem.innerHTML = "";
-    // no tests: no folders yet (they appear with the first test)
     if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, [], () => "", "p1");
     else listElem.innerHTML = `<div class="empty-state">No objective tests yet. Finish a test from <strong>New Test</strong> and it will appear here.</div>`;
     return;
@@ -5590,12 +5164,10 @@ function renderP1History() {
       </article>
     `;
   };
-  // Subject > Chapter tests > chapter > Full / Partial chapter, and Subject > Mix tests
   if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, history, cardHTML, "p1");
   else listElem.innerHTML = history.map(cardHTML).join("");
 }
 
-// Tests taken with negative marking 0 were scored with -0.25 per wrong answer: fix their saved score
 function repairZeroNegativeScores() {
   const history = loadJSON("rbi_p1_history", []);
   let changed = false;
@@ -5607,7 +5179,6 @@ function repairZeroNegativeScores() {
   if (changed) saveJSON("rbi_p1_history", history);
 }
 
-// Review a test attempt from Phase-1 History
 function reviewP1HistoricalTest(id) {
   const history = loadJSON("rbi_p1_history", []);
   const test = history.find(t => t.id === id);
@@ -5617,7 +5188,6 @@ function reviewP1HistoricalTest(id) {
   showScreen("result");
 }
 
-// Delete an item from Phase-1 History
 function deleteP1HistoryItem(id) {
   if (!confirm("Delete this test attempt from history?")) return;
   let history = loadJSON("rbi_p1_history", []);
@@ -5627,7 +5197,6 @@ function deleteP1HistoryItem(id) {
   renderP1History();
 }
 
-// Clear all Phase-1 History
 function clearP1History() {
   const history = loadJSON("rbi_p1_history", []);
   if (history.length === 0) return;
@@ -5637,15 +5206,6 @@ function clearP1History() {
   renderP1History();
 }
 
-// ============================================================
-// STUDY PLAN & CALENDAR INFRASTRUCTURE (EXCEL / CSV IMPORT)
-// ============================================================
-
-// ============================================================
-// STUDY PLAN & CALENDAR INFRASTRUCTURE (EXCEL / CSV IMPORT)
-// ============================================================
-
-// Extract all files from a standard PKZIP archive (DOCX or XLSX)
 async function extractZipEntries(buf) {
   const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   let eocdOffset = -1;
@@ -5681,7 +5241,6 @@ async function extractZipEntries(buf) {
 
     p += 46 + fileNameLen + extraLen + commentLen;
 
-    // Read local file header to locate exact compressed payload
     if (localHeaderOffset + 30 > buf.byteLength) continue;
     const localView = new DataView(buf.buffer, buf.byteOffset + localHeaderOffset, 30);
     if (localView.getUint32(0, true) !== 0x04034b50) continue;
@@ -5701,7 +5260,6 @@ async function extractZipEntries(buf) {
         const merged = await decompressBuffer(compressedData, "deflate-raw");
         entries[fileName] = new TextDecoder("utf-8").decode(merged);
       } catch (e) {
-        // Continue if a single zip entry fails decompression
       }
     }
   }
@@ -5709,7 +5267,6 @@ async function extractZipEntries(buf) {
   return entries;
 }
 
-// Convert Excel column letters (A, B, ..., Z, AA, AB) to 0-based index
 function colLettersToIndex(letters) {
   let col = 0;
   const str = String(letters).toUpperCase();
@@ -5719,12 +5276,10 @@ function colLettersToIndex(letters) {
   return col - 1;
 }
 
-// Native client-side parser for modern XLSX files (without external dependencies)
 async function parseXLSX(arrayBuffer) {
   const buf = new Uint8Array(arrayBuffer);
   const entries = await extractZipEntries(buf);
 
-  // 1. Parse shared strings table (xl/sharedStrings.xml)
   const sharedStrings = [];
   const sstXml = entries["xl/sharedStrings.xml"] || entries["xl/SharedStrings.xml"] || "";
   if (sstXml) {
@@ -5747,7 +5302,6 @@ async function parseXLSX(arrayBuffer) {
     }
   }
 
-  // 2. Locate first sheet XML
   let sheetXmlKey = Object.keys(entries).find(k => /^xl\/worksheets\/sheet\d+\.xml$/i.test(k));
   if (!sheetXmlKey) sheetXmlKey = Object.keys(entries).find(k => /^xl\/worksheets\/.*\.xml$/i.test(k));
   if (!sheetXmlKey) throw new Error("No worksheets found in this Excel spreadsheet.");
@@ -5771,14 +5325,12 @@ async function parseXLSX(arrayBuffer) {
       const val = vMatch ? vMatch[1].trim() : "";
       const isVal = tMatch ? tMatch[1].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'").trim() : "";
 
-      // derive column index from r="A1"
       const rAttrMatch = /r="([A-Z]+)(\d+)"/.exec(attrs);
       let colIdx = row.length;
       if (rAttrMatch) {
         colIdx = colLettersToIndex(rAttrMatch[1]);
       }
 
-      // pad any skipped empty cells
       while (row.length < colIdx) {
         row.push("");
       }
@@ -5806,7 +5358,6 @@ async function parseXLSX(arrayBuffer) {
   return rows;
 }
 
-// Parse RFC-compliant CSV or TSV string respecting quotes
 function parseCSV(text) {
   const rows = [];
   let row = [];
@@ -5844,12 +5395,10 @@ function parseCSV(text) {
   return rows;
 }
 
-// Parse various spreadsheet date formats into "YYYY-MM-DD"
 function parseScheduleDate(raw) {
   if (!raw) return getLocalDateString(new Date());
   const str = String(raw).trim();
 
-  // Excel serial number (e.g. 46347)
   const num = Number(str);
   if (!isNaN(num) && num > 25000 && num < 75000) {
     const epoch = new Date(Date.UTC(1899, 11, 30));
@@ -5860,19 +5409,16 @@ function parseScheduleDate(raw) {
     return `${year}-${month}-${day}`;
   }
 
-  // ISO "YYYY-MM-DD"
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
     const parts = str.split("-");
     return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
   }
 
-  // DD-MM-YYYY or DD/MM/YYYY
   const dmyMatch = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/.exec(str);
   if (dmyMatch) {
     return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
   }
 
-  // Standard Date parsing fallback
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     return getLocalDateString(parsed);
@@ -5881,9 +5427,7 @@ function parseScheduleDate(raw) {
   return getLocalDateString(new Date());
 }
 
-// Wire all global DOM event listeners and initialize screen state
 document.addEventListener("DOMContentLoaded", () => {
-  // Navigation
   const navSetup = $("nav-setup");
   if (navSetup) {
     navSetup.addEventListener("click", () => {
@@ -5915,7 +5459,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Setup Screen
   const qForm = $("question-form");
   if (qForm) {
     qForm.addEventListener("submit", handleQuestionFormSubmit);
@@ -5928,7 +5471,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Phase-1 test settings are saved as soon as they change
   [["setup-p1-minutes", "totalMinutes", 1], ["setup-p1-positive", "positiveMarks", 0], ["setup-p1-negative", "negativeMarks", 0]].forEach(([id, key, min]) => {
     const el = $(id);
     if (!el) return;
@@ -6027,7 +5569,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnStart.addEventListener("click", handleStartTestClick);
   }
 
-  // Exam Screen
   const examAnswer = $("exam-answer");
   if (examAnswer) {
     examAnswer.addEventListener("input", handleAnswerInput);
@@ -6085,7 +5626,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           if (state.markedForReview) {
             state.markedForReview.delete(currentQ.id);
-            state.test.markedForReview = Array.from(state.markedForReview);   // the saved copy too
+            state.test.markedForReview = Array.from(state.markedForReview);
           }
           saveJSON("rbi_active_test", state.test);
           updateWordCount();
@@ -6130,7 +5671,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Exam keyboard shortcuts
   window.addEventListener("keydown", (e) => {
     if (!state.test) return;
     if (e.ctrlKey && e.altKey) {
@@ -6144,7 +5684,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Reload, closing the tab or switching away during an exam: save the answer on screen now
   const saveOnLeave = () => {
     if (state.test && state.questionShownAt > 0) storeCurrentAnswer();
     if (state.p1_test && state.p1_questionShownAt > 0) saveCurrentP1QuestionTime();
@@ -6152,7 +5691,6 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("pagehide", saveOnLeave);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") saveOnLeave(); });
 
-  // Context menu prevention during exam
   window.addEventListener("contextmenu", (e) => {
     if (state.test) {
       e.preventDefault();
@@ -6186,7 +5724,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Result Screen
   const resultList = $("result-list");
   if (resultList) {
     resultList.addEventListener("click", (e) => {
@@ -6244,7 +5781,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // History Screen
   const historyList = $("history-list");
   if (historyList) {
     historyList.addEventListener("change", (e) => {
@@ -6363,11 +5899,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnClearHistory.addEventListener("click", clearAllHistory);
   }
 
-  // ==========================================
-  // PHASE 1: EVENT LISTENERS
-  // ==========================================
-
-  // Phase switchers in header
   const phaseBtnP1 = $("phase-btn-p1");
   if (phaseBtnP1) {
     phaseBtnP1.addEventListener("click", () => setPhase("phase1"));
@@ -6378,20 +5909,16 @@ document.addEventListener("DOMContentLoaded", () => {
     phaseBtnP2.addEventListener("click", () => setPhase("phase2"));
   }
 
-  // "Back to calendar" on a result opened from the calendar
   document.querySelectorAll(".btn-back-calendar").forEach(b => b.addEventListener("click", () => showScreen("calendar")));
 
-  // Phase-1 Setup Events
   const p1Form = $("p1-question-form");
   if (p1Form) {
     p1Form.addEventListener("submit", handleP1QuestionFormSubmit);
   }
 
-  // the model answer box grows with the text you type or paste
   const qModel = $("q-model");
   if (qModel) qModel.addEventListener("input", () => autoGrowTextarea(qModel));
 
-  // AI Check pressed without a key: remember it, so it runs once the key is saved
   document.addEventListener("click", (e) => {
     const want = e.target.closest("[data-want-check]");
     if (want) state.wantAICheck = want.dataset.wantCheck;
@@ -6456,7 +5983,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Move within the list of ready questions (questions under "Needs attention" stay where they are)
       const moveBtn = e.target.closest(".btn-p1-move-up, .btn-p1-move-down");
       if (moveBtn) {
         const qs = state.p1_setup.questions;
@@ -6481,7 +6007,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const p1FormReset = $("p1-question-form");
   if (p1FormReset) {
     p1FormReset.addEventListener("reset", () => {
-      // Cancelling a correction: the next submit adds a new MCQ again
       setTimeout(() => {
         if (!state.p1_editingId) return;
         state.p1_editingId = null;
@@ -6496,7 +6021,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnStartP1Test.addEventListener("click", startP1Exam);
   }
 
-  // Phase-1 Exam Screen Events
   const p1OptionsList = $("p1-exam-options-list");
   if (p1OptionsList) {
     p1OptionsList.addEventListener("click", (e) => {
@@ -6562,7 +6086,6 @@ document.addEventListener("DOMContentLoaded", () => {
     p1BtnConfirmNo.addEventListener("click", closeP1SubmitModal);
   }
 
-  // Phase-1 Result Screen Events
   document.querySelectorAll("#screen-result-p1 .rf-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll("#screen-result-p1 .rf-btn").forEach(b => b.classList.remove("active"));
@@ -6598,7 +6121,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Phase-1 History Events
   const p1HistoryList = $("p1-history-list");
   if (p1HistoryList) {
     p1HistoryList.addEventListener("click", (e) => {
@@ -6626,19 +6148,14 @@ document.addEventListener("DOMContentLoaded", () => {
     btnClearP1History.addEventListener("click", clearP1History);
   }
 
-  // Calendar & TODO screens (see calendar.js)
   initCalendar();
 
-  // AI evaluation: settings dialog, result & history assessments (see ai_eval.js)
   if (window.AIEval) AIEval.init();
 
   repairZeroNegativeScores();
 
-  // Initial load
   setPhase(state.phase);
-  // AI work keeps running in the background; the header shows it on every screen
   wireAIBackground();
-  // after sign-in (auth.js): "resume your test?", then AI work a page reload interrupted
   const afterSignIn = () => {
     checkResumeActiveTest();
     if (window.AIEval && AIEval.resumePending) AIEval.resumePending();

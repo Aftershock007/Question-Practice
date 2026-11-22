@@ -1,25 +1,11 @@
 "use strict";
-// ============================================================================
-// Subject / chapter folders
-// ----------------------------------------------------------------------------
-// When a DOCX/PDF is uploaded you say which subject it belongs to, whether it is
-// a chapter test (which chapter, full or partial) or a mix test, and optionally
-// a topic. Every imported question carries that as q.folder; a test takes its
-// folder from its questions (test.folder), and History is shown as folders:
-//   Subject > Chapter tests > Chapter 1: ... > Full chapter / Partial chapter
-//   Subject > Mix tests
-// Uses helpers from app.js ($, escapeHTML, loadJSON, saveJSON, sanitizeDashes).
-// ============================================================================
 
 const FOLDER_SUBJECTS = ["Economics (ESI)", "Finance", "Management", "English", "General Awareness", "Quantitative Aptitude", "Reasoning"];
 const FOLDER_OTHER = "Other";
 const FOLDER_UNSORTED = "Not sorted yet";
 
-// Folders come only from your tests: a folder appears with its first test and goes away
-// with its last one. (An older version kept empty chapter folders in this key.)
-try { localStorage.removeItem("rbi_folder_chapters"); } catch (_) { /* nothing to clean */ }
+try { localStorage.removeItem("rbi_folder_chapters"); } catch (_) {}
 
-// "Economics (ESI)" etc. from the subject / paper the parser guessed
 function folderSubjectFromGuess(guess) {
   const g = String(guess || "").toLowerCase();
   if (/esi|econom|national income|gdp|inflation|monetary|fiscal/.test(g)) return "Economics (ESI)";
@@ -32,7 +18,6 @@ function folderSubjectFromGuess(guess) {
   return "";
 }
 
-// "CH-1-National_Income-Questions.docx" / "Chapter 2: Inflation" -> "Chapter 1: National Income"
 function folderChapterFromName(fileName, title) {
   const tidy = s => sanitizeDashes(String(s || ""))
     .replace(/\.(docx|pdf)$/i, "")
@@ -51,7 +36,6 @@ function folderChapterFromName(fileName, title) {
   return "";
 }
 
-// Chapter names used by your tests and the questions on New Test (for the chapter suggestions)
 function folderKnownChapters(subject) {
   const out = new Set();
   const add = f => { if (f && f.subject === subject && f.chapter) out.add(f.chapter); };
@@ -61,8 +45,6 @@ function folderKnownChapters(subject) {
   return [...out].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
-// Ask which subject / chapter a file (or a test) belongs to. Resolves to
-// { subject, kind: "chapter"|"mix", chapter, coverage: "full"|"partial", topic } or null (cancelled).
 function askFolder(opts) {
   opts = opts || {};
   return new Promise(resolve => {
@@ -153,13 +135,10 @@ function askFolder(opts) {
   });
 }
 
-// Ask for an uploaded file's folder, with guesses from its name and title
 function askFileFolder(fileName, rawText, guessSubject, count) {
   const head = String(rawText || "").split("\n", 40).map(l => l.replace(/\*\*/g, "").trim()).filter(Boolean);
   const title = head[0] || "";
   const chapter = folderChapterFromName(fileName, title);
-  // a "Subject: Finance" line at the top (files converted with AI_CONVERT_PROMPT.md) names it outright;
-  // the file name and title are better clues than the parser's guess (which falls back to General Awareness)
   const subjectLine = (head.slice(0, 12).map(l => l.match(/^Subject\s*:\s*(.+)$/i)).find(Boolean) || [])[1] || "";
   const cleanName = String(fileName || "").replace(/[_]+/g, " ");
   const subject = folderSubjectFromGuess(subjectLine) || folderSubjectFromGuess(cleanName) || folderSubjectFromGuess(title) || folderSubjectFromGuess(guessSubject);
@@ -171,11 +150,9 @@ function askFileFolder(fileName, rawText, guessSubject, count) {
   });
 }
 
-// Tag freshly imported questions with their folder (and the topic where the file gave none)
 function applyFolderToQuestions(questions, folder) {
   if (!folder) return;
   const tag = { subject: folder.subject, kind: folder.kind, chapter: folder.chapter || "", coverage: folder.coverage || "" };
-  // the subject you chose replaces the guessed one (objective: q.subject, subjective: q.paper)
   const paper = { "Economics (ESI)": "ESI", "Finance": "Finance", "Management": "Management", "English": "English Descriptive" }[folder.subject];
   (questions || []).forEach(q => {
     q.folder = Object.assign({}, tag);
@@ -185,8 +162,6 @@ function applyFolderToQuestions(questions, folder) {
   });
 }
 
-// A test's folder from its questions: one chapter -> that chapter (partial if any part
-// says so); several chapters of one subject -> that subject's mix tests; several subjects -> mixed
 function testFolderFromQuestions(questions) {
   const fs = (questions || []).map(q => q && q.folder).filter(f => f && f.subject);
   if (!fs.length) return null;
@@ -199,31 +174,23 @@ function testFolderFromQuestions(questions) {
   return { subject: subjects[0], kind: "mix", chapter: "", coverage: "" };
 }
 
-// The folder a saved test belongs to (set when it started, or worked out from its questions)
 function testFolderOf(test) {
   if (!test) return null;
   if (test.folder && test.folder.subject) return test.folder;
   return testFolderFromQuestions(test.questions);
 }
 
-// One line naming a folder, e.g. "Economics (ESI) › Chapter 1: National Income › Full chapter"
 function folderLabel(f) {
   if (!f || !f.subject) return FOLDER_UNSORTED;
   if (f.kind !== "chapter") return f.subject + " › Mix tests";
   return f.subject + " › " + f.chapter + " › " + (f.coverage === "partial" ? "Partial chapter" : "Full chapter");
 }
 
-// ---- History as a file explorer -------------------------------------------
-// Folders: History > Subject > Chapter tests > Chapter n > Full / Partial chapter
-//                            > Mix tests;  plus "Not sorted yet". Tests are the "files".
 const FOLDER_ICON = '<svg class="ex-ico" viewBox="0 0 48 40" aria-hidden="true"><path class="ex-ico-back" d="M4 6a4 4 0 0 1 4-4h11l5 5h16a4 4 0 0 1 4 4v23a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path class="ex-ico-front" d="M4 14a4 4 0 0 1 4-4h32a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/></svg>';
 const ICON_BACK = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_UP = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15.5V5M5 9.5 10 4.5l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const explorerState = {};   // phaseKey -> { path: [keys], back: [[keys]...] }
+const explorerState = {};
 
-// The folder tree of a list of tests: only folders that hold at least one test exist
-// (a subject, chapter or Full / Partial folder appears with its first test and is gone
-// when its last test is deleted or moved)
 function buildHistoryTree(tests) {
   const root = { key: "", name: "History", kind: "root", children: [], tests: [] };
   const child = (parent, key, name, kind) => {
@@ -264,24 +231,22 @@ function explorerNode(root, path) {
   return { node, trail };
 }
 
-// History opens in the folder of the test you just finished
 function historyOpenFolderOf(test, phaseKey) {
   const f = testFolderOf(test);
   const path = !f ? ["unsorted"] : f.kind === "chapter"
     ? ["s:" + f.subject, "chapter", "c:" + String(f.chapter || "").toLowerCase().replace(/\s+/g, " ").trim(), f.coverage === "partial" ? "partial" : "full"]
     : ["s:" + f.subject, "mix"];
   explorerState[phaseKey] = { path, back: [], loaded: true };
-  try { sessionStorage.setItem("rbi_hist_path_" + phaseKey, JSON.stringify(path)); } catch (_) { /* per-tab convenience */ }
+  try { sessionStorage.setItem("rbi_hist_path_" + phaseKey, JSON.stringify(path)); } catch (_) {}
 }
 
-// Draw the explorer into listElem. cardFor(test) gives the test's card (element or HTML).
 function renderHistoryFolders(listElem, tests, cardFor, phaseKey) {
   const st = explorerState[phaseKey] || (explorerState[phaseKey] = { path: [], back: [] });
   try { if (!st.loaded) { st.path = JSON.parse(sessionStorage.getItem("rbi_hist_path_" + phaseKey) || "[]"); st.loaded = true; } } catch (_) { st.loaded = true; }
   const root = buildHistoryTree(tests);
   const { node, trail } = explorerNode(root, st.path);
   st.path = trail.slice(1).map(n => n.key);
-  try { sessionStorage.setItem("rbi_hist_path_" + phaseKey, JSON.stringify(st.path)); } catch (_) { /* per-tab convenience */ }
+  try { sessionStorage.setItem("rbi_hist_path_" + phaseKey, JSON.stringify(st.path)); } catch (_) {}
 
   const go = (path, remember = true) => {
     if (remember) st.back.push(st.path.slice());
@@ -289,7 +254,6 @@ function renderHistoryFolders(listElem, tests, cardFor, phaseKey) {
     renderHistoryFolders(listElem, tests, cardFor, phaseKey);
   };
 
-  // left: the folder tree (like the navigation pane of a file manager)
   const treeHTML = (n, path, depth) => n.children.map(c => {
     const p = path.concat(c.key);
     const open = st.path.length >= p.length && p.every((k, i) => st.path[i] === k);
@@ -350,7 +314,6 @@ function renderHistoryFolders(listElem, tests, cardFor, phaseKey) {
   });
 }
 
-// "Move to folder" on a History test
 async function moveHistoryTestToFolder(storageKey, testId) {
   const history = loadJSON(storageKey, []);
   const t = history.find(x => x.id === testId);
@@ -369,9 +332,6 @@ async function moveHistoryTestToFolder(storageKey, testId) {
   if (storageKey === "rbi_p1_history") renderP1History(); else renderHistory();
 }
 
-// ---- Self-assessment: performance by subject and chapter (bar chart) ------
-// Score % = marks scored / marks possible over every test in that folder
-// (objective: net score, never below 0; subjective: graded answers only).
 function testScoreParts(t, kind) {
   if (kind === "mcq") return { got: Math.max(0, Number(t.score) || 0), max: Number(t.maxScore) || 0 };
   let got = 0;
@@ -394,7 +354,6 @@ function perfAdd(b, parts, at) {
   if (at >= b.lastAt) { b.last = pct; b.lastAt = at; }
 }
 
-// Draw the chart into container (history: newest first)
 function renderPerformanceChart(container, history, kind) {
   if (!container) return;
   const subjects = new Map();
@@ -420,7 +379,6 @@ function renderPerformanceChart(container, history, kind) {
   const pctOf = b => (b.max ? b.got / b.max * 100 : null);
   const fmt = v => (Math.round(v * 10) / 10).toString();
   const describe = (name, b) => `${name}: ${Math.round(pctOf(b))}% (${fmt(b.got)} of ${fmt(b.max)} marks) over ${b.tests} test${b.tests === 1 ? "" : "s"} · best ${Math.round(b.best)}% · latest ${Math.round(b.last)}%`;
-  // inSummary: the row is the clickable heading of a subject, so the summary itself takes focus
   const bar = (name, b, level, extra, inSummary) => {
     const pct = pctOf(b);
     if (pct === null) return `<div class="perf-row perf-l${level} is-empty"><span class="perf-name">${escapeHTML(name)}</span><span class="perf-track"></span><span class="perf-val">No marks yet</span></div>`;
@@ -456,7 +414,6 @@ function renderPerformanceChart(container, history, kind) {
       <div class="perf-scale" aria-hidden="true"><span></span><span class="perf-ticks">${[0, 25, 50, 75, 100].map(v => `<i style="left:${v}%">${v}%</i>`).join("")}</span><span></span></div>
       <div class="perf-rows">${rows}${unsorted.tests ? bar(FOLDER_UNSORTED, unsorted, 1) : ""}</div>
     </section>` : "";
-  // one tooltip for every bar (pointer and keyboard)
   let tip = document.getElementById("perf-tip");
   if (!tip) { tip = document.createElement("div"); tip.id = "perf-tip"; tip.className = "perf-tip"; tip.setAttribute("role", "tooltip"); document.body.appendChild(tip); }
   const show = (row, x, y) => {

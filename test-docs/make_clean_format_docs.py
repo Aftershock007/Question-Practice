@@ -1,22 +1,3 @@
-"""Build the clean-format test documents (DOCX) and their expected results (JSON).
-
-These are files in the layout that AI_CONVERT_PROMPT.md asks an AI to produce
-("Format: RBI-PRACTICE-V1"). The app reads them by their labels (parseCleanFormat).
-
-Run:  python3 test-docs/make_clean_format_docs.py      (needs python-docx)
-Then: soffice --headless --convert-to pdf --outdir test-docs test-docs/fmt-*.docx
-
-fmt-01: objective file as an AI would build it: Word tables (match list, DI data,
-        a table inside an explanation), statements, assertion-reason, multi-answer,
-        a 4-option question, passages with ranges, explanation lines without a full stop.
-fmt-02: descriptive file: Word bullet lists, a table and a "Q2 FY26 ..." line
-        inside an answer, a question over several paragraphs with (a)/(b) parts, a
-        question that starts with a year, a shared case for Q4-Q5, a topic written above
-        its question, a letter with "Subject:" / "Date:" lines, "Answer: Not given".
-fmt-03: one file with both kinds, typed as plain paragraphs (as text pasted into Word):
-        "|" rows instead of tables, "**Answer:**" left over from Markdown, options on
-        one line, the answer letter on the line under "Answer:", "a, c" answers.
-"""
 import json, os
 from docx import Document
 from docx.shared import Pt
@@ -50,9 +31,6 @@ def save(d, name, expected):
 
 os.makedirs(os.path.join(OUT, "expected"), exist_ok=True)
 
-# ---------------------------------------------------------------------------
-# fmt-01: objective
-# ---------------------------------------------------------------------------
 d = new_doc()
 for line in ["Chapter 1: National Income", "Subject: Economics (ESI)", "Type: Objective", "Format: RBI-PRACTICE-V1"]:
     para(d, line)
@@ -155,9 +133,6 @@ mcq(13, ["Note: Answer on the basis of the System of National Accounts 2008.", "
     ["Only the factory building adds to the stock of fixed capital. The household car is final consumption."], None, T3)
 save(d, "fmt-01-clean-objective", {"kind": "mcq", "chapter": "National Income", "questions": exp})
 
-# ---------------------------------------------------------------------------
-# fmt-02: descriptive
-# ---------------------------------------------------------------------------
 d = new_doc()
 for line in ["Chapter 1: National Income", "Subject: Economics (ESI)", "Type: Descriptive", "Format: RBI-PRACTICE-V1"]:
     para(d, line)
@@ -278,9 +253,6 @@ para(d, "Answer: Not given")
 exp.append({"number": 9, "topic": "Potential Output", "marks": 15, "wordLimit": 600, "question": q9, "answerStart": "", "answerHas": [], "passage": ""})
 save(d, "fmt-02-clean-descriptive", {"kind": "desc", "questions": exp})
 
-# ---------------------------------------------------------------------------
-# fmt-03: both kinds in one file, typed as plain paragraphs (text pasted into Word)
-# ---------------------------------------------------------------------------
 d = new_doc()
 lines = [
     "Chapter 2: Inflation", "Subject: Economics (ESI)", "Format: RBI-PRACTICE-V1", "Type: Objective",

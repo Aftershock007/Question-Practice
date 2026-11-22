@@ -1,28 +1,8 @@
 "use strict";
 
-// ============================================================================
-// AI EVALUATION OF SUBJECTIVE (PHASE-2 DESCRIPTIVE) ANSWERS
-// ----------------------------------------------------------------------------
-// When a subjective test is submitted, every answer is sent - together with the
-// RBI evaluation prompt from prompt.js - to the AI provider set up in
-// "API keys" (top bar; models default from ai_config.js). The model replies with structured JSON that
-// is checked, re-added and shown as an easy-to-read assessment on the Result
-// screen and in History. The score is written into History automatically.
-//
-// Providers: Google Gemini (native API), OpenAI, Anthropic Claude, Groq,
-// OpenRouter, DeepSeek, Mistral, and any OpenAI-compatible server (Ollama,
-// LM Studio, vLLM...). Requests go straight from this page to the provider;
-// nothing passes through any other server.
-//
-// Public API: window.AIEval (used by app.js).
-// ============================================================================
-
 (function () {
-  // --------------------------------------------------------------------------
-  // 1. Providers & constants
-  // --------------------------------------------------------------------------
   const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta";
-  const GEMINI_FALLBACK_MODEL = "gemini-flash-latest"; // Google's alias that always points to the newest Flash
+  const GEMINI_FALLBACK_MODEL = "gemini-flash-latest";
   const ANTHROPIC_API = "https://api.anthropic.com/v1";
 
   const PROVIDERS = {
@@ -64,7 +44,6 @@
       keyUrl: "https://openrouter.ai/settings/keys", keyHint: "starts with sk-or-",
       note: "One key for hundreds of models. Models ending in :free cost nothing but have a daily request cap; Load models lists free ones first.",
       headers: { "X-Title": "RBI Practice Console" },
-      // only models that can answer in text; free variants listed first
       modelFilter: (id, m) => !(m && m.architecture && Array.isArray(m.architecture.output_modalities)) || m.architecture.output_modalities.includes("text"),
       modelRank: id => (/:free$/.test(id) ? 0 : 1)
     },
@@ -74,7 +53,6 @@
       suggestions: ["deepseek-chat", "deepseek-reasoner"],
       keyUrl: "https://platform.deepseek.com/api_keys", keyHint: "starts with sk-",
       note: "Low-cost API.",
-      // deepseek-chat stops at 4K output tokens unless asked for more; a full assessment needs more.
       maxTokens: model => (model === "deepseek-chat" ? 8192 : 0)
     },
     mistral: {
@@ -93,17 +71,13 @@
     }
   };
 
-  const SETTINGS_KEY = "rbi_ai_settings";   // models chosen in the API keys dialog (keys themselves: sessionStorage)
-  const REPORTS_KEY = "rbi_ai_reports";     // { [testId]: { [questionId]: report } }
-  // Detailed reports are big (~10-15 KB per answer). Keep them inside a budget so
-  // they can never crowd out your test history; the oldest reports are dropped
-  // first and their scores stay in History.
+  const SETTINGS_KEY = "rbi_ai_settings";
+  const REPORTS_KEY = "rbi_ai_reports";
   const REPORTS_MAX_CHARS = 1500000;
   const REPORT_VERSION = 1;
-  const MAX_PARALLEL = 4;                    // answers graded at the same time (a full Phase-2 paper has 4)
-  const GENERATE_TIMEOUT_MS = 420000;        // per attempt; free reasoning models can take 2-4 minutes
-  const QUICK_TIMEOUT_MS = 45000;            // model list / connection test
-  // A timed-out request may still be running upstream (and counted against a free quota): never re-send it automatically.
+  const MAX_PARALLEL = 4;
+  const GENERATE_TIMEOUT_MS = 420000;
+  const QUICK_TIMEOUT_MS = 45000;
   const MAX_ATTEMPTS = { rate: 4, overloaded: 4, network: 3 };
 
   const PENALTY_LABELS = {
@@ -118,11 +92,6 @@
     "TYPO": "Typing slip (no penalty)"
   };
 
-  // ---- The rubric's fixed rules, applied by the app after every grading ----------
-  // (prompt.js STAGE 1 / 1B / 2). The model judges the script; the app applies the
-  // arithmetic, so the same judgement always gives the same marks.
-
-  // Stage-2 penalty table: value per instance for 10 / 15 / 30-40 marks and the most instances counted
   const PENALTY_TABLE = {
     "RP-1": { m10: 0.75, m15: 1.25, m30: 2.5, most: 4 },
     "RP-2": { m10: 0.25, m15: 0.25, m30: 0.5, most: 3 },
@@ -134,10 +103,8 @@
     "RP-8": { m10: 0.25, m15: 0.25, m30: 0.5, most: 3 }
   };
 
-  // Word-discipline bands per track: [full credit from, to], [half credit from, to] in % of the limit
   const WORD_BANDS = { A: [[82, 104], [72, 112]], B: [[90, 105], [80, 112]], C: [[92, 105], [86, 110]] };
 
-  // STAGE 1B examiner checks: label and, for a NO, [parameter number, cap as share of that parameter]
   const EXAMINER_CHECKS = {
     A: {
       1: ["Every sub-part answered", [1, 0.45]],
@@ -175,7 +142,6 @@
   };
   const TRACK_PARAMS = { A: 5, B: 5, C: 5, D: 4 };
 
-  // Value of one penalty instance for this question's marks (RULE 5 scales the 10-mark column)
   function penaltyValue(code, max) {
     const t = PENALTY_TABLE[code];
     if (!t) return null;
@@ -185,7 +151,6 @@
     return code === "RP-7" ? round2(t.m30 * max / 30) : round2(t.m10 * max / 10);
   }
 
-  // "full" | "half" | "zero" word-discipline band (null when the track has none)
   function wordBand(track, words, limit) {
     const b = WORD_BANDS[track];
     if (!b || !(limit > 0)) return null;
@@ -195,20 +160,16 @@
     return "zero";
   }
 
-  // Apply the rubric's fixed rules to the model's parameters and penalties (mutates them);
-  // returns { rules: [what the app changed], autoFail }
   function enforceRubric(track, parameters, penalties, checks, anchorCount, q, words) {
     const max = maxMarksOf(q);
     const limit = wordLimitOf(q);
     const rules = [];
-    // parameter maxima must add up to the question's marks (RULE 5): rescale when they do not
     const pmaxSum = sum(parameters.map(p => p.max));
     if (parameters.length && parameters.every(p => p.max > 0) && Math.abs(pmaxSum - max) > 0.05) {
       const k = max / pmaxSum;
       parameters.forEach(p => { p.max = round2(p.max * k); if (p.awarded !== null) p.awarded = round2(p.awarded * k); });
       rules.push("Parameter maxima rescaled to add up to " + fmt(max) + " marks.");
     }
-    // which parameter is P1..P5: by its "P<n>" code, else by position when the count matches the track
     const byNo = {};
     const expected = TRACK_PARAMS[track];
     parameters.forEach((p, i) => {
@@ -219,25 +180,22 @@
     const capParam = (no, share, why) => {
       const p = byNo[no];
       if (!p || !(p.max > 0) || p.awarded === null) return;
-      const ceiling = Math.floor(p.max * share * 4) / 4;      // marks are given in 0.25 steps
+      const ceiling = Math.floor(p.max * share * 4) / 4;
       if (p.awarded > ceiling + 1e-9) {
         rules.push("P" + no + " limited to " + fmt(ceiling) + " / " + fmt(p.max) + " (" + Math.round(share * 100) + "% cap): " + why + ".");
         p.awarded = ceiling;
       }
       if (!p.cap) p.cap = Math.round(share * 100) + "% - " + why;
     };
-    // a NO on an examiner check applies its gate
     const table = EXAMINER_CHECKS[track] || {};
     checks.forEach(c => {
       const def = table[c.id];
       if (def && def[1] && c.pass === false) capParam(def[1][0], def[1][1], "check failed: " + def[0].charAt(0).toLowerCase() + def[0].slice(1));
     });
-    // Track A evidence gate on P3
     if (track === "A" && anchorCount !== null) {
       if (anchorCount <= 0) capParam(3, 0.20, "no specific report, committee, scheme or data");
       else if (anchorCount === 1) capParam(3, 0.45, "only one specific source");
     }
-    // word discipline (P5) and the RP-5 penalty follow from the word count
     const band = wordBand(track, words, limit);
     const pct = limit > 0 ? Math.round(words / limit * 100) : 0;
     if (band === "half") capParam(5, 0.5, "word count " + words + " of " + limit + " (" + pct + "%)");
@@ -252,13 +210,11 @@
         rules.push("RP-5 removed: " + pct + "% of the word limit is inside the allowed band.");
       }
     }
-    // lifting / outside info (RP-7) exists only for precis and comprehension
     if (track === "A" || track === "B") {
       const before = penalties.length;
       for (let i = penalties.length - 1; i >= 0; i--) if (penalties[i].code === "RP-7") penalties.splice(i, 1);
       if (penalties.length !== before) rules.push("RP-7 removed: it applies only to precis and comprehension.");
     }
-    // every penalty takes its value from the table; capped instances are counted once each up to the limit
     const seen = {};
     let changed = false;
     for (let i = 0; i < penalties.length; i++) {
@@ -270,7 +226,6 @@
       if (Math.abs(p.deduction - v) > 1e-9) { p.deduction = v; changed = true; }
     }
     if (changed) rules.push("Penalties set to the rubric's table values for " + fmt(max) + " marks (RP-2, RP-3, RP-8 counted at most 3 times).");
-    // automatic fail: an essay or ESI/FM answer under 60 words
     const autoFail = (track === "A" || track === "B") && words > 0 && words < 60;
     if (autoFail) rules.push("Under 60 words: the rubric gives 0 marks.");
     return { rules, autoFail };
@@ -290,7 +245,6 @@
     D: "Reading comprehension"
   };
 
-  // Grade brackets from the prompt's STRICT SIMULATOR GRADE BRACKETS
   const GRADES = [
     { grade: "A", min: 52, label: "AIR Top-10 ready", cls: "a" },
     { grade: "B", min: 42, label: "Strong selection zone", cls: "b" },
@@ -299,16 +253,12 @@
     { grade: "F", min: 0, label: "Fail zone", cls: "f" }
   ];
 
-  // --------------------------------------------------------------------------
-  // 2. Small helpers (local, so this file does not depend on script order)
-  // --------------------------------------------------------------------------
   function esc(v) {
     return String(v == null ? "" : v)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
-  // Escaped text with **bold** markers and line breaks kept
   function inline(v) {
     return esc(v).replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>");
   }
@@ -377,10 +327,6 @@
     return GRADES.find(g => g.grade === letter) || GRADES[GRADES.length - 1];
   }
 
-  // The prompt is deliberately ~2-3 marks stricter per question than the real RBI
-  // panel ("Score X here -> X + 2.0 to X + 3.0 in RBI"; +3.5 to +5.5 on 30/40-mark
-  // English). This turns a strict score into the likely real-exam range.
-  // attempted = the answer has at least 60 words (below that the rubric itself says 0)
   function projectionFor(score, max, attempted) {
     if (!(score > 0) && !attempted) return null;
     let lo, hi;
@@ -404,15 +350,6 @@
     return (typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(String(v)) : String(v).replace(/["\\]/g, "\\$&");
   }
 
-  // --------------------------------------------------------------------------
-  // 3. Settings: ai_config.js defaults + what you saved in API keys (top bar)
-  // --------------------------------------------------------------------------
-  // Two AI "engines" (model set-ups, sharing one key per provider); every AI task runs on one:
-  //   check: Hydrogen - the AI Check of uploaded questions, the marking checklist and the
-  //          objective topic analysis (everything except subjective grading)
-  //   grade: Neon - marks and the full analysis of every subjective answer
-  // The thinking tier picked for each in the API keys dialog is the one that engine uses.
-  // "thinking" is Gemini's thinking level (the model tier): low / medium / high, or "default".
   const ENGINES = {
     check: {
       id: "check", n: 1, label: "AI Check and objective analysis",
@@ -427,8 +364,6 @@
   };
   const ROLE_ENGINE = { check: "check", analysis: "check", grading: "grade" };
   const THINKING_LEVELS = ["low", "medium", "high"];
-  // API keys live only in this browser session: kept across refreshes, gone when the browser closes.
-  // One key per provider: both engines on Gemini share the same Gemini key.
   const SESSION_KEYS = "rbi_ai_session_keys";
 
   function fileConfig() {
@@ -475,7 +410,6 @@
     }
   }
 
-  // Keys were once saved permanently (localStorage): they now live only in the session
   function dropStoredKeys() {
     const o = readOverrides();
     if (o.keys || o.provider || o.models) {
@@ -487,7 +421,6 @@
     }
   }
 
-  // Empty keys and DEMO_ placeholders mean "not set up" - they are never sent anywhere.
   function isPlaceholderKey(key) {
     const k = String(key == null ? "" : key).trim();
     if (!k) return true;
@@ -513,7 +446,6 @@
     return { autoEvaluate, passes };
   }
 
-  // An engine's set-up from ai_config.js (falling back to the built-in defaults above)
   function engineDefaults(id) {
     const base = ENGINES[id];
     const f = (fileConfig().engines || {})[id] || {};
@@ -527,7 +459,6 @@
     };
   }
 
-  // What is in use: the API keys dialog (this browser) over ai_config.js
   function engineSettings(id) {
     const d = engineDefaults(id);
     const local = (readOverrides().engines || {})[id] || {};
@@ -554,17 +485,14 @@
     };
   }
 
-  // A provider's key from ai_config.js (normally a DEMO_ placeholder)
   function fileKeyFor(provider) {
     return pickStr(fileConfig().keys, provider);
   }
 
-  // Providers the two engines use (usually just "gemini": one key for both)
   function providersInUse(settingsById) {
     return [...new Set(Object.keys(ENGINES).map(id => (settingsById ? settingsById[id] : engineSettings(id)).provider))];
   }
 
-  // The full configuration of one engine (its provider's key from this session, else from ai_config.js)
   function resolveEngine(id) {
     const engine = ENGINES[id] ? id : "grade";
     const s = engineSettings(engine);
@@ -582,7 +510,6 @@
     return pc;
   }
 
-  // role: "check" (file checks), "analysis" (objective topic analysis), "grading" (subjective; the default)
   function activeProvider(role) {
     return resolveEngine(ROLE_ENGINE[role] || "grade");
   }
@@ -592,9 +519,6 @@
   }
 
 
-  // --------------------------------------------------------------------------
-  // 4. Prompt: the exact copy-paste prompt from prompt.js + a JSON output contract
-  // --------------------------------------------------------------------------
   const SYSTEM_INSTRUCTION =
     "You grade RBI Grade B Phase-2 descriptive answers inside a candidate's practice app. " +
     "Apply the user's rubric, gates, penalties and calibration exactly as written. " +
@@ -722,8 +646,6 @@ answer. Never invent errors: an empty list is the right answer when the script
 has no error of that kind, but do not skip real ones.
 ################################################################################`;
 
-  // JSON Schema handed to Gemini (generationConfig.responseJsonSchema) so the
-  // reply always has this shape. Key order = generation order: audit before marks.
   function objSchema(props) {
     return { type: "object", properties: props, required: Object.keys(props) };
   }
@@ -771,9 +693,6 @@ has no error of that kind, but do not skip real ones.
     })
   });
 
-  // scoreOnly: a cross-check pass that returns only the marking (no feedback text), which
-  // costs far fewer output tokens. The "QUESTION 1 OF 3" line of the copy-paste prompt is
-  // left out so every grading prompt starts with the same text (providers cache that prefix).
   const SCORE_SCHEMA = objSchema({
     track: { type: "string", enum: ["A", "B", "C", "D"] },
     checklist: CHECKLIST_SCHEMA,
@@ -794,7 +713,6 @@ has no error of that kind, but do not skip real ones.
     return base + "\n\n" + schemePromptBlock(schemeOf(q)) + (scoreOnly ? SCORE_CONTRACT : JSON_CONTRACT).replace(/\{\{MARKS\}\}/g, String(q.marks));
   }
 
-  // The cross-check output: the same marking, without any feedback text
   const SCORE_CONTRACT = `################################################################################
 #  OUTPUT CONTRACT - SCORE-ONLY CROSS-CHECK (overrides the presentation format above)
 ################################################################################
@@ -827,20 +745,12 @@ then return ONE JSON object with ONLY these keys and nothing else:
 All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
 ################################################################################`;
 
-  // --------------------------------------------------------------------------
-  // 4b. Consistency: a FIXED marking checklist per question, built once from the
-  //     reference answer you uploaded and reused for every attempt, plus several
-  //     independent gradings combined into one mark.
-  // --------------------------------------------------------------------------
-  const SCHEMES_KEY = "rbi_ai_schemes";       // { [hash]: { points: [{id, point, weight}], createdAt } }
-  // Gradings per answer: "smart" = one full grading, plus a score-only cross-check only when it
-  // looks unreliable (or a third when two disagree); "two" = full grading + cross-check always
-  const RUN_SPREAD = 0.12;                    // runs further apart than 12% of the marks get a third, deciding run
-  const ANCHOR_BELOW = 0.25;                  // the mark may fall at most 25% of the marks below the checklist coverage...
-  const ANCHOR_ABOVE = 0.15;                  // ...and rise at most 15% above it
+  const SCHEMES_KEY = "rbi_ai_schemes";
+  const RUN_SPREAD = 0.12;
+  const ANCHOR_BELOW = 0.25;
+  const ANCHOR_ABOVE = 0.15;
   const COVER_VALUE = { full: 1, partial: 0.5, missing: 0 };
 
-  // The same question + reference answer always gives the same hash
   function schemeHash(q) {
     const src = [q.text, q.passage || "", q.modelAnswer || "", q.marks].join("\u0001");
     let h1 = 0x811c9dc5, h2 = 0x01000193;
@@ -865,7 +775,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return pts.length >= 2 ? pts : null;
   }
 
-  // Remember a checklist for a question (stored on the question and in a small cache)
   function storeScheme(q, raw) {
     const points = cleanScheme(raw);
     if (!points || !q) return null;
@@ -875,11 +784,10 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     all[hash] = { points, createdAt: Date.now() };
     const keys = Object.keys(all);
     if (keys.length > 400) keys.sort((a, b) => (all[a].createdAt || 0) - (all[b].createdAt || 0)).slice(0, keys.length - 400).forEach(k => delete all[k]);
-    try { localStorage.setItem(SCHEMES_KEY, JSON.stringify(all)); } catch (_) { /* the copy on the question still works */ }
+    try { localStorage.setItem(SCHEMES_KEY, JSON.stringify(all)); } catch (_) {}
     return q.scheme;
   }
 
-  // The checklist of a question (only if it was built from this exact question + reference answer)
   function schemeOf(q) {
     if (!q) return null;
     const hash = schemeHash(q);
@@ -906,7 +814,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     ].filter(Boolean).join("\n");
   }
 
-  // Build the checklist if the question does not have one yet (model 1, from your reference answer)
   async function ensureScheme(q, opts) {
     const have = schemeOf(q);
     if (have) { q.scheme = have; return have; }
@@ -940,7 +847,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     ].join("\n");
   }
 
-  // Share of the weighted checklist a report says the answer covers (0-1), or null
   function checklistCoverage(r) {
     const list = r && r.checklist;
     if (!list || !list.length) return null;
@@ -948,9 +854,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return total ? sum(list.map(c => (c.weight || 1) * (COVER_VALUE[c.coverage] || 0))) / total : null;
   }
 
-  // --------------------------------------------------------------------------
-  // 5. Network layer: errors you can act on, timeouts, retries
-  // --------------------------------------------------------------------------
   class AIError extends Error {
     constructor(kind, message, extra) {
       super(message);
@@ -965,7 +868,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       const e = data.error;
       if (e && typeof e === "object") {
         if (typeof e.message === "string" && e.message.trim()) {
-          // OpenRouter wraps the upstream provider's error in metadata.raw
           const raw = e.metadata && typeof e.metadata.raw === "string" ? e.metadata.raw : "";
           return raw && raw.length < 400 ? e.message + " - " + raw : e.message;
         }
@@ -996,8 +898,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return null;
   }
 
-  // Gemini returns 429 both for "too many requests this minute" (wait and retry)
-  // and "daily free-tier quota used up" (retrying is pointless) - tell them apart.
   function isGeminiDailyQuota(data, message) {
     const details = data && data.error && Array.isArray(data.error.details) ? data.error.details : [];
     let sawViolation = false;
@@ -1025,7 +925,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       return new AIError("rate", detail, Object.assign({ retryAfterMs: retryDelayMs(data, detail) }, extra));
     }
     if (status === 402) return kindIs("quota");
-    // OpenRouter: the account's privacy settings exclude every provider of this (usually free) model
     if (/data policy|privacy settings|settings\/privacy/i.test(detail)) return kindIs("privacy");
     if (status === 401 || reasons.includes("API_KEY_INVALID") || /api key not valid|api key expired|invalid api key|incorrect api key|invalid x-api-key/i.test(detail)) return kindIs("auth");
     if (status === 403) return kindIs("permission");
@@ -1090,7 +989,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
           throw err;
         }
         let wait = err.retryAfterMs != null ? err.retryAfterMs + 500 : [3000, 8000, 20000][attempt - 1] || 20000;
-        if (wait > 65000) { err.attempts = attempt; throw err; } // a long wait means "come back later"
+        if (wait > 65000) { err.attempts = attempt; throw err; }
         wait = Math.max(wait, 1000);
         const why = { rate: "Rate limited", overloaded: "Provider busy", network: "Connection problem", timeout: "No reply yet" }[err.kind];
         const until = Date.now() + wait;
@@ -1102,7 +1001,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     }
   }
 
-  // Plain-English explanation of an error, plus whether the API keys dialog can fix it
   function explainError(err, pc) {
     const label = pc ? pc.def.label : "The AI provider";
     const model = pc ? pc.model : "";
@@ -1155,10 +1053,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     }
   }
 
-  // --------------------------------------------------------------------------
-  // 6. Provider adapters: Gemini, OpenAI-compatible, Anthropic
-  // --------------------------------------------------------------------------
-  // Tokens a reply used, as the provider reports them: { input, cached, output, thinking }
   function usageFrom(data, kind) {
     const n = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
     if (!data || typeof data !== "object") return null;
@@ -1181,7 +1075,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return { input: a.input + b.input, cached: a.cached + b.cached, output: a.output + b.output, thinking: a.thinking + b.thinking };
   }
 
-  // "13.1k in · 5.2k out · 17.3k thinking"
   function tokensText(u) {
     if (!u) return "";
     const k = v => (v >= 1000 ? (Math.round(v / 100) / 10) + "k" : String(v));
@@ -1196,7 +1089,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       throw new AIError("bad_response", "Empty reply (no candidates).");
     }
     const parts = cand.content && Array.isArray(cand.content.parts) ? cand.content.parts : [];
-    // Thinking models can return "thought" parts - only the answer text counts.
     const text = parts.filter(p => p && typeof p.text === "string" && !p.thought).map(p => p.text).join("");
     const reason = String(cand.finishReason || "");
     let finish = "stop";
@@ -1212,13 +1104,11 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
 
   async function geminiGenerate(pc, req, opts) {
     const url = GEMINI_API + "/models/" + encodeURIComponent(pc.model) + ":generateContent";
-    // Try structured JSON first; if this model/API version rejects a field, step down.
     const variants = req.json ? (req.schema === null ? ["mime", "plain"] : ["schema", "mime", "plain"]) : ["plain"];
     let lastErr = null;
     for (const v of variants) {
       const body = {};
       if (v === "plain") {
-        // Some models (e.g. Gemma) reject system instructions: fold it into the prompt.
         body.contents = [{ role: "user", parts: [{ text: (req.system ? req.system + "\n\n" : "") + req.prompt }] }];
       } else {
         body.contents = [{ role: "user", parts: [{ text: req.prompt }] }];
@@ -1228,10 +1118,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
           ? { responseMimeType: "application/json", responseJsonSchema: schema }
           : { responseMimeType: "application/json" };
       }
-      // The engine's thinking level (model tier): low / medium / high
       if (pc.thinking) body.generationConfig = Object.assign({}, body.generationConfig, { thinkingConfig: { thinkingLevel: pc.thinking } });
-      // No temperature / maxOutputTokens: Gemini 3.x docs say keep sampling defaults,
-      // and the default output limit is the model's maximum (thinking included).
       const r = await requestJSON(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": pc.apiKey },
@@ -1239,7 +1126,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       }, opts);
       if (r.ok) return geminiParse(r.data);
       const err = httpError(pc, r.status, r.data, r.text);
-      // a model without thinking levels: ask again at its default
       if (err.kind === "bad_request" && pc.thinking && /thinking/i.test(err.detail || err.message || "")) {
         return geminiGenerate(Object.assign({}, pc, { thinking: "" }), req, opts);
       }
@@ -1259,7 +1145,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
   }
 
   function openaiParse(data, pc) {
-    if (data && data.error) throw httpError(pc, 400, data, ""); // OpenRouter can send errors with HTTP 200
+    if (data && data.error) throw httpError(pc, 400, data, "");
     const choice = data && Array.isArray(data.choices) ? data.choices[0] : null;
     if (!choice) throw new AIError("bad_response", "Empty reply (no choices).");
     const msg = choice.message || {};
@@ -1287,8 +1173,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       const messages = [];
       if (req.system) messages.push({ role: "system", content: req.system });
       messages.push({ role: "user", content: req.prompt });
-      // Deliberately minimal: no temperature / max_tokens, which current reasoning
-      // models reject. JSON mode is requested and dropped if a server refuses it.
       const body = { model: pc.model, messages };
       if (v === "json") body.response_format = { type: "json_object" };
       const maxTokens = pc.def.maxTokens ? pc.def.maxTokens(pc.model) : 0;
@@ -1313,7 +1197,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       "Content-Type": "application/json",
       "x-api-key": pc.apiKey,
       "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true" // required for calls from a web page
+      "anthropic-dangerous-direct-browser-access": "true"
     };
     for (let tries = 0; tries < 2; tries++) {
       const r = await requestJSON(ANTHROPIC_API + "/messages", { method: "POST", headers, body: JSON.stringify(body) }, opts);
@@ -1330,7 +1214,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
         return { text, finish: stop === "max_tokens" ? "length" : (stop === "refusal" ? "blocked" : "stop"), modelUsed: data.model || "", usage: usageFrom(data, "anthropic") };
       }
       const err = httpError(pc, r.status, r.data, r.text);
-      // Older models have a lower output cap: use the cap the API reports.
       const m = /max_tokens[^0-9]*\d+\s*>\s*(\d+)/i.exec(err.detail || "");
       if (err.kind === "bad_request" && m && tries === 0) { body.max_tokens = Number(m[1]); continue; }
       throw err;
@@ -1399,9 +1282,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return { ms: Date.now() - t0, modelUsed: res.modelUsed || pc.model, reply: res.text.trim().slice(0, 60) };
   }
 
-  // --------------------------------------------------------------------------
-  // 7. Turning the model's reply into a checked report
-  // --------------------------------------------------------------------------
   function extractJSON(text) {
     if (!text) return null;
     let t = String(text).replace(/^\uFEFF/, "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
@@ -1415,7 +1295,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       try {
         const v = JSON.parse(candidate);
         if (v && typeof v === "object" && !Array.isArray(v)) return v;
-      } catch (_) { /* try the next candidate */ }
+      } catch (_) {}
     }
     return null;
   }
@@ -1451,7 +1331,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return code ? code.toUpperCase() + " · " + t : t;
   }
 
-  // Validate and re-add the model's numbers so the breakdown you see always adds up.
   function normalizeReport(o, q, answerText) {
     const max = maxMarksOf(q);
     const parameters = objList(o.parameters, 8).map(p => {
@@ -1476,7 +1355,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const enforced = track ? enforceRubric(track, parameters, penalties, checks, anchorCount, q, words) : { rules: [], autoFail: false };
 
     const scored = parameters.filter(p => p.awarded !== null);
-    // a bare total without its breakdown cannot be checked against the rubric: ask again
     if (!scored.length) throw new AIError("format", "The reply had no marks breakdown.");
     const rawSum = scored.length ? round2(sum(scored.map(p => p.awarded))) : num(o.stage1_raw_sum);
     const penaltySum = penalties.length || Array.isArray(o.penalties) ? round2(sum(penalties.map(p => p.deduction))) : Math.abs(num(o.total_penalties) || 0);
@@ -1513,7 +1391,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
           const c = got.find(x => String(x.id || "").trim().toUpperCase() === p.id) || got[i] || {};
           const cov = String(c.coverage || "").toLowerCase();
           const quote = str(c.quote, 400);
-          // "full" needs words from the script
           const coverage = COVER_VALUE[cov] === undefined ? "missing" : (cov === "full" && (!quote || !quoteInScript(quote, plainText(answerText))) ? "partial" : cov);
           return { id: p.id, point: p.point, weight: p.weight, coverage, quote };
         });
@@ -1546,12 +1423,10 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return /^(?:not specified|none|n\/a|unknown)$/i.test(t) ? "" : t;
   }
 
-  // "programme" -> "program", "labour" -> "labor", "organisation" -> "organization": Indian English, not a mistake
   function isBritishVariant(wrong, correct) {
     const a = String(wrong || "").toLowerCase().trim();
     const b = String(correct || "").toLowerCase().trim();
     if (!a || !b || a === b) return false;
-    // only the standard British / American pairs (a looser rule would also hide real slips such as "presense")
     const toUS = (x) => x
       .replace(/isation(s)?$/, "ization$1").replace(/ise(s|d)?$/, "ize$1").replace(/ising$/, "izing").replace(/yse(s|d)?$/, "yze$1")
       .replace(/our(s|ed|ing|able|ite|ites)?$/, "or$1").replace(/tre(s)?$/, "ter$1").replace(/amme(s)?$/, "am$1").replace(/ogue(s)?$/, "og$1")
@@ -1559,13 +1434,11 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return toUS(a) === toUS(b) || toUS(a) === b || a === toUS(b);
   }
 
-  // Does a quoted passage really occur in the candidate's script? (drops invented "errors";
-  // tolerant of changed punctuation, quotes and "..." gaps)
   function plainText(v) {
     return String(v || "").toLowerCase().replace(/[‘’`]/g, "'").replace(/[^a-z0-9']+/g, " ").trim();
   }
   function quoteInScript(quote, scriptPlain) {
-    if (!scriptPlain) return true;                          // no script text to compare with
+    if (!scriptPlain) return true;
     const qp = plainText(String(quote || "").replace(/\.{3}|…/g, " "));
     if (!qp) return false;
     if (scriptPlain.includes(qp)) return true;
@@ -1575,7 +1448,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return words.filter(x => have.has(x)).length / words.length >= 0.8;
   }
 
-  // The language / style audit of the script (null when the model did not send one)
   function normalizeWriting(w, answerText) {
     if (!w || typeof w !== "object" || Array.isArray(w)) return null;
     const script = plainText(answerText);
@@ -1593,10 +1465,8 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const out = {
       grammar: objList(w.grammar_errors, 25).map(x => ({ quote: str(x.quote, 500), type: str(x.type, 40).toLowerCase(), explanation: str(x.explanation || x.error || x.problem, 500), correction: str(x.correction || x.fix, 600) }))
         .filter(x => x.quote && x.correction && quoteInScript(x.quote, script) && plainText(x.quote) !== plainText(x.correction)),
-      // the misspelt word must be in the script; British / Indian spellings are not errors
       spelling: objList(w.spelling_errors, 30).map(x => ({ wrong: str(x.wrong || x.word, 80), correct: str(x.correct || x.correction, 80), context: str(x.context, 200) }))
         .filter(x => x.wrong && x.correct && x.wrong.toLowerCase() !== x.correct.toLowerCase() && (!script || plainText(x.wrong).split(" ").every(t => scriptWords.has(t))) && !isBritishVariant(x.wrong, x.correct)),
-      // "[VERIFY LATEST FIGURE]" items are figures to double-check, not proven errors
       facts: objList(w.factual_errors, 12).map(x => {
         const problem = str(x.problem || x.issue, 600);
         const fact = str(x.correct_fact || x.correction, 600);
@@ -1632,8 +1502,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     };
   }
 
-  // Grade one answer: the fixed checklist first, then one full grading (plus score-only cross-checks when needed)
-  // (a third when they disagree), combined into one consistent mark
   async function gradeAnswer(test, idx, opts) {
     const q = test.questions[idx];
     const onStatus = (opts && opts.onStatus) || function () {};
@@ -1655,15 +1523,13 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const runs = [];
     let reason = "";
     if (getSettings().passes === "two") {
-      // every answer: the full grading plus a score-only cross-check, side by side
       const [full, check] = await Promise.allSettled([pass("Grading", false), pass("Cross-check", true)]);
       if (full.status === "fulfilled") runs.push(full.value);
       else if (full.reason && full.reason.kind === "cancelled") throw full.reason;
-      else runs.push(await pass("Grading again", false));   // the feedback needs one full grading
+      else runs.push(await pass("Grading again", false));
       if (check.status === "fulfilled") runs.push(check.value);
       reason = "set to two gradings for every answer";
     } else {
-      // smart: one full grading; a score-only cross-check only when it looks unreliable
       runs.push(await pass("Grading", false));
       reason = crossCheckReason(runs[0], q, ans);
       if (reason) {
@@ -1677,7 +1543,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       const r = await extra("Deciding grading");
       if (r) runs.push(r);
     }
-    // the full grading (which writes the feedback) was the odd one out: write fresh feedback
     const fullRun = runs.find(r => !r.scoreOnly);
     if (runs.length >= 2 && fullRun && Math.abs(fullRun.score - combinedMark(runs.map(r => r.score))) > RUN_SPREAD * max) {
       onStatus("Writing fresh feedback (the first grading disagreed with the others)…");
@@ -1686,7 +1551,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return combineRuns(runs, q, max, started, reason);
   }
 
-  // One mark from several gradings: the average of two, the median of three or more
   function combinedMark(scores) {
     const s = scores.slice().sort((a, b) => a - b);
     const n = s.length;
@@ -1695,7 +1559,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
   }
 
-  // Words that carry meaning (for the free, local check of the AI's checklist verdict)
   const LEX_STOP = new Set("that this with from have been were their there which what when where while also into than then them they these those such only more most very much many some other over under about after before between because would could should shall will must each every both either neither does doing done make made using used uses being upon onto your yours itself shows show shown gives given give take taken takes like just even still well same different within without across along among around through during against towards toward".split(" "));
   function lexWords(text) {
     return (String(text || "").toLowerCase().match(/[a-z][a-z0-9-]*/g) || [])
@@ -1703,8 +1566,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       .map(w => (w.length > 5 ? w.replace(/(ational|ations|ation|ities|ity|ings|ing|ments|ment|ness|ies|ied|ed|es|s|ly|al)$/, "") : w.replace(/s$/, "")));
   }
 
-  // How much of the checklist the script covers by its words alone (0-1): rough, but it costs
-  // nothing and catches a grading that says "nothing covered" for a full answer (or the reverse)
   function lexicalCoverage(points, answerText) {
     const have = new Set(lexWords(answerText));
     let total = 0;
@@ -1719,7 +1580,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return total ? got / total : null;
   }
 
-  // Why a single grading should be cross-checked ("" = it looks reliable)
   function crossCheckReason(r, q, ans) {
     const scheme = schemeOf(q);
     const max = maxMarksOf(q);
@@ -1734,15 +1594,12 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return "";
   }
 
-  // One mark from several gradings: the average of two close runs, else the median;
-  // then kept within a band around the reference-checklist coverage
   function combineRuns(runs, q, max, started, reason) {
     const scores = runs.map(r => r.score);
     const sorted = scores.slice().sort((a, b) => a - b);
     let final = combinedMark(scores);
-    const combined = final;   // before the checklist band
+    const combined = final;
     const method = sorted.length === 1 ? "one full grading" : sorted.length === 2 ? "average of 2 independent gradings" : "median of " + sorted.length + " independent gradings (the first two disagreed)";
-    // the median coverage too: one stray grading (e.g. "everything missing") cannot drag it down
     const covs = runs.map(checklistCoverage).filter(c => c !== null).sort((a, b) => a - b);
     const coverage = !covs.length ? null : covs.length % 2 ? covs[(covs.length - 1) / 2] : (covs[covs.length / 2 - 1] + covs[covs.length / 2]) / 2;
     let anchored = "";
@@ -1754,12 +1611,9 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       else if (final > hi) { anchored = "lowered"; final = hi; }
     }
     final = clamp(Math.round(final * 4) / 4, 0, max);
-    // the full grading supplies the detailed feedback (cross-checks carry marks only); without
-    // one (older callers), the run closest to the final mark does
     const fulls = runs.filter(r => !r.scoreOnly);
     const base = (fulls.length ? fulls : runs).slice().sort((a, b) => Math.abs(a.score - combined) - Math.abs(b.score - combined))[0];
     const usage = runs.reduce((u, r) => addUsage(u, r.usage), null);
-    // the checklist shown is the one most runs agree on per point
     if (base.checklist && base.checklist.length) {
       base.checklist = base.checklist.map((c, i) => {
         const votes = runs.map(r => (r.checklist && r.checklist[i] ? r.checklist[i].coverage : null)).filter(Boolean);
@@ -1782,7 +1636,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
         anchored,
         spread: round2(sorted[sorted.length - 1] - sorted[0]),
         reason: runs.length > 1 ? (reason || "") : "",
-        // the feedback was written by a grading whose own mark ended up far from the final one
         feedbackOff: runs.length > 1 && Math.abs(base.score - combined) > RUN_SPREAD * max
       },
       usage,
@@ -1790,7 +1643,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     });
   }
 
-  // One independent grading of one answer
   async function gradeOnce(test, idx, opts) {
     const q = test.questions[idx];
     const ans = answerOf(test, q);
@@ -1808,7 +1660,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       try {
         return await withRetries(() => generate(ref.pc, req, netOpts), { signal: netOpts.signal, onStatus });
       } catch (err) {
-        // A retired/renamed Gemini model: try Google's always-current Flash alias once.
         if (err.kind === "model" && ref.pc.def.kind === "gemini" && ref.pc.model !== GEMINI_FALLBACK_MODEL) {
           ref.fallbackFrom = ref.pc.model;
           ref.pc = Object.assign({}, ref.pc, { model: GEMINI_FALLBACK_MODEL });
@@ -1871,9 +1722,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     throw new AIError("format", "No assessment.", { raw: lastRaw });
   }
 
-  // Generic JSON task for other parts of the app (MCQ answer-key check, objective
-  // topic analysis): same provider, retries and error messages as grading.
-  // req: { system, prompt, schema (Gemini JSON schema or null), signal, onStatus, timeoutMs, validate(obj) }
   async function runJSON(req) {
     const pc = activeProvider(req.role || "check");
     if (!pc.ready) throw new AIError("not_configured", "No API key set up.");
@@ -1902,11 +1750,8 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     throw lastErr;
   }
 
-  // --------------------------------------------------------------------------
-  // 8. Storage: detailed reports (capped) + score write-back into History
-  // --------------------------------------------------------------------------
   let reportsCache = null;
-  let storageProblem = "";  // shown once in the panel
+  let storageProblem = "";
 
   function loadReports() {
     if (reportsCache) return reportsCache;
@@ -1947,9 +1792,8 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
         reportsCache = all;
         return { ok: true, pruned };
       } catch (_) {
-        // Browser storage is full (other app data too): free space from old reports.
         if (!dropOldestTest(all, keepTestId)) {
-          reportsCache = all; // still shown this session
+          reportsCache = all;
           return { ok: false, pruned };
         }
         pruned++;
@@ -1984,7 +1828,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
   function clearAllReports() {
     for (const job of jobs.values()) cancelJob(job);
     reportsCache = {};
-    try { localStorage.removeItem(REPORTS_KEY); } catch (_) { /* ignore */ }
+    try { localStorage.removeItem(REPORTS_KEY); } catch (_) {}
   }
 
   function historyList() {
@@ -2010,19 +1854,15 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       state.lastResultTest.scores = state.lastResultTest.scores || {};
       state.lastResultTest.scores[qid] = score;
     }
-    // Every answer graded: the calendar ticks the TODO of this test and shows its marks
     if (t && typeof calOnTestScored === "function") {
       try { calOnTestScored("write", testId); } catch (e) { console.warn("Calendar update failed:", e); }
     }
     return !!t;
   }
 
-  // --------------------------------------------------------------------------
-  // 9. Grading queue (2 answers at a time, live status, stop / retry)
-  // --------------------------------------------------------------------------
-  const jobs = new Map();   // "testId::qid" -> job
+  const jobs = new Map();
   const queue = [];
-  const runs = new Map();   // testId -> { total, done } for the progress bar
+  const runs = new Map();
   let running = 0;
 
   function jobKey(testId, qid) { return testId + "::" + qid; }
@@ -2088,7 +1928,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
         onStatus: (m) => { job.message = m; tick(job); }
       });
       jobs.delete(job.key);
-      // The test may have been deleted from History while it was being graded.
       if (historyList().some(t => t && t.id === job.testId)) {
         saveReport(report);
         writeScore(job.testId, job.qid, report.score);
@@ -2138,7 +1977,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     emit("ai:graded", { testId: test.id, qid: q.id });
   }
 
-  // Grade the answers of a test. onlyMissing: skip answers that already have a report.
   function evaluateTest(test, options) {
     const onlyMissing = !options || options.onlyMissing !== false;
     if (!test || !Array.isArray(test.questions)) return 0;
@@ -2152,7 +1990,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       if (onlyMissing && getReport(test.id, q.id)) return;
       const job = getJob(test.id, q.id);
       if (isActive(job)) return;
-      if (job) jobs.delete(job.key); // clear an old error
+      if (job) jobs.delete(job.key);
       if (!answerOf(test, q).wordCount) {
         saveNotAttempted(test, q);
         return;
@@ -2181,16 +2019,11 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     refreshPanel(test.id);
   }
 
-  // Called by app.js right after a subjective test is submitted
-  // Grading never starts by itself: the "AI Analysis" button starts it (kept for app.js, does nothing)
   function autoEvaluate(test) {
     void test;
     return;
   }
 
-  // --------------------------------------------------------------------------
-  // 10. Rendering - Result screen
-  // --------------------------------------------------------------------------
   function currentResultTest() {
     return (typeof state !== "undefined" && state.lastResultTest) || null;
   }
@@ -2225,12 +2058,10 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     emit("ai:activity", { testId: job.testId });
   }
 
-  // Grading runs in the background: other screens listen to these events to update themselves
   function emit(name, detail) {
     try { document.dispatchEvent(new CustomEvent(name, { detail })); } catch (e) { console.warn(e); }
   }
 
-  // What is being graded right now: [{ testId, total, done, active }]
   function activity() {
     const out = [];
     runs.forEach((run, testId) => {
@@ -2240,7 +2071,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return out;
   }
 
-  // Answers whose grading was started, so a page reload can pick it up again: { [testId]: [qid] }
   const PENDING_KEY = "rbi_ai_pending";
   function pendingAll() {
     try { const o = JSON.parse(localStorage.getItem(PENDING_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (_) { return {}; }
@@ -2250,10 +2080,9 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const list = new Set(all[testId] || []);
     if (on) list.add(qid); else list.delete(qid);
     if (list.size) all[testId] = [...list]; else delete all[testId];
-    try { localStorage.setItem(PENDING_KEY, JSON.stringify(all)); } catch (_) { /* resuming is a convenience */ }
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify(all)); } catch (_) {}
   }
 
-  // After a reload (and sign-in): grade what was still waiting when the page went away
   function resumePending() {
     const all = pendingAll();
     const ids = Object.keys(all);
@@ -2261,10 +2090,9 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     let resumed = 0;
     ids.forEach(testId => {
       const test = findTest(testId);
-      // exactly the answers that were being graded (also an interrupted re-grade)
       const qids = test ? (all[testId] || []).filter(qid => test.questions.some(q => q.id === qid)) : [];
       delete all[testId];
-      try { localStorage.setItem(PENDING_KEY, JSON.stringify(all)); } catch (_) { /* ignore */ }
+      try { localStorage.setItem(PENDING_KEY, JSON.stringify(all)); } catch (_) {}
       qids.forEach(qid => {
         const idx = test.questions.findIndex(q => q.id === qid);
         if (isActive(getJob(testId, qid))) return;
@@ -2277,14 +2105,12 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return resumed;
   }
 
-  // Cheap per-second update of a running job's timer and status text
   function tick(job) {
     const secs = Math.max(0, Math.round((Date.now() - job.startedAt) / 1000));
     document.querySelectorAll('[data-ai-time="' + cssEsc(job.key) + '"]').forEach(el => { el.textContent = secs + " s"; });
     document.querySelectorAll('[data-ai-msg="' + cssEsc(job.key) + '"]').forEach(el => { el.textContent = job.message; });
   }
 
-  // Called by app.js at the end of renderResult()
   function renderResultScreen(test) {
     if (!test) return;
     const panel = document.getElementById("ai-panel");
@@ -2366,7 +2192,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return note;
   }
 
-  // Group graded answers by topic: [{ topic, count, score, max, pct, verdict, gaps }] weakest first
   function topicStats(rows) {
     const by = new Map();
     rows.forEach(r => {
@@ -2385,7 +2210,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     }).sort((a, b) => a.pct - b.pct);
   }
 
-  // Every graded answer of every subjective test in History
   function allGradedRows() {
     const out = [];
     const all = loadReports();
@@ -2481,7 +2305,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
           "<td>" + status + "</td></tr>";
       }).join("");
 
-      // the analysis covers only the answers you wrote (blank questions just count as 0)
       const analysed = reports.filter(r => !r.notAttempted);
       const leaks = leaksAcross(analysed);
       const leaksHTML = leaks.length
@@ -2501,8 +2324,8 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
           '<div class="ai-overall-text">' +
             '<div class="ai-overall-label">' + (allDone ? "Total score" : "Score so far · " + st.graded.length + " of " + st.rows.length + " graded") + "</div>" +
             '<span class="ai-grade-badge ai-g-' + g.cls + '">Grade ' + g.grade + " · " + esc(g.label) + "</span> <span class=\"ai-pct\">" + fmt(pct) + "%</span>" +
-            '<div class="ai-projection">Likely in the real RBI exam: <strong>' + fmt(projLo) + "–" + fmt(projHi) + " / " + fmt(max) + "</strong></div>" +
-            '<p class="ai-muted">This grader is deliberately about 2–3 marks stricter per answer than the real RBI panel.</p>' +
+            '<div class="ai-projection">Likely in the real exam: <strong>' + fmt(projLo) + "–" + fmt(projHi) + " / " + fmt(max) + "</strong></div>" +
+            '<p class="ai-muted">This grader is deliberately about 2–3 marks stricter per answer than the real exam panel.</p>' +
             (function () { const u = reports.reduce((a, r) => addUsage(a, r.usage), null); return u ? '<p class="ai-muted">AI tokens for this test: ' + esc(tokensText(u)) + "</p>" : ""; })() +
           "</div></div>" +
         '<div class="table-scroll"><table class="ai-table ai-q-table"><thead><tr><th>Q</th><th>Paper</th><th>Words</th><th>Score</th><th>Grade</th></tr></thead><tbody>' + rowsHTML + "</tbody></table></div>" +
@@ -2656,7 +2479,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
 
   const VERDICT_CLS = { "RBI-ready": "good", "Nearly there": "ok", "Not yet": "weak" };
 
-  // Counts for the chips at the top of the writing analysis
   function writingCounts(w) {
     return w ? { grammar: w.grammar.length, spelling: w.spelling.length, facts: w.facts.filter(f => !f.verify).length } : { grammar: 0, spelling: 0, facts: 0 };
   }
@@ -2665,10 +2487,10 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const c = writingCounts(w);
     const chip = (n, label) => '<span class="ai-wchip' + (n ? " has" : "") + '"><strong>' + n + "</strong> " + label + "</span>";
     let h = '<div class="ai-wchips">' + chip(c.grammar, "grammar / punctuation") + chip(c.spelling, "spelling") + chip(c.facts, "factual") +
-      (w.style.verdict ? '<span class="ai-cov ai-cov-' + (VERDICT_CLS[w.style.verdict] || "ok") + '">Style: ' + esc(w.style.verdict) + (w.style.score !== null ? " · " + fmt(w.style.score) + "/10" : "") + "</span>" : "") +
+      (w.style.verdict ? '<span class="ai-cov ai-cov-' + (VERDICT_CLS[w.style.verdict] || "ok") + '">Style: ' + esc(w.style.verdict === "RBI-ready" ? "Exam-ready" : w.style.verdict) + (w.style.score !== null ? " · " + fmt(w.style.score) + "/10" : "") + "</span>" : "") +
       "</div>";
     if (w.style.assessment || w.style.issues.length) {
-      h += "<h6>Is the writing style up to RBI standard?</h6>" + (w.style.assessment ? "<p>" + inline(w.style.assessment) + "</p>" : "") + (w.style.issues.length ? listHTML(w.style.issues, "") : "");
+      h += "<h6>Is the writing style up to exam standard?</h6>" + (w.style.assessment ? "<p>" + inline(w.style.assessment) + "</p>" : "") + (w.style.issues.length ? listHTML(w.style.issues, "") : "");
     }
     h += "<h6>Grammar and punctuation</h6>";
     h += w.grammar.length
@@ -2731,7 +2553,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
         '<div class="ai-report-head-text">' +
           '<div class="ai-report-title-row"><span class="ai-grade-badge ai-g-' + g.cls + '">Grade ' + g.grade + " · " + esc(g.label) + '</span><span class="ai-pct">' + fmt(r.percent) + "%</span>" +
           (r.track && TRACKS[r.track] ? '<span class="ai-tag">' + esc(TRACKS[r.track]) + "</span>" : "") + "</div>" +
-          '<div class="ai-projection">Likely in the real RBI exam: <strong>' + proj + "</strong></div>" +
+          '<div class="ai-projection">Likely in the real exam: <strong>' + proj + "</strong></div>" +
           '<div class="ai-muted">Strict grader: about 2–3 marks tougher than the real panel, so clearing it here means you are safe there.</div>' +
         "</div></div>" +
       (r.summary ? '<p class="ai-summary">' + inline(r.summary) + "</p>" : "") +
@@ -2763,7 +2585,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       "</div>";
   }
 
-  // How the mark was reached: the independent gradings and the reference checklist
   function consistencyHTML(r) {
     const c = r.consistency;
     const list = r.checklist || [];
@@ -2787,10 +2608,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return section("How this mark was set (consistency check)", list.length ? covered + " of " + list.length + " key points covered" : (c ? c.runs.length + " gradings" : ""), body);
   }
 
-  // --------------------------------------------------------------------------
-  // 11. Rendering - History
-  // --------------------------------------------------------------------------
-  // Called by app.js inside each History review card
   function historyBlockHTML(test, q) {
     const r = getReport(test.id, q.id);
     if (!r) return "";
@@ -2810,9 +2627,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       "</div>";
   }
 
-  // --------------------------------------------------------------------------
-  // 12. Markdown export (copy / download)
-  // --------------------------------------------------------------------------
   function cell(v) { return String(v == null ? "" : v).replace(/\|/g, "/").replace(/\s*\n\s*/g, " "); }
 
   function questionMarkdown(test, q, idx, r) {
@@ -2913,9 +2727,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     if (typeof downloadText === "function") downloadText(name, text);
   }
 
-  // --------------------------------------------------------------------------
-  // 13. Clicks (delegated - works for Result, History and the settings dialog)
-  // --------------------------------------------------------------------------
   function onClick(e) {
     const el = e.target.closest("[data-ai-action]");
     if (!el) return;
@@ -3026,11 +2837,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     }
   }
 
-  // --------------------------------------------------------------------------
-  // 14. API keys & models dialog (one card per engine). Keys go to sessionStorage
-  //     only; provider / model / thinking level are remembered in localStorage.
-  // --------------------------------------------------------------------------
-  let draft = null; // unsaved values while the dialog is open
+  let draft = null;
 
   function el(id) { return document.getElementById(id); }
   function card(id) { return document.querySelector('#ai-engines [data-engine="' + id + '"]'); }
@@ -3041,7 +2848,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     if (!modal) return;
     draft = { autoEvaluate: getSettings().autoEvaluate, passes: getSettings().passes, testId: testId || "", engines: {}, keys: Object.assign({}, readSessionKeys()) };
     Object.keys(ENGINES).forEach(id => { draft.engines[id] = Object.assign({}, engineSettings(id)); });
-    // start from what is saved: drop the fields of an earlier, cancelled visit
     if (el("ai-keys")) el("ai-keys").innerHTML = "";
     if (el("ai-engines")) el("ai-engines").innerHTML = "";
     setStatusNode(el("ai-save-status"), "");
@@ -3075,7 +2881,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return "Kept for this browser session only.";
   }
 
-  // One key field per provider in use: with both models on Gemini, one Gemini key serves both
   function keyBlockHTML() {
     const used = providersInUse(draft.engines);
     return used.map(pid => {
@@ -3100,7 +2905,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return (
       '<section class="ai-engine" data-engine="' + id + '">' +
         '<div class="ai-engine-head"><span class="ai-engine-num">' + e.n + '</span><div><strong>' + esc(e.label) + '</strong><p class="ai-field-note">' + esc(e.uses) + "</p></div></div>" +
-        // the reasoning tier is always visible: you choose low, medium or high for each model
         '<div class="ai-tier" role="radiogroup" aria-label="Reasoning tier for model ' + e.n + '" data-f="thinkwrap"' + (def.kind === "gemini" ? "" : " hidden") + ">" +
           '<span class="ai-tier-label">Reasoning</span>' +
           ["low", "medium", "high"].map(t => '<label class="ai-tier-opt"><input type="radio" name="tier-' + id + '" value="' + t + '"' + (t === s.thinking ? " checked" : "") + '><span>' + t[0].toUpperCase() + t.slice(1) + "</span></label>").join("") +
@@ -3160,7 +2964,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     if (passes) draft.passes = passes.value;
   }
 
-  // The engine as the form describes it (for "Test" / "Load models" before saving)
   function formEngineConfig(id) {
     readKeys();
     const s = readEngine(id);
@@ -3197,7 +3000,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     }
     void local;
     const reopenTestId = draft.testId;
-    // opened from an "AI Analysis" button: run the analysis that was asked for
     const draftWantsGrading = !!draft.wantsGrading;
     closeSettings();
     updateNavDot();
@@ -3205,12 +3007,10 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const resultVisible = el("screen-result") && !el("screen-result").hidden;
     if (t && resultVisible) {
       renderResultScreen(t);
-      // Opened from "Add API key" on a result: start grading straight away.
       if (reopenTestId === t.id && activeProvider("grading").ready && draftWantsGrading && testState(t).missing > 0) {
         evaluateTest(t, { onlyMissing: true });
       }
     }
-    // Other screens (objective setup / result) refresh their AI buttons
     if (typeof onAISettingsSaved === "function") {
       try { onAISettingsSaved(); } catch (e) { console.warn(e); }
     }
@@ -3309,9 +3109,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     });
   }
 
-  // --------------------------------------------------------------------------
-  // 15. Start-up
-  // --------------------------------------------------------------------------
   let initialised = false;
 
   function init() {
@@ -3319,7 +3116,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     initialised = true;
     wireSettings();
     document.addEventListener("click", onClick);
-    // Closing the tab mid-grading would waste the requests already made.
     window.addEventListener("beforeunload", (e) => {
       if (anyActive()) {
         e.preventDefault();
@@ -3339,7 +3135,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     getReport,
     openSettings,
     runJSON,
-    // role: "check" (file checks, the default here), "analysis" (objective topics), "grading" (subjective)
     isReady: (role) => activeProvider(role || "check").ready,
     activity,
     resumePending,
@@ -3350,7 +3145,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     providerLabel: (role) => engineLabel(activeProvider(role || "check")),
     explain: (err, role) => explainError(err, activeProvider(role || "check")),
     evaluateTest: (test) => evaluateTest(test, { onlyMissing: true }),
-    // exposed for tests / debugging
     _internal: {
       PROVIDERS, REPORT_SCHEMA, JSON_CONTRACT, extractJSON, normalizeReport, httpError, explainError,
       isPlaceholderKey, resolveEngine, getSettings, projectionFor, gradeFor, buildPrompt, generate,

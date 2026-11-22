@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Subjective Typing &amp; Answer Practice</title>
   <link rel="stylesheet" href="style.css">
-  <!-- Sign-in gate: the app stays hidden until you sign in (auth.js). Runs first, so nothing flashes. -->
   <script>
     try { if (sessionStorage.getItem("rbi_signed_in") !== "1") document.documentElement.classList.add("auth-locked"); }
     catch (e) { document.documentElement.classList.add("auth-locked"); }
@@ -32,7 +31,7 @@
   </div>
   <header id="app-header">
     <div class="header-main-bar">
-      <h1 class="brand"><span class="brand-mark" aria-hidden="true">RBI</span><span class="brand-name">Grade B <span>Practice Console</span></span></h1>
+      <h1 class="brand"><span class="brand-mark" aria-hidden="true">EP</span><span class="brand-name">Exam <span>Practice</span></span></h1>
       <div class="phase-switcher-container" role="group" aria-label="Test type">
         <button type="button" id="phase-btn-p1" class="phase-toggle-btn active" title="MCQ tests: Phase-1 and Phase-2 objective papers">Objective</button>
         <button type="button" id="phase-btn-p2" class="phase-toggle-btn" title="Phase-2 descriptive (subjective) answer writing">Subjective</button>
@@ -48,7 +47,6 @@
   </header>
 
   <main>
-    <!-- Screen: Phase-1 Setup (Objective / MCQs) -->
     <section id="screen-setup-p1" class="screen">
       <div class="setup-header">
         <div class="setup-title-group">
@@ -58,7 +56,6 @@
         </div>
       </div>
 
-      <!-- Minimal Document Import / Upload Card -->
       <div class="minimal-upload-card">
         <div class="upload-drop-zone">
           <div class="upload-icon-circle">
@@ -88,7 +85,6 @@
         <span id="setup-p1-doc-status" class="upload-status-badge"></span>
       </div>
 
-      <!-- Collapsible Manual Question Form -->
       <details id="p1-manual-accordion" class="minimal-accordion">
         <summary class="accordion-summary">
           <span class="accordion-title">Add an MCQ manually</span>
@@ -152,7 +148,6 @@
         </form>
       </details>
 
-      <!-- Answer-key check: summary, AI check status and "Needs attention" (built by app.js / objective_ai.js) -->
       <div id="setup-p1-check" class="p1-check" hidden></div>
 
       <div class="setup-list-header">
@@ -184,11 +179,10 @@
       <p id="setup-p1-error" class="error"></p>
     </section>
 
-    <!-- Screen: Phase-1 Exam (TCS iON Objective Console) -->
     <section id="screen-exam-p1" class="screen" hidden>
       <div class="rbi-exam-header">
         <div class="rbi-exam-title">
-          <div class="rbi-emblem" aria-hidden="true">RBI</div>
+          <div class="rbi-emblem" aria-hidden="true">EP</div>
           <div>
             <h3>RESERVE BANK OF INDIA</h3>
             <p>Online Examination - Objective (MCQ) Console</p>
@@ -198,7 +192,7 @@
           <div class="candidate-avatar" aria-hidden="true">PC</div>
           <div class="candidate-details">
             <span class="cand-name">Candidate: <strong>Practice Candidate</strong></span>
-            <span class="cand-roll">Roll No: <strong>RBI-2026-P1</strong> | System: <strong>C-104</strong></span>
+            <span class="cand-roll">Roll No: <strong>EXAM-2026-P1</strong> | System: <strong>C-104</strong></span>
           </div>
         </div>
       </div>
@@ -320,7 +314,6 @@
       </div>
     </section>
 
-    <!-- Screen: Phase-1 Result (Objective Scorecard & Review) -->
     <section id="screen-result-p1" class="screen" hidden>
       <button type="button" class="btn-soft btn-back-calendar" hidden>‹ Back to calendar</button>
       <div class="result-scorecard">
@@ -341,7 +334,6 @@
         </div>
       </div>
 
-      <!-- Topic-wise analysis + AI explanation of weak topics (objective_ai.js) -->
       <section id="p1-analysis" class="p1-analysis" aria-label="Topic-wise analysis"></section>
 
       <div class="result-filter-toolbar">
@@ -364,7 +356,6 @@
       </div>
     </section>
 
-    <!-- Screen: Phase-1 History -->
     <section id="screen-history-p1" class="screen" hidden>
       <span class="eyebrow">Objective · MCQ</span>
       <h2>History</h2>
@@ -373,17 +364,15 @@
       <button type="button" id="btn-clear-p1-history" class="danger">Delete all objective test history</button>
     </section>
 
-    <!-- Screen: Phase-2 Setup (Descriptive) -->
     <section id="screen-setup" class="screen" hidden>
       <div class="setup-header">
         <div class="setup-title-group">
           <span class="eyebrow">Phase 2 · Descriptive</span>
           <h2>Subjective test</h2>
-          <p class="setup-subtitle">Timed answer writing for ESI, Finance, Management and English with word limits, like the real exam. When you submit, every answer is graded by AI against the RBI rubric.</p>
+          <p class="setup-subtitle">Timed answer writing for ESI, Finance, Management and English with word limits, like the real exam. When you submit, every answer is graded by AI against the exam rubric.</p>
         </div>
       </div>
 
-      <!-- Minimal Document Import / Upload Card -->
       <div class="minimal-upload-card">
         <div class="upload-drop-zone">
           <div class="upload-icon-circle">
@@ -407,7 +396,6 @@
         <span id="setup-doc-status" class="upload-status-badge"></span>
       </div>
 
-      <!-- Collapsible Manual Question Form -->
       <details id="p2-manual-accordion" class="minimal-accordion">
         <summary class="accordion-summary">
           <span class="accordion-title">Add a descriptive question manually</span>
@@ -493,12 +481,10 @@
       <p id="setup-error" class="error"></p>
     </section>
 
-    <!-- Screen: Exam (RBI / TCS iON Examination Console) -->
     <section id="screen-exam" class="screen" hidden>
-      <!-- Top Exam Header Banner (TCS iON Style) -->
       <div class="rbi-exam-header">
         <div class="rbi-exam-title">
-          <div class="rbi-emblem" aria-hidden="true">RBI</div>
+          <div class="rbi-emblem" aria-hidden="true">EP</div>
           <div>
             <h3>RESERVE BANK OF INDIA</h3>
             <p>Phase-II Online Examination - Descriptive (Subjective) Console</p>
@@ -508,12 +494,11 @@
           <div class="candidate-avatar" aria-hidden="true">PC</div>
           <div class="candidate-details">
             <span class="cand-name">Candidate: <strong>Practice Candidate</strong></span>
-            <span class="cand-roll">Roll No: <strong>RBI-2026-P2</strong> | System: <strong>C-104</strong></span>
+            <span class="cand-roll">Roll No: <strong>EXAM-2026-P2</strong> | System: <strong>C-104</strong></span>
           </div>
         </div>
       </div>
 
-      <!-- Exam Subbar with Section Tab & Countdown Timer -->
       <div id="exam-topbar" class="rbi-section-bar">
         <div class="rbi-section-tabs">
           <div class="rbi-section-tab active">
@@ -527,9 +512,7 @@
         </div>
       </div>
 
-      <!-- Main Two-Column Layout -->
       <div class="rbi-exam-body">
-        <!-- Left Column: Question & Answer Workspace -->
         <div class="rbi-work-panel">
           <div class="rbi-q-header">
             <span id="exam-qpos" class="rbi-q-badge">Question No. 1</span>
@@ -566,9 +549,7 @@
           </div>
         </div>
 
-        <!-- Right Column: Legend, Question Palette, Summary & Submit -->
         <div class="rbi-side-panel">
-          <!-- Legend Box -->
           <div class="rbi-palette-legend">
             <h4>Question Status Legend</h4>
             <div class="legend-grid">
@@ -579,7 +560,6 @@
             </div>
           </div>
 
-          <!-- Question Palette Box -->
           <div class="rbi-palette-box">
             <div class="palette-header">
               <h4>Question Palette</h4>
@@ -588,7 +568,6 @@
             <div id="exam-palette" class="rbi-palette-grid"></div>
           </div>
 
-          <!-- Status Summary Grid -->
           <div class="rbi-summary-box">
             <div class="summary-row"><span>Total Questions:</span><strong id="summary-total">0</strong></div>
             <div class="summary-row"><span>Answered:</span><strong id="summary-answered" class="text-green">0</strong></div>
@@ -597,14 +576,12 @@
             <div class="summary-row"><span>Not Visited:</span><strong id="summary-not-visited" class="text-muted">0</strong></div>
           </div>
 
-          <!-- Submit Button in Side Panel -->
           <div class="rbi-submit-container">
             <button type="button" id="btn-submit" class="rbi-btn submit-btn">Submit Test</button>
           </div>
         </div>
       </div>
 
-      <!-- Realistic RBI / TCS iON Confirmation Modal -->
       <div id="confirm-submit" class="modal" hidden>
         <div class="modal-content rbi-modal-content">
           <div class="rbi-modal-header">
@@ -641,14 +618,12 @@
       </div>
     </section>
 
-    <!-- Screen: Result -->
     <section id="screen-result" class="screen" hidden>
       <button type="button" class="btn-soft btn-back-calendar" hidden>‹ Back to calendar</button>
       <span class="eyebrow">Phase 2 · Descriptive</span>
       <h2>Your results</h2>
       <p id="result-summary"></p>
 
-      <!-- AI assessment of the whole test: status, total, per-question table (built by ai_eval.js) -->
       <div id="ai-panel" class="ai-panel"></div>
 
       <div class="result-toolbar">
@@ -657,12 +632,11 @@
         <button type="button" id="btn-copy-all" class="btn-soft">Copy all prompts</button>
       </div>
 
-      <div id="result-list"></div>   <!-- one card per question, built by JS -->
+      <div id="result-list"></div>
 
       <button type="button" id="btn-go-history" class="btn-soft">Go to History</button>
     </section>
 
-    <!-- Screen: History -->
     <section id="screen-history" class="screen" hidden>
       <span class="eyebrow">Phase 2 · Descriptive</span>
       <h2>History</h2>
@@ -671,10 +645,8 @@
       <button type="button" id="btn-clear-history" class="danger">Delete all history</button>
     </section>
 
-    <!-- Screen: Calendar & TODO for the whole daily routine (content is built by calendar.js) -->
     <section id="screen-calendar" class="screen calendar-screen" hidden></section>
 
-    <!-- Edit TODO dialog (shared by both calendars) -->
     <div id="todo-modal" class="modal" hidden>
       <div class="modal-content todo-modal-card" role="dialog" aria-modal="true" aria-labelledby="todo-modal-title">
         <h3 id="todo-modal-title">Edit TODO</h3>
@@ -702,7 +674,6 @@
       </div>
     </div>
 
-    <!-- Which kind of test is this? (asked when a test starts; decides which TODO it completes) -->
     <div id="test-type-modal" class="modal" hidden>
       <div class="modal-content test-type-card" role="dialog" aria-modal="true" aria-labelledby="test-type-title">
         <h3 id="test-type-title">What kind of test is this?</h3>
@@ -718,7 +689,6 @@
       </div>
     </div>
 
-    <!-- Subject / chapter of an uploaded file, or of a History test (folders.js) -->
     <div id="folder-modal" class="modal" hidden>
       <div class="modal-content folder-card" role="dialog" aria-modal="true" aria-labelledby="folder-title">
         <h3 id="folder-title">Which subject and chapter is this?</h3>
@@ -727,7 +697,6 @@
       </div>
     </div>
 
-    <!-- AI evaluation settings (behaviour in ai_eval.js, defaults in ai_config.js) -->
     <div id="ai-settings-modal" class="modal" hidden>
       <div class="modal-content ai-settings-card" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title">
         <div class="ai-settings-head">
