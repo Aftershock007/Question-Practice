@@ -440,10 +440,11 @@ function renderPerformanceChart(container, history, kind) {
   const pctOf = b => (b.max ? b.got / b.max * 100 : null);
   const fmt = v => (Math.round(v * 10) / 10).toString();
   const describe = (name, b) => `${name}: ${Math.round(pctOf(b))}% (${fmt(b.got)} of ${fmt(b.max)} marks) over ${b.tests} test${b.tests === 1 ? "" : "s"} · best ${Math.round(b.best)}% · latest ${Math.round(b.last)}%`;
-  const bar = (name, b, level, extra) => {
+  // inSummary: the row is the clickable heading of a subject, so the summary itself takes focus
+  const bar = (name, b, level, extra, inSummary) => {
     const pct = pctOf(b);
     if (pct === null) return `<div class="perf-row perf-l${level} is-empty"><span class="perf-name">${escapeHTML(name)}</span><span class="perf-track"></span><span class="perf-val">No marks yet</span></div>`;
-    return `<div class="perf-row perf-l${level}" tabindex="0" data-tip="${escapeHTML(describe(name, b))}" aria-label="${escapeHTML(describe(name, b))}">
+    return `<div class="perf-row perf-l${level}"${inSummary ? "" : ` tabindex="0" aria-label="${escapeHTML(describe(name, b))}"`} data-tip="${escapeHTML(describe(name, b))}">
       <span class="perf-name">${escapeHTML(name)}${extra || ""}</span>
       <span class="perf-track"><span class="perf-fill" style="width:${Math.max(1.5, Math.min(100, pct))}%"></span></span>
       <span class="perf-val"><strong>${Math.round(pct)}%</strong> <span>${b.tests} test${b.tests === 1 ? "" : "s"}</span></span>
@@ -460,7 +461,7 @@ function renderPerformanceChart(container, history, kind) {
       const split = [c.full.tests ? `Full ${Math.round(pctOf(c.full))}%` : "", c.partial.tests ? `Partial ${Math.round(pctOf(c.partial))}%` : ""].filter(Boolean).join(" · ");
       return bar(c.name, c.total, 2, split ? `<em class="perf-split">${escapeHTML(split)}</em>` : "");
     }).join("") + (s.mix.tests ? bar("Mix tests", s.mix, 2) : "");
-    return `<details class="perf-subject"><summary>${bar(name, s.total, 1)}</summary><div class="perf-children">${inner || '<p class="perf-none">No chapter tests yet.</p>'}</div></details>`;
+    return `<details class="perf-subject"><summary aria-label="${escapeHTML(describe(name, s.total) + ". Open for chapters.")}">${bar(name, s.total, 1, "", true)}</summary><div class="perf-children">${inner || '<p class="perf-none">No chapter tests yet.</p>'}</div></details>`;
   }).join("");
   const overall = pctOf(all);
   container.innerHTML = all.tests ? `
@@ -488,6 +489,9 @@ function renderPerformanceChart(container, history, kind) {
   const hide = () => tip.classList.remove("is-visible");
   container.onpointermove = (e) => { const row = e.target.closest(".perf-row[data-tip]"); if (row) show(row, e.clientX, e.clientY); else hide(); };
   container.onpointerleave = hide;
-  container.onfocusin = (e) => { const row = e.target.closest(".perf-row[data-tip]"); if (row) { const r = row.getBoundingClientRect(); show(row, r.left + r.width / 2, r.top); } };
+  container.onfocusin = (e) => {
+    const row = e.target.closest(".perf-row[data-tip]") || (e.target.matches("summary") ? e.target.querySelector(".perf-row[data-tip]") : null);
+    if (row) { const r = row.getBoundingClientRect(); show(row, r.left + r.width / 2, r.top); }
+  };
   container.onfocusout = hide;
 }

@@ -764,7 +764,7 @@ function calLinkedResult(link) {
   return { kind: "write", test, scoreText: r.text, pending: !r.complete };
 }
 
-// Marks of a subjective test: "18.5 / 25 marks" or "waiting for AI grades (1 of 2 graded)"
+// Marks of a subjective test: "18.5 / 25 marks", "waiting for grades (1 of 2 graded)" or "not graded yet"
 function calWriteScore(test) {
   const qs = test.questions || [];
   const scores = test.scores || {};
@@ -774,7 +774,7 @@ function calWriteScore(test) {
   const complete = qs.length > 0 && graded.length === qs.length;
   const fmt = (n) => String(Math.round(n * 100) / 100);
   if (complete) return { complete, text: `${fmt(total)} / ${fmt(max)} marks`, total, max };
-  return { complete, text: graded.length ? `waiting for grades (${graded.length} of ${qs.length} graded, ${fmt(total)} so far)` : "waiting for AI grades", total, max };
+  return { complete, text: graded.length ? `waiting for grades (${graded.length} of ${qs.length} graded, ${fmt(total)} so far)` : "not graded yet: press AI Analysis on the result", total, max };
 }
 
 // Which test type to suggest when a test starts: the TODO it was started from, or today's open test TODO
@@ -1051,7 +1051,7 @@ function calExamCardHTML(item) {
         <span class="dp-exam-main">
           <span class="dp-exam-type">${escapeHTML(type)} · objective · ${escapeHTML(time)}</span>
           <strong>${score} / ${max}</strong>
-          <span>${exam.accuracy || 0}% accuracy · ${exam.correctCount || 0} correct · ${exam.incorrectCount || 0} wrong · ${exam.unattemptedCount || 0} left · ${formatDuration(exam.timeSpent || 0)}</span>
+          <span>${exam.accuracy || 0}% accuracy · ${exam.correctCount || 0} correct · ${exam.incorrectCount || 0} wrong · ${exam.unattemptedCount || 0} left · time ${formatHM(exam.timeSpent || 0)}</span>
         </span>
         <span class="dp-exam-open" aria-hidden="true">Open result ›</span>
       </button>`;
@@ -1063,7 +1063,7 @@ function calExamCardHTML(item) {
       <span class="dp-exam-main">
         <span class="dp-exam-type">${escapeHTML(type)} · subjective · ${escapeHTML(time)}</span>
         <strong>${r.complete ? escapeHTML(r.text) : `<span class="dp-pending">${escapeHTML(r.text)}</span>`}</strong>
-        <span>${(exam.questions || []).length} question(s) · ${words} words · ${formatDuration(exam.usedSeconds || 0)}</span>
+        <span>${(exam.questions || []).length} question(s) · ${words} words · time ${formatHM(exam.usedSeconds || 0)}</span>
       </span>
       <span class="dp-exam-open" aria-hidden="true">Open result ›</span>
     </button>`;

@@ -1,6 +1,6 @@
 # Descriptive Typing Test Practice
 
-A personal, offline typing test and descriptive answer practice website designed for daily timed writing sessions. It simulates real exam typing conditions (no spell-check or autocorrect, optional copy-paste blocking, live word limits and counters) and automatically exports structured evaluation prompts for AI grading with models like Gemini, Claude, and ChatGPT.
+A personal, offline typing test and descriptive answer practice website designed for daily timed writing sessions. It simulates real exam typing conditions (no spell-check or autocorrect, copy and paste blocked, live word limits and counters) and automatically exports structured evaluation prompts for AI grading with models like Gemini, Claude, and ChatGPT.
 
 ---
 
@@ -31,7 +31,7 @@ A personal, offline typing test and descriptive answer practice website designed
   - Four dedicated papers: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
   - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support. Copy, cut and paste are always blocked in the answer box, with a warning when you try.
   - **AI check of descriptive questions** after every upload (model 1): the question is complete, the model answer belongs to it, is complete and has no clear factual error, and the marks look right. Problems are listed under **Needs attention**; **AI Check** runs it again.
-  - **Built-in AI evaluation:** the moment you submit, every answer is graded by AI with the RBI rubric in `prompt.js` (see [AI evaluation](#ai-evaluation) below), including a line-by-line **writing analysis** (grammar, spelling, factual errors, RBI writing style) and **topic-wise performance**.
+  - **Built-in AI evaluation:** press **AI Analysis** on the result and every answer you wrote is graded by AI with the RBI rubric in `prompt.js` (see [AI evaluation](#ai-evaluation) below), including a line-by-line **writing analysis** (grammar, spelling, factual errors, RBI writing style) and **topic-wise performance**.
   - The full evaluation prompt can still be copied or downloaded for grading in any chatbot (Gemini, Claude, ChatGPT).
 - **Calendar & TODO (your daily routine):**
   - One calendar for the whole plan. The built-in plan is `RBI_Study_Schedule.xlsx` (415 days); **Upload Timetable** / **Remove Timetable** in the study plan settings replace or clear it.
@@ -66,7 +66,7 @@ No backend server, Node.js runtime, build steps, or external dependencies are re
 
 ## AI evaluation
 
-After a subjective test, each answer is sent with the evaluation prompt from `prompt.js` to an AI model. The result screen then shows, for every answer:
+After a subjective test, press **AI Analysis** on the result: each answer you wrote is sent with the evaluation prompt from `prompt.js` to AI model 2 (blank answers are recorded as 0 and left out of the analysis). The result screen then shows, for every answer:
 
 - **Score and grade** out of the question's marks, plus the **likely real RBI score**. The grader is deliberately about 2-3 marks stricter per answer than the real panel.
 - **In plain words**: a short summary of what the mark means and the most important fix.
@@ -118,7 +118,7 @@ If a request fails, the answer card says why in plain words (invalid key, quota 
 1. **Select Questions:** Pick 2-3 questions with target word limits (e.g., 400 or 600 words) across your focus subjects (**ESI**, **Finance**, **Management**, or **English Descriptive**).
 2. **Set Strict Timing:** Aim for a focused writing pace (e.g., ~25 words per minute) to build typing speed, focus, and answer structure discipline.
 3. **Simulate Real Exam Conditions:** Type continuously without pausing, without browser autocorrect or spell-check, and with copy-paste blocked.
-4. **Submit & read the AI assessment:** Your answers are graded automatically. Start with *In plain words* and *Fix these next*, then compare your sentences with the rewrites and the model answer.
+4. **Submit & read the AI assessment:** Press **AI Analysis** on the result to grade your answers. Start with *In plain words* and *Fix these next*, then compare your sentences with the rewrites and the model answer.
 5. **Track & Review:** Scores land in History automatically, so your streak and performance trends stay up to date.
 
 ---

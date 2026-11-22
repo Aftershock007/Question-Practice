@@ -6370,7 +6370,7 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .perf-row { padding: 8px 0; border-radius: 8px; outline: none; }
 .perf-row:focus-visible { box-shadow: var(--ring); }
 .perf-name { font-size: 13.5px; color: var(--ink); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-.perf-l1 .perf-name::before {
+.perf-subject > summary .perf-name::before {
   content: "";
   width: 6px;
   height: 6px;
@@ -6438,3 +6438,16 @@ button.dp-exam:hover { filter: brightness(0.98); box-shadow: var(--shadow-sm); }
 .tcard-actions .btn-soft:not(.btn-soft-danger):hover { background: var(--accent-soft); color: var(--accent-hover); border-color: var(--accent-line); }
 .tcard-actions .btn-toggle-answer-review { background: var(--card) !important; color: var(--ink-2) !important; border: 1px solid var(--line-strong) !important; padding: 7px 14px !important; border-radius: 10px !important; font-size: 13px !important; }
 .tcard-actions .btn-toggle-answer-review:hover { background: var(--accent-soft) !important; color: var(--accent-hover) !important; border-color: var(--accent-line) !important; opacity: 1; }
+.folder-form #folder-chapter-wrap[hidden], .folder-form #folder-other-wrap[hidden] { display: none; }
+
+.explorer { margin-bottom: 16px; }
+
+/* Phone: question cards on the New Test lists keep their text full width; the move / edit / remove buttons go below */
+@media (max-width: 640px) {
+  .p1-question-list li { flex-wrap: wrap; }
+  #setup-question-list li > div { flex-wrap: wrap; }
+  .p1-question-list li .q-actions,
+  #setup-question-list li .q-actions { width: 100%; justify-content: flex-end; }
+}
+.perf-subject > summary { border-radius: 8px; }
+.perf-subject > summary:focus-visible { outline: none; box-shadow: var(--ring); }

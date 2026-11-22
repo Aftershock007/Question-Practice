@@ -11,17 +11,36 @@
   const AUTH_KEY = "rbi_signed_in";
   const USER = "root";
   const PASS = "root";
+  const waiting = [];   // start-up actions (e.g. "resume your test?") that must wait for sign-in
+
+  function isLocked() {
+    return document.documentElement.classList.contains("auth-locked");
+  }
+
+  // Run fn now if signed in, otherwise right after a correct sign-in
+  window.whenSignedIn = function (fn) {
+    if (typeof fn !== "function") return;
+    if (isLocked()) waiting.push(fn);
+    else fn();
+  };
 
   // Show the app after a correct sign-in
   function unlock() {
     try { sessionStorage.setItem(AUTH_KEY, "1"); } catch (_) { /* this tab only */ }
     document.documentElement.classList.remove("auth-locked");
+    // let the app paint first, then run what waited (dialogs, resumed tests)
+    setTimeout(() => {
+      while (waiting.length) {
+        const fn = waiting.shift();
+        try { fn(); } catch (e) { console.error(e); }
+      }
+    }, 0);
   }
 
   document.addEventListener("DOMContentLoaded", () => {
     const form = document.getElementById("auth-form");
     if (!form) return;
-    if (document.documentElement.classList.contains("auth-locked")) {
+    if (isLocked()) {
       const u = document.getElementById("auth-user");
       if (u) u.focus();
     }

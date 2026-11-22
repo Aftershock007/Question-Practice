@@ -30,7 +30,7 @@
       id: "gemini", label: "Google Gemini", kind: "gemini",
       defaultModel: "gemini-3.8-flash",
       suggestions: ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"],
-      keyUrl: "https://aistudio.google.com/app/apikey", keyHint: "starts with AIza",
+      keyUrl: "https://aistudio.google.com/app/apikey", keyHint: "starts with AIza or AQ.",
       note: "Has a free tier: create a key in Google AI Studio (takes a minute)."
     },
     openai: {
@@ -2497,7 +2497,7 @@ has no error of that kind, but do not skip real ones.
         if (test) evaluateTest(test, { onlyMissing: true });
         break;
       case "reevaluate-all":
-        if (test && confirm("Grade every answer of this test again? This sends " + test.questions.length + " new request(s) to the AI and replaces the current reports.")) {
+        if (test && confirm("Grade every answer of this test again? Each written answer is graded at least twice (about " + (test.questions.length * 2) + " AI requests), and the current reports are replaced.")) {
           evaluateTest(test, { onlyMissing: false });
         }
         break;
@@ -2604,6 +2604,10 @@ has no error of that kind, but do not skip real ones.
     if (!modal) return;
     draft = { autoEvaluate: getSettings().autoEvaluate, testId: testId || "", engines: {}, keys: Object.assign({}, readSessionKeys()) };
     Object.keys(ENGINES).forEach(id => { draft.engines[id] = Object.assign({}, engineSettings(id)); });
+    // start from what is saved: drop the fields of an earlier, cancelled visit
+    if (el("ai-keys")) el("ai-keys").innerHTML = "";
+    if (el("ai-engines")) el("ai-engines").innerHTML = "";
+    setStatusNode(el("ai-save-status"), "");
     renderEngineCards();
     if (el("ai-auto")) el("ai-auto").checked = !!draft.autoEvaluate;
     modal.hidden = false;

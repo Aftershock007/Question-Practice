@@ -695,7 +695,11 @@ function handleQuestionFormSubmit(event) {
   if (editId) {
     const idx = state.setup.questions.findIndex(q => q.id === editId);
     if (idx >= 0) {
-      const old = state.setup.questions[idx].passage || "";
+      const prev = state.setup.questions[idx];
+      const old = prev.passage || "";
+      // keep what the form does not show: the subject / chapter folder and the marking checklist
+      if (prev.folder) questionObj.folder = prev.folder;
+      if (prev.scheme) questionObj.scheme = prev.scheme;
       state.setup.questions[idx] = questionObj;
       syncSharedPassage(state.setup.questions, questionObj, old);
     } else {
@@ -856,7 +860,7 @@ function showQuestion(index) {
     secName.textContent = `${q.paper || "Descriptive Test"} (Keyboard Entry)`;
   }
 
-  const candRoll = document.querySelector(".cand-roll");
+  const candRoll = document.querySelector("#screen-exam .cand-roll");
   if (candRoll) {
     candRoll.innerHTML = `Roll No: <strong>RBI-2026-P2</strong> | Paper: <strong>${escapeHTML(q.paper || "General")}</strong>`;
   }
@@ -1305,7 +1309,7 @@ function renderResult(test) {
   const totalQ = test.questions.length;
   const autoNote = test.autoSubmitted ? " · Auto-submitted" : "";
 
-  $("result-summary").textContent = `Answered ${answeredCount} of ${totalQ} questions · Time used: ${formatDuration(test.usedSeconds)} of ${test.totalMinutes} min${autoNote}`;
+  $("result-summary").textContent = `Answered ${answeredCount} of ${totalQ} questions · Time used: ${formatHM(test.usedSeconds)} of ${formatHM((test.totalMinutes || 0) * 60)} (hh:mm)${autoNote}`;
 
   const list = $("result-list");
   list.innerHTML = "";
@@ -1632,22 +1636,24 @@ function renderHistory() {
 
 // Score summary badge of one descriptive test in History
 function historyScoreBadgeHTML(t) {
+  // marks over the answers that have a score (the same basis as "Performance by subject")
   let total = 0;
   let max = 0;
-  let any = false;
+  let graded = 0;
   let words = 0;
+  const n = (t.questions || []).length;
   (t.questions || []).forEach(q => {
-    max += Number(q.marks) || 10;
     const sc = t.scores ? t.scores[q.id] : null;
     if (sc !== null && sc !== undefined && sc !== "" && !isNaN(sc)) {
       total += Number(sc);
-      any = true;
+      max += Number(q.marks) || 10;
+      graded++;
     }
     const a = t.answers && t.answers[q.id];
     if (a && a.wordCount) words += a.wordCount;
   });
-  return any
-    ? scoreRingHTML(max ? total / max * 100 : 0, `<strong>${Number(total.toFixed(2))}</strong> / ${max}`)
+  return graded
+    ? scoreRingHTML(max ? total / max * 100 : 0, `<strong>${Number(total.toFixed(2))}</strong> / ${max}` + (graded < n ? `<br>${graded} of ${n} graded` : ""))
     : scoreRingHTML(null, `${words} words<br>not graded yet`);
 }
 
@@ -2481,7 +2487,10 @@ function joinAnswerLines(lines) {
 // "Study the table below and answer Questions 6 to 10", "Case Study 2: ...", "Passage 1".
 // A lone "Consider the following statements and answer the question" is not one.
 const PASSAGE_HEADING_RE = /^(?:Case\s*Study|Caselet|Case\s*let|Passage|Reading\s+Comprehension|Comprehension|Data\s+Interpretation\s+Set|DI\s+Set)\s*(?:[-#]?\s*(?:\d{1,2}|[IVX]{1,4}|[A-H]))?\s*(?:[:.\-]\s*.{0,120})?$/i;
-const PASSAGE_LEAD_RE = /^(?:Directions?\b|(?:Read|Study|Go\s+through|Refer\s+to|Look\s+at|Examine|Analy[sz]e|Based\s+on|On\s+the\s+basis\s+of|Use|Consider)\b.{0,90}?\b(?:passage|paragraph|extract|excerpt|case|caselet|table|data|graph|chart|information|report|text|article)s?\b)/i;
+// "Directions: choose the correct answer for each question" names no passage, so it is not one
+const PASSAGE_LEAD_RE = /^(?:Directions?\b.{0,120}?\b(?:passage|paragraph|extract|excerpt|case|caselet|table|data|graph|chart|information|report|text|article|arrangement|puzzle)s?\b|(?:Read|Study|Go\s+through|Refer\s+to|Look\s+at|Examine|Analy[sz]e|Based\s+on|On\s+the\s+basis\s+of|Use|Consider)\b.{0,90}?\b(?:passage|paragraph|extract|excerpt|case|caselet|table|data|graph|chart|information|report|text|article)s?\b)/i;
+// An explicit instruction to answer questions on a passage ("answer the questions that follow", "Questions 3 and 4")
+const PASSAGE_INSTRUCTION_RE = /\b(?:answer|attempt)\b.{0,60}\bquestions?\b|\bquestions?\b.{0,40}\b(?:that\s+follow|follows?|given\s+below|below|based\s+on)\b|\bQ(?:s|uestions?)?\.?\s*\d{1,3}\s*(?:-|to|and|&)\s*(?:Q\.?\s*)?\d{1,3}/i;
 const PASSAGE_MANY_RE = /\bquestions\b|\bQ(?:s|uestions)?\.?\s*(?:No\.?\s*)?\d{1,4}\s*(?:-|to|and|&)\s*\d{1,4}|\(\s*\d{1,4}\s*(?:-|to)\s*\d{1,4}\s*\)/i;
 function isPassageIntro(line) {
   const l = String(line || "").trim();
@@ -2622,6 +2631,9 @@ function parseQuestionsAndAnswers(rawText) {
     while (idx.length > 1 && isSectionBannerLine(rawLines[idx[idx.length - 1]])) idx.pop();
     // a passage block never holds an answer: then the line was part of an answer
     if (idx.length < 2 || idx.some(j => ANSWER_RE.test(rawLines[j]))) continue;
+    // after a question (inside its answer), "Case Study: ..." is a section of that answer unless
+    // the block tells you to answer questions on it
+    if (owner && !idx.some(j => PASSAGE_INSTRUCTION_RE.test(rawLines[j]))) continue;
     const r = rawLines[i].match(/\b(?:Q(?:s|uestions?)?\.?\s*(?:No\.?\s*)?)(\d{1,3})\s*(?:-|to|and|&)\s*(?:Q\.?\s*)?(\d{1,3})\b/i) || rawLines[i].match(/\(\s*(\d{1,3})\s*(?:-|to)\s*(\d{1,3})\s*\)/);
     passages.push({ start: i, end, firstK: nextK, text: idx.map(j => rawLines[j]).join("\n"), from: r ? Number(r[1]) : null, to: r ? Number(r[2]) : null });
     i = end - 1;
@@ -3418,8 +3430,10 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
       lastNum = num;
     }
     cur = { number: num, section, topic, lines: firstLine ? [firstLine] : [], opts: [], explanation: [], inlineAnswer: "", skipped: [], preface: [] };
-    // "Directions: Answer the following questions." with no passage under it is just this question's preface
-    if (context && context.open && context.lines.length < 2 && context.left === Infinity) {
+    // "Directions: Answer the following questions." with no real passage under it (no table and
+    // under ~60 characters of text) is just this question's preface, not shared by every question
+    const openBody = context && context.open ? context.lines.slice(1) : [];
+    if (context && context.open && context.left === Infinity && (openBody.length === 0 || (openBody.join(" ").length < 60 && !openBody.some(l => / \| /.test(l))))) {
       cur.preface = context.lines;
       context = null;
     }
@@ -3488,7 +3502,7 @@ function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
     }
     // "Read the following passage and answer the questions (6 to 10)", "Case Study 2",
     // "Study the table below ...": a shared passage / table for the questions that follow
-    if (!collectingContext && (!cur || cur.opts.length >= 2) && isPassageIntro(p)) {
+    if (!collectingContext && (!cur || cur.opts.length >= 2) && isPassageIntro(p) && !(inExpl && !PASSAGE_INSTRUCTION_RE.test(p))) {
       takePending();
       finalize();
       const r = p.match(RANGE_FOR_RE) || p.match(/\(\s*(?:Q(?:s|uestions?)?\.?\s*)?(\d{1,4})\s*(?:-|to)\s*(?:Q\.?\s*)?(\d{1,4})\s*\)/i);
@@ -4001,7 +4015,9 @@ function onAISettingsSaved() {
     if ((state.p1_setup.questions || []).some(q => mcqStatus(q) === "unchecked" || mcqStatus(q) === "failed")) mcqVerifyQuestions();
     if (typeof descVerifyQuestions === "function" && (state.setup.questions || []).some(q => ["unchecked", "failed"].includes(descStatus(q)) && !(q.check && q.check.user))) descVerifyQuestions();
   }
-  if (state.p1_lastResultTest && typeof p1RenderAnalysis === "function") p1RenderAnalysis(state.p1_lastResultTest);
+  if (state.p1_lastResultTest && typeof p1RenderAnalysis === "function") {
+    if (!(typeof p1AnalysisAfterKeySaved === "function" && p1AnalysisAfterKeySaved())) p1RenderAnalysis(state.p1_lastResultTest);
+  }
 }
 
 // Buttons of the check panel and of "Needs attention"
@@ -4735,7 +4751,7 @@ function renderP1Result(test) {
   if ($("p1-stat-correct")) $("p1-stat-correct").textContent = test.correctCount;
   if ($("p1-stat-incorrect")) $("p1-stat-incorrect").textContent = test.incorrectCount;
   if ($("p1-stat-unattempted")) $("p1-stat-unattempted").textContent = test.unattemptedCount;
-  if ($("p1-stat-time")) $("p1-stat-time").textContent = formatDuration(test.timeSpent || 0);
+  if ($("p1-stat-time")) $("p1-stat-time").textContent = formatHM(test.timeSpent || 0);
 
   // Filter counts + always start on "All questions"
   const total = (test.questions || []).length;
@@ -6002,5 +6018,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Initial load
   setPhase(state.phase);
-  checkResumeActiveTest();
+  // "Resume your test?" waits until you have signed in (auth.js)
+  if (typeof window.whenSignedIn === "function") window.whenSignedIn(checkResumeActiveTest);
+  else checkResumeActiveTest();
 });

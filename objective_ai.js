@@ -486,7 +486,7 @@ function p1RenderAnalysis(test) {
       <button type="button" class="ai-btn-primary" data-p1-action="run-analysis">AI Analysis</button></div>`;
   } else {
     ai = `<div class="p1-ai-cta"><p>Add your API key, then press AI Analysis to get each weak topic explained, with the reason behind every wrong answer.</p>
-      <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="verify">AI Analysis</button></div>`;
+      <button type="button" class="ai-btn-primary" data-ai-action="open-settings" data-engine="verify" data-p1-want-analysis="1">AI Analysis</button></div>`;
   }
 
   box.innerHTML = `
@@ -571,8 +571,19 @@ function p1AutoAnalysis(test) {
   void test;
 }
 
+// "AI Analysis" pressed before a key was set: run it as soon as the key is saved
+let p1WantAnalysisFor = "";
+function p1AnalysisAfterKeySaved() {
+  const test = state.p1_lastResultTest;
+  if (!test || p1WantAnalysisFor !== test.id || !window.AIEval || !AIEval.isReady("analysis")) return false;
+  p1WantAnalysisFor = "";
+  p1RunAnalysis(test);
+  return true;
+}
+
 // Clicks inside the analysis box
 document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-p1-want-analysis]") && state.p1_lastResultTest) p1WantAnalysisFor = state.p1_lastResultTest.id;
   const btn = e.target.closest("[data-p1-action]");
   if (!btn) return;
   const test = state.p1_lastResultTest;

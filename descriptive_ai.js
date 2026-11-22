@@ -162,6 +162,11 @@ function renderDescCheckPanel() {
   if (!box) return;
   descClearStalePending();
   const qs = state.setup.questions || [];
+  const start = $("btn-start-test");
+  if (start) {
+    start.disabled = descVerify.running;
+    start.textContent = descVerify.running ? "Checking questions with AI…" : "Start Subjective Test";
+  }
   if (!qs.length) { box.hidden = true; box.innerHTML = ""; return; }
   box.hidden = false;
   const ready = window.AIEval && AIEval.isReady("check");
@@ -183,7 +188,7 @@ function renderDescCheckPanel() {
       <button type="button" class="ai-btn-primary" data-desc-check="run">AI Check</button></div>`;
   } else {
     row = `<div class="p1-check-row"><div class="p1-check-grow"><span><strong>AI check finished:</strong> ${count("ok")} question${count("ok") === 1 ? "" : "s"} passed${issues.length ? ` · <span class="p1-warn">${issues.length} need${issues.length === 1 ? "s" : ""} attention</span>` : ""}.</span></div>
-      <button type="button" class="btn-soft" data-desc-check="run-all">AI Check again</button></div>`;
+      ${qs.some(q => !(q.check && q.check.user)) ? `<button type="button" class="btn-soft" data-desc-check="run-all">AI Check again</button>` : ""}</div>`;
   }
   if (descVerify.error && !descVerify.running) row += `<p class="ai-warning">${escapeHTML(descVerify.error)}</p>`;
   const cards = issues.map(q => `
@@ -212,11 +217,6 @@ function renderDescCheckPanel() {
       <div class="p1-attention-head"><h3>Needs attention <span class="count-badge">${issues.length}</span></h3>
       <p>The AI found a problem in these questions or their model answers. Fix, keep or remove each one; you can still start the test with them.</p></div>
       <ol class="p1-issue-list">${cards}</ol></section>` : ""}`;
-  const start = $("btn-start-test");
-  if (start) {
-    start.disabled = descVerify.running;
-    start.textContent = descVerify.running ? "Checking questions with AI…" : "Start Subjective Test";
-  }
 }
 
 // Buttons of the descriptive check panel
