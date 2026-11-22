@@ -118,6 +118,164 @@
     "TYPO": "Typing slip (no penalty)"
   };
 
+  // ---- The rubric's fixed rules, applied by the app after every grading ----------
+  // (prompt.js STAGE 1 / 1B / 2). The model judges the script; the app applies the
+  // arithmetic, so the same judgement always gives the same marks.
+
+  // Stage-2 penalty table: value per instance for 10 / 15 / 30-40 marks and the most instances counted
+  const PENALTY_TABLE = {
+    "RP-1": { m10: 0.75, m15: 1.25, m30: 2.5, most: 4 },
+    "RP-2": { m10: 0.25, m15: 0.25, m30: 0.5, most: 3 },
+    "RP-3": { m10: 0.25, m15: 0.25, m30: 0.5, most: 3 },
+    "RP-4": { m10: 0.75, m15: 1.25, m30: 2.5, most: 1 },
+    "RP-5": { m10: 0.5, m15: 0.75, m30: 1.5, most: 1 },
+    "RP-6": { m10: 1.0, m15: 1.25, m30: 2.0, most: 4 },
+    "RP-7": { m10: 0, m15: 0, m30: 1.0, most: 4 },
+    "RP-8": { m10: 0.25, m15: 0.25, m30: 0.5, most: 3 }
+  };
+
+  // Word-discipline bands per track: [full credit from, to], [half credit from, to] in % of the limit
+  const WORD_BANDS = { A: [[82, 104], [72, 112]], B: [[90, 105], [80, 112]], C: [[92, 105], [86, 110]] };
+
+  // STAGE 1B examiner checks: label and, for a NO, [parameter number, cap as share of that parameter]
+  const EXAMINER_CHECKS = {
+    A: {
+      1: ["Every sub-part answered", [1, 0.45]],
+      2: ["Command word obeyed", [1, 0.45]],
+      3: ["At least 70% answers this question", [1, 0.45]],
+      4: ["Domain terms and cause-effect mechanics", [2, 0.35]],
+      5: ["Indian context", [2, 0.55]],
+      6: ["Specific sources stated with their function", null],
+      7: ["A recent development used correctly", [3, 0.63]],
+      8: ["Headings / numbered points, not a wall of text", [4, 0.35]],
+      9: ["A specific, feasible way forward", [4, 0.55]],
+      10: ["Sober third-person institutional register", null],
+      11: ["Calculation: correct formula, working and answer", [2, 0.45]]
+    },
+    B: {
+      1: ["Prompt unpacked into a clear thesis", [1, 0.45]],
+      2: ["4+ dimensions with counter-arguments", null],
+      3: ["Concrete examples and evidence", null],
+      4: ["Continuous prose, no bullets or headings", [4, 0.35]],
+      5: ["Opening hook and a closing loop", null],
+      6: ["Grammatically sound, clear prose", null]
+    },
+    C: {
+      1: ["A 3-8 word title", [1, 0.33]],
+      2: ["Every core idea retained", null],
+      3: ["No 5+ word verbatim lifts", [3, 0.35]],
+      4: ["One third-person paragraph, no opinion", [4, 0.30]]
+    },
+    D: {
+      1: ["Every sub-question answered", null],
+      2: ["Answers from the passage only", null],
+      3: ["In the candidate's own words", [2, 0.30]],
+      4: ["Complete sentences", null]
+    }
+  };
+  const TRACK_PARAMS = { A: 5, B: 5, C: 5, D: 4 };
+
+  // Value of one penalty instance for this question's marks (RULE 5 scales the 10-mark column)
+  function penaltyValue(code, max) {
+    const t = PENALTY_TABLE[code];
+    if (!t) return null;
+    if (max === 10) return t.m10;
+    if (max === 15) return t.m15;
+    if (max === 30 || max === 40) return t.m30;
+    return code === "RP-7" ? round2(t.m30 * max / 30) : round2(t.m10 * max / 10);
+  }
+
+  // "full" | "half" | "zero" word-discipline band (null when the track has none)
+  function wordBand(track, words, limit) {
+    const b = WORD_BANDS[track];
+    if (!b || !(limit > 0)) return null;
+    const pct = Math.round(words / limit * 100);
+    if (pct >= b[0][0] && pct <= b[0][1]) return "full";
+    if (pct >= b[1][0] && pct <= b[1][1]) return "half";
+    return "zero";
+  }
+
+  // Apply the rubric's fixed rules to the model's parameters and penalties (mutates them);
+  // returns { rules: [what the app changed], autoFail }
+  function enforceRubric(track, parameters, penalties, checks, anchorCount, q, words) {
+    const max = maxMarksOf(q);
+    const limit = wordLimitOf(q);
+    const rules = [];
+    // parameter maxima must add up to the question's marks (RULE 5): rescale when they do not
+    const pmaxSum = sum(parameters.map(p => p.max));
+    if (parameters.length && parameters.every(p => p.max > 0) && Math.abs(pmaxSum - max) > 0.05) {
+      const k = max / pmaxSum;
+      parameters.forEach(p => { p.max = round2(p.max * k); if (p.awarded !== null) p.awarded = round2(p.awarded * k); });
+      rules.push("Parameter maxima rescaled to add up to " + fmt(max) + " marks.");
+    }
+    // which parameter is P1..P5: by its "P<n>" code, else by position when the count matches the track
+    const byNo = {};
+    const expected = TRACK_PARAMS[track];
+    parameters.forEach((p, i) => {
+      const code = (String(p.name).match(/^P(\d)\b/) || [])[1];
+      const no = code ? Number(code) : (parameters.length === expected ? i + 1 : 0);
+      if (no && !byNo[no]) byNo[no] = p;
+    });
+    const capParam = (no, share, why) => {
+      const p = byNo[no];
+      if (!p || !(p.max > 0) || p.awarded === null) return;
+      const ceiling = Math.floor(p.max * share * 4) / 4;      // marks are given in 0.25 steps
+      if (p.awarded > ceiling + 1e-9) {
+        rules.push("P" + no + " limited to " + fmt(ceiling) + " / " + fmt(p.max) + " (" + Math.round(share * 100) + "% cap): " + why + ".");
+        p.awarded = ceiling;
+      }
+      if (!p.cap) p.cap = Math.round(share * 100) + "% - " + why;
+    };
+    // a NO on an examiner check applies its gate
+    const table = EXAMINER_CHECKS[track] || {};
+    checks.forEach(c => {
+      const def = table[c.id];
+      if (def && def[1] && c.pass === false) capParam(def[1][0], def[1][1], "check failed: " + def[0].charAt(0).toLowerCase() + def[0].slice(1));
+    });
+    // Track A evidence gate on P3
+    if (track === "A" && anchorCount !== null) {
+      if (anchorCount <= 0) capParam(3, 0.20, "no specific report, committee, scheme or data");
+      else if (anchorCount === 1) capParam(3, 0.45, "only one specific source");
+    }
+    // word discipline (P5) and the RP-5 penalty follow from the word count
+    const band = wordBand(track, words, limit);
+    const pct = limit > 0 ? Math.round(words / limit * 100) : 0;
+    if (band === "half") capParam(5, 0.5, "word count " + words + " of " + limit + " (" + pct + "%)");
+    if (band === "zero") capParam(5, 0, "word count " + words + " of " + limit + " (" + pct + "%)");
+    if (band) {
+      const has = penalties.some(p => p.code === "RP-5");
+      if (band === "zero" && !has) {
+        penalties.push({ code: "RP-5", trigger: "Word count " + words + " of " + limit + " (" + pct + "% of the limit)", deduction: 0 });
+        rules.push("RP-5 added: the word count is outside the allowed band.");
+      } else if (band !== "zero" && has) {
+        for (let i = penalties.length - 1; i >= 0; i--) if (penalties[i].code === "RP-5") penalties.splice(i, 1);
+        rules.push("RP-5 removed: " + pct + "% of the word limit is inside the allowed band.");
+      }
+    }
+    // lifting / outside info (RP-7) exists only for precis and comprehension
+    if (track === "A" || track === "B") {
+      const before = penalties.length;
+      for (let i = penalties.length - 1; i >= 0; i--) if (penalties[i].code === "RP-7") penalties.splice(i, 1);
+      if (penalties.length !== before) rules.push("RP-7 removed: it applies only to precis and comprehension.");
+    }
+    // every penalty takes its value from the table; capped instances are counted once each up to the limit
+    const seen = {};
+    let changed = false;
+    for (let i = 0; i < penalties.length; i++) {
+      const p = penalties[i];
+      const v = penaltyValue(p.code, max);
+      if (v === null) continue;
+      seen[p.code] = (seen[p.code] || 0) + 1;
+      if (seen[p.code] > PENALTY_TABLE[p.code].most || v === 0) { penalties.splice(i--, 1); changed = true; continue; }
+      if (Math.abs(p.deduction - v) > 1e-9) { p.deduction = v; changed = true; }
+    }
+    if (changed) rules.push("Penalties set to the rubric's table values for " + fmt(max) + " marks (RP-2, RP-3, RP-8 counted at most 3 times).");
+    // automatic fail: an essay or ESI/FM answer under 60 words
+    const autoFail = (track === "A" || track === "B") && words > 0 && words < 60;
+    if (autoFail) rules.push("Under 60 words: the rubric gives 0 marks.");
+    return { rules, autoFail };
+  }
+
   const COVERAGE = {
     "DEEP & BALANCED": { label: "Covered well", cls: "good" },
     "TEXTBOOK ONLY": { label: "Textbook only", cls: "ok" },
@@ -460,6 +618,15 @@ Keys, in this exact order (section numbers refer to the format above):
 - "subparts": every explicit and implicit sub-part of the question, each
   {"part": short name, "coverage": "DEEP & BALANCED" | "TEXTBOOK ONLY" |
   "SUPERFICIAL" | "MISSED", "comment": one line on how it was handled}.
+- "examiner_checks": every STAGE 1B check of the chosen track, in order, each
+  {"id": the check number as a string ("1", "2", ...), "result": "YES" | "NO"
+  | "N/A" (N/A only for Track A check 11 when no calculation is asked),
+  "evidence": the candidate's exact words, or why the check fails}. The app
+  applies the gate of every NO to the marks, so judge each check strictly.
+- "anchor_count": Track A check 6 as a number - specific, ACCURATE data points,
+  reports, committees or schemes (for pure management / OB questions: named
+  theories and real cases) stated WITH their function; bare name-drops and
+  wrong facts do not count. 0 for Tracks B, C and D.
 - "caps_triggered": evidence-gate caps applied, e.g. "P3 capped at 20% - no
   data" ([] if none).
 - "pacing_audit": word count %, time used, WPM and any speed risk (1-3 sentences).
@@ -568,6 +735,8 @@ has no error of that kind, but do not skip real ones.
     track: { type: "string", enum: ["A", "B", "C", "D"] },
     checklist: CHECKLIST_SCHEMA,
     subparts: { type: "array", items: objSchema({ part: S, coverage: { type: "string", enum: Object.keys(COVERAGE) }, comment: S }) },
+    examiner_checks: { type: "array", items: objSchema({ id: S, result: { type: "string", enum: ["YES", "NO", "N/A"] }, evidence: S }) },
+    anchor_count: N,
     caps_triggered: SL,
     pacing_audit: S,
     anchors_used: SL,
@@ -608,6 +777,8 @@ has no error of that kind, but do not skip real ones.
   const SCORE_SCHEMA = objSchema({
     track: { type: "string", enum: ["A", "B", "C", "D"] },
     checklist: CHECKLIST_SCHEMA,
+    examiner_checks: { type: "array", items: objSchema({ id: S, result: { type: "string", enum: ["YES", "NO", "N/A"] }, evidence: S }) },
+    anchor_count: N,
     parameters: { type: "array", items: objSchema({ name: S, max_marks: N, cap_applied: S, awarded: N, justification: S }) },
     penalties: { type: "array", items: objSchema({ code: S, trigger: S, deduction: N }) },
     stage1_raw_sum: N,
@@ -636,6 +807,15 @@ then return ONE JSON object with ONLY these keys and nothing else:
   order: {"id": "K1", "coverage": "full" | "partial" | "missing", "quote": the
   candidate's exact words that cover it (at most 12 words), or ""}. [] when there
   is no checklist.
+- "examiner_checks": every STAGE 1B check of the chosen track, in order, each
+  {"id": the check number as a string ("1", "2", ...), "result": "YES" | "NO"
+  | "N/A" (N/A only for Track A check 11 when no calculation is asked),
+  "evidence": at most 10 words}. The app
+  applies the gate of every NO to the marks, so judge each check strictly.
+- "anchor_count": Track A check 6 as a number - specific, ACCURATE data points,
+  reports, committees or schemes (for pure management / OB questions: named
+  theories and real cases) stated WITH their function; bare name-drops and
+  wrong facts do not count. 0 for Tracks B, C and D.
 - "parameters": one item per parameter of the chosen track, each {"name",
   "max_marks", "cap_applied" ("" if none), "awarded", "justification": at most
   12 words}. The max_marks must add up to exactly {{MARKS}} (RULE 5).
@@ -1286,11 +1466,23 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       deduction: Math.abs(num(p.deduction != null ? p.deduction : p.marks) || 0)
     })).filter(p => p.deduction > 0);
 
+    const track = /^[ABCD]$/.test(String(o.track || "").trim().toUpperCase().charAt(0)) ? String(o.track).trim().toUpperCase().charAt(0) : "";
+    const checks = objList(o.examiner_checks, 15).map(c => {
+      const res = String(c.result != null ? c.result : c.pass).trim().toUpperCase();
+      return { id: Number(String(c.id || "").replace(/[^0-9]/g, "")) || 0, pass: /^(YES|TRUE|PASS)/.test(res) ? true : /^(NO|FALSE|FAIL)/.test(res) ? false : null, evidence: str(c.evidence || c.reason, 600) };
+    }).filter(c => c.id);
+    const anchorCount = num(o.anchor_count);
+    const words = answerText ? wordsIn(answerText) : 0;
+    const enforced = track ? enforceRubric(track, parameters, penalties, checks, anchorCount, q, words) : { rules: [], autoFail: false };
+
     const scored = parameters.filter(p => p.awarded !== null);
+    // a bare total without its breakdown cannot be checked against the rubric: ask again
+    if (!scored.length) throw new AIError("format", "The reply had no marks breakdown.");
     const rawSum = scored.length ? round2(sum(scored.map(p => p.awarded))) : num(o.stage1_raw_sum);
-    const penaltySum = penalties.length ? round2(sum(penalties.map(p => p.deduction))) : Math.abs(num(o.total_penalties) || 0);
+    const penaltySum = penalties.length || Array.isArray(o.penalties) ? round2(sum(penalties.map(p => p.deduction))) : Math.abs(num(o.total_penalties) || 0);
     const modelFinal = num(o.final_score != null ? o.final_score : o.score);
     let score = rawSum !== null ? rawSum - penaltySum : modelFinal;
+    if (enforced.autoFail) score = 0;
     if (score === null || !Number.isFinite(score)) {
       throw new AIError("format", "The reply contained no usable score.");
     }
@@ -1310,6 +1502,9 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       capped: unclamped !== score,
       modelFinal,
       adjusted: modelFinal !== null && Math.abs(clamp(modelFinal, 0, max) - score) >= 0.125,
+      rules: enforced.rules,
+      checks: checks.map(c => ({ id: c.id, pass: c.pass, evidence: c.evidence, label: ((EXAMINER_CHECKS[track] || {})[c.id] || [""])[0] })),
+      anchorCount,
       checklist: (function () {
         const scheme = schemeOf(q);
         if (!scheme) return [];
@@ -1323,7 +1518,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
           return { id: p.id, point: p.point, weight: p.weight, coverage, quote };
         });
       })(),
-      track: /^[ABCD]$/.test(String(o.track || "").trim().toUpperCase().charAt(0)) ? String(o.track).trim().toUpperCase().charAt(0) : "",
+      track,
       subparts: objList(o.subparts, 10).map(s => ({ part: str(s.part || s.name, 300), coverage: normCoverage(s.coverage), comment: str(s.comment || s.note, 600) })).filter(s => s.part),
       caps: strList(o.caps_triggered, 8, 300).filter(c => !/^none\.?$/i.test(c)),
       pacing: str(o.pacing_audit, 1200),
@@ -1850,6 +2045,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     };
     jobs.set(key, job);
     queue.push(job);
+    setPending(test.id, q.id, true);
     const run = runs.get(test.id) || { total: 0, done: 0 };
     run.total++;
     runs.set(test.id, run);
@@ -1873,7 +2069,11 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const run = runs.get(testId);
     if (!run) return;
     run.done++;
-    if (!anyActive(testId)) runs.delete(testId);
+    if (!anyActive(testId)) {
+      runs.delete(testId);
+      const failed = Array.from(jobs.values()).filter(j => j.testId === testId && j.status === "error").length;
+      emit("ai:run-done", { testId, total: run.total, failed });
+    }
   }
 
   async function runJob(job) {
@@ -1892,6 +2092,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       if (historyList().some(t => t && t.id === job.testId)) {
         saveReport(report);
         writeScore(job.testId, job.qid, report.score);
+        emit("ai:graded", { testId: job.testId, qid: job.qid });
       }
     } catch (err) {
       const e = err instanceof AIError ? err : new AIError("internal", (err && err.message) || String(err));
@@ -1905,6 +2106,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       }
     } finally {
       clearInterval(ticker);
+      setPending(job.testId, job.qid, false);
       finishRun(job.testId);
       changed(job);
     }
@@ -1914,6 +2116,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     if (job.status === "queued") {
       job.status = "cancelled";
       jobs.delete(job.key);
+      setPending(job.testId, job.qid, false);
       finishRun(job.testId);
     } else if (job.status === "running") {
       job.controller.abort();
@@ -1932,6 +2135,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
   function saveNotAttempted(test, q) {
     saveReport(notAttemptedReport(test, q));
     writeScore(test.id, q.id, 0);
+    emit("ai:graded", { testId: test.id, qid: q.id });
   }
 
   // Grade the answers of a test. onlyMissing: skip answers that already have a report.
@@ -2018,6 +2222,59 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
   function changed(job) {
     refreshQuestion(job.testId, job.qid);
     refreshPanel(job.testId);
+    emit("ai:activity", { testId: job.testId });
+  }
+
+  // Grading runs in the background: other screens listen to these events to update themselves
+  function emit(name, detail) {
+    try { document.dispatchEvent(new CustomEvent(name, { detail })); } catch (e) { console.warn(e); }
+  }
+
+  // What is being graded right now: [{ testId, total, done, active }]
+  function activity() {
+    const out = [];
+    runs.forEach((run, testId) => {
+      const active = Array.from(jobs.values()).filter(j => j.testId === testId && isActive(j)).length;
+      if (active) out.push({ testId, total: run.total, done: run.done, active });
+    });
+    return out;
+  }
+
+  // Answers whose grading was started, so a page reload can pick it up again: { [testId]: [qid] }
+  const PENDING_KEY = "rbi_ai_pending";
+  function pendingAll() {
+    try { const o = JSON.parse(localStorage.getItem(PENDING_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (_) { return {}; }
+  }
+  function setPending(testId, qid, on) {
+    const all = pendingAll();
+    const list = new Set(all[testId] || []);
+    if (on) list.add(qid); else list.delete(qid);
+    if (list.size) all[testId] = [...list]; else delete all[testId];
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify(all)); } catch (_) { /* resuming is a convenience */ }
+  }
+
+  // After a reload (and sign-in): grade what was still waiting when the page went away
+  function resumePending() {
+    const all = pendingAll();
+    const ids = Object.keys(all);
+    if (!ids.length || !activeProvider("grading").ready) return 0;
+    let resumed = 0;
+    ids.forEach(testId => {
+      const test = findTest(testId);
+      // exactly the answers that were being graded (also an interrupted re-grade)
+      const qids = test ? (all[testId] || []).filter(qid => test.questions.some(q => q.id === qid)) : [];
+      delete all[testId];
+      try { localStorage.setItem(PENDING_KEY, JSON.stringify(all)); } catch (_) { /* ignore */ }
+      qids.forEach(qid => {
+        const idx = test.questions.findIndex(q => q.id === qid);
+        if (isActive(getJob(testId, qid))) return;
+        if (!answerOf(test, test.questions[idx]).wordCount) { saveNotAttempted(test, test.questions[idx]); return; }
+        if (enqueue(test, idx)) resumed++;
+      });
+      if (qids.length) { refreshPanel(testId); refreshAllSlots(testId); }
+    });
+    if (resumed) emit("ai:resumed", { count: resumed });
+    return resumed;
   }
 
   // Cheap per-second update of a running job's timer and status text
@@ -2328,6 +2585,14 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
 
   function breakdownHTML(r) {
     let h = "";
+    if (r.checks && r.checks.length) {
+      h += '<h6>Examiner checks</h6><div class="table-scroll"><table class="ai-table ai-checks"><thead><tr><th>Check</th><th>Result</th><th>Evidence</th></tr></thead><tbody>' +
+        r.checks.map(c => "<tr><td>" + esc(c.label || "Check " + c.id) + "</td>" +
+          '<td><span class="ai-check-res ' + (c.pass === true ? "is-yes" : c.pass === false ? "is-no" : "is-na") + '">' + (c.pass === true ? "Yes" : c.pass === false ? "No" : "N/A") + "</span></td>" +
+          "<td>" + inline(c.evidence) + "</td></tr>").join("") +
+        "</tbody></table></div>" +
+        (r.anchorCount !== null && r.anchorCount !== undefined && r.track === "A" ? '<p class="ai-muted">Specific sources stated with their function: ' + fmt(r.anchorCount) + ".</p>" : "");
+    }
     if (r.parameters.length) {
       h += '<div class="table-scroll"><table class="ai-table"><thead><tr><th>Criterion</th><th>Marks</th><th>Why</th></tr></thead><tbody>' +
         r.parameters.map(p => {
@@ -2350,7 +2615,10 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     }
     h += '<p class="ai-math">' + (r.rawSum !== null ? fmt(r.rawSum) + " − " + fmt(r.penaltySum) + " penalties = " : "Final score: ") +
       "<strong>" + fmt(r.score) + " / " + fmt(r.max) + "</strong>" + (r.capped ? " (limited to the 0–" + fmt(r.max) + " range)" : "") + "</p>";
-    if (r.adjusted) h += '<p class="ai-muted">The model\'s own total was ' + fmt(r.modelFinal) + "; the score above is re-added from this breakdown so the numbers match.</p>";
+    if (r.rules && r.rules.length) {
+      h += '<h6>Rubric rules applied by the app</h6><ul class="ai-rules">' + r.rules.map(x => "<li>" + esc(x) + "</li>").join("") + "</ul>";
+    }
+    if (r.adjusted) h += '<p class="ai-muted">The model\'s own total was ' + fmt(r.modelFinal) + "; the score above is re-added from this breakdown" + (r.rules && r.rules.length ? " after the rules above" : "") + " so the numbers match.</p>";
     return h;
   }
 
@@ -2563,10 +2831,12 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     if (r.checklist && r.checklist.length) L.push("### Key points from your reference answer", ...r.checklist.map(x => "- [" + x.coverage + "] (weight " + x.weight + ") " + x.point), "");
     if (r.strengths.length) L.push("### What worked", ...r.strengths.map(s => "- " + s), "");
     if (r.penalties.length) L.push("### Where marks were lost", ...r.penalties.map(p => "- " + p.code + " " + (PENALTY_LABELS[p.code] || "") + " (−" + fmt(p.deduction) + "): " + p.trigger), "");
+    if (r.checks && r.checks.length) L.push("### Examiner checks", ...r.checks.map(c => "- [" + (c.pass === true ? "Yes" : c.pass === false ? "No" : "N/A") + "] " + (c.label || "Check " + c.id) + (c.evidence ? " - " + c.evidence : "")), "");
     if (r.parameters.length) {
       L.push("### Marks breakdown", "| Criterion | Marks | Why |", "|---|---|---|");
       r.parameters.forEach(p => L.push("| " + cell(p.name) + (p.cap ? " (capped: " + cell(p.cap) + ")" : "") + " | " + fmt(p.awarded) + " / " + fmt(p.max) + " | " + cell(p.why) + " |"));
       L.push("", (r.rawSum !== null ? fmt(r.rawSum) + " − " + fmt(r.penaltySum) + " penalties = " : "") + "**" + fmt(r.score) + " / " + fmt(r.max) + "**", "");
+      if (r.rules && r.rules.length) L.push("Rubric rules applied by the app:", ...r.rules.map(x => "- " + x), "");
     }
     if (r.subparts.length) L.push("### Question coverage", ...r.subparts.map(s => "- [" + ((COVERAGE[s.coverage] || {}).label || s.coverage) + "] " + s.part + (s.comment ? " - " + s.comment : "")), "");
     if (r.errors.length) L.push("### Mistakes, line by line", ...r.errors.map(e => "- " + (e.quote ? "\u201c" + e.quote + "\u201d - " : "") + (e.code ? e.code + ": " : "") + e.problem + (e.correction ? " Better: " + e.correction : "")), "");
@@ -3071,6 +3341,9 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     runJSON,
     // role: "check" (file checks, the default here), "analysis" (objective topics), "grading" (subjective)
     isReady: (role) => activeProvider(role || "check").ready,
+    activity,
+    resumePending,
+    stopTest,
     storeScheme,
     schemeOf,
     tokensText,

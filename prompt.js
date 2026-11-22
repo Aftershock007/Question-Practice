@@ -151,6 +151,8 @@ P1. DIRECTIVE COMPLIANCE & MULTI-DIMENSIONAL SCOPE (20%)
     Directions, regulatory sandboxes, fiscal rules, supervisory tools)—NOT vague
     civics slogans ("create awareness", "strict implementation", "educate people").
 - GATE: Missing ANY sub-part caps P1 at 45% (and triggers a Stage 2 penalty).
+- RELEVANCE GATE: If more than 30% of the script is padding, background or
+  drift that does not answer THIS question, cap P1 at 45%.
 
 P2. CONCEPTUAL CLARITY, MECHANISMS & DOMAIN RIGOR (25%)
 - ESI: Macroeconomic transmission channels, fiscal-monetary interplay, growth vs.
@@ -168,6 +170,11 @@ P2. CONCEPTUAL CLARITY, MECHANISMS & DOMAIN RIGOR (25%)
   Act 2013 / SEBI LODR; Role of Auditors & Independent Directors).
 - GATE: Explaining concepts in layperson/common-sense prose without domain
   terminology or cause-and-effect mechanics caps P2 at 35%.
+- INDIA-CONTEXT GATE: An ESI/FM answer with no link to the Indian economy,
+  Indian banking/financial system or Indian institutions caps P2 at 55%.
+- NUMERICAL GATE (Finance questions that ask for a calculation): a wrong
+  formula, missing working or wrong final figure/unit caps P2 at 45% and is an
+  RP-6 error.
 
 P3. EMPIRICAL ANCHORING, RBI REPORTS, COMMITTEES & CASE CITATIONS (25%)
 - ESI: Economic Survey, Union Budget targets/allocations, NITI Aayog (MPI, SDG
@@ -186,6 +193,9 @@ P3. EMPIRICAL ANCHORING, RBI REPORTS, COMMITTEES & CASE CITATIONS (25%)
   * Only 1 generic citation -> HARD CAP at 45% on P3.
   * 2+ accurate, contextual, high-value citations required to cross 55% on P3.
   * Provably fabricated statistics or wrong committee attribution -> 0.0 on P3.
+  * CONTEMPORARY GATE: Without at least one correctly used recent development
+    (last 12-18 months: policy action, budget/RBI measure, report, data release),
+    P3 cannot exceed 63%.
 
 P4. STRUCTURE, LOGICAL FLOW & EXAM PRESENTATION — "IBC" MODEL (20%)
 - Introduction (10-15% of words): Crisp definition, contemporary regulatory hook,
@@ -198,6 +208,9 @@ P4. STRUCTURE, LOGICAL FLOW & EXAM PRESENTATION — "IBC" MODEL (20%)
   looking institutional synthesis (e.g., aligning with financial stability,
   sustainable inclusion, or Viksit Bharat @2047).
 - GATE: Unstructured wall of text without clear headings/points -> HARD CAP 35%.
+- WAY-FORWARD GATE: A conclusion that is missing, or only slogans ("create
+  awareness", "strict implementation") instead of specific, feasible
+  institutional measures, caps P4 at 55%.
 
 P5. CENTRAL-BANKER REGISTER, PRECISION & WORD DISCIPLINE (10%)
 - Sober, objective, analytical, third-person institutional voice. Penalize
@@ -277,6 +290,29 @@ P4. GRAMMAR & COMPLETE SENTENCES (15% / 4.5M)
 - Clean, grammatically correct complete sentences (penalize fragmented note-dumps).
 
 --------------------------------------------------------------------------------
+STAGE 1B: EXAMINER CHECKS (ANSWER EACH ONE YES / NO WITH EVIDENCE)
+--------------------------------------------------------------------------------
+Before awarding any parameter marks, answer every check of the chosen track
+with YES or NO and quote the evidence. Every NO applies its gate above.
+Track A: (1) every sub-part answered; (2) command word obeyed; (3) at least 70%
+  of the script answers THIS question; (4) correct domain terms and
+  cause-effect mechanics; (5) Indian context; (6) number of specific, accurate
+  data points / reports / committees / schemes stated WITH their function (for
+  pure management / OB questions: named theories and real cases) - 0 caps P3
+  at 20%, 1 caps it at 45%; (7) at least one recent development used
+  correctly; (8) organised under headings / numbered points, not a wall of
+  text; (9) a specific, feasible way forward; (10) sober third-person institutional register; (11) only when a
+  calculation is asked: correct formula, working and final answer.
+Track B: (1) the prompt / metaphor unpacked into a clear thesis; (2) 4+
+  dimensions with counter-arguments; (3) concrete examples and evidence;
+  (4) continuous prose, no bullets or headings; (5) an opening hook and a
+  conclusion that closes the loop; (6) grammatically sound, clear prose.
+Track C: (1) a 3-8 word title; (2) every core idea retained; (3) no 5+ word
+  verbatim lifts; (4) one third-person paragraph with no opinion.
+Track D: (1) every sub-question answered; (2) answers taken from the passage
+  only; (3) answers in the candidate's own words; (4) complete sentences.
+
+--------------------------------------------------------------------------------
 STAGE 2: MANDATORY FORENSIC RED-PEN PENALTY LEDGER (APPLIED AFTER STAGE 1 SUM)
 --------------------------------------------------------------------------------
 To enforce the "X -> Real (X+2 to X+3)" strictness buffer and eliminate LLM
@@ -328,6 +364,8 @@ any marks in Section 4 or printing the Final Verdict in Section 5.
    - Track Applied: [Track A / B / C / D]
    - Sub-Question & Command-Word Matrix: Break down EVERY sub-part of the prompt
      and tag each as [DEEP & BALANCED / TEXTBOOK ONLY / SUPERFICIAL / MISSED].
+   - Examiner Checks (Stage 1B): every check of the track -> YES / NO -> the
+     quoted evidence.
    - Evidence-Gate Caps Triggered: Explicitly list every parameter cap triggered
      (e.g., "P1 capped at 45% — one-sided critique", "P3 capped at 20% — zero data",
      or "None").

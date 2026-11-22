@@ -137,6 +137,7 @@ async function descVerifyQuestions(only) {
   for (let i = 0; i < todo.length; i += DESC_VERIFY_BATCH) batches.push(todo.slice(i, i + DESC_VERIFY_BATCH));
   Object.assign(descVerify, { running: true, total: todo.length, done: 0, controller: new AbortController(), error: "", usage: null });
   renderSetupList();
+  document.dispatchEvent(new CustomEvent("ai:activity", { detail: {} }));
   let next = 0;
   const worker = async () => {
     while (next < batches.length && !descVerify.controller.signal.aborted) {
@@ -160,6 +161,8 @@ async function descVerifyQuestions(only) {
   descVerify.running = false;
   saveSetup();
   renderSetupList();
+  const qs = state.setup.questions || [];
+  document.dispatchEvent(new CustomEvent("ai:check-done", { detail: { kind: "desc", passed: qs.filter(q => descStatus(q) === "ok").length, issues: qs.filter(q => descStatus(q) === "issue").length, failed: qs.filter(q => descStatus(q) === "failed").length } }));
 }
 
 // A check left "pending" by a reload can never finish: it is simply not checked yet

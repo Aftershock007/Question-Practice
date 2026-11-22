@@ -204,6 +204,7 @@ async function mcqVerifyQuestions(only) {
   for (let i = 0; i < todo.length; i += MCQ_VERIFY_BATCH) batches.push(todo.slice(i, i + MCQ_VERIFY_BATCH));
   Object.assign(mcqVerify, { running: true, total: todo.length, done: 0, failed: 0, controller: new AbortController(), message: "", error: "", usage: null });
   renderP1SetupList();
+  document.dispatchEvent(new CustomEvent("ai:activity", { detail: {} }));
 
   let next = 0;
   const worker = async () => {
@@ -234,6 +235,8 @@ async function mcqVerifyQuestions(only) {
   mcqVerify.running = false;
   saveP1Setup();
   renderP1SetupList();
+  const qs = state.p1_setup.questions || [];
+  document.dispatchEvent(new CustomEvent("ai:check-done", { detail: { kind: "mcq", passed: qs.filter(q => mcqStatus(q) === "ok").length, issues: qs.filter(q => mcqStatus(q) === "issue").length, failed: qs.filter(q => mcqStatus(q) === "failed").length } }));
 }
 
 // Files without topic headings get AI topic names batch by batch, which drift
@@ -423,6 +426,8 @@ async function p1RunAnalysis(test) {
   }
   const j = { status: "running", message: "Analysing your answers…", error: null, startedAt: Date.now(), controller: new AbortController() };
   p1AnalysisJobs.set(test.id, j);
+  try { localStorage.setItem("rbi_p1_analysis_pending", test.id); } catch (_) { /* resuming is a convenience */ }
+  document.dispatchEvent(new CustomEvent("ai:activity", { detail: { testId: test.id } }));
   p1RenderAnalysis(test);
   const timer = setInterval(() => p1RenderAnalysisStatus(test), 1000);
   try {
@@ -445,10 +450,23 @@ async function p1RunAnalysis(test) {
     }
   } finally {
     clearInterval(timer);
+    try { if (localStorage.getItem("rbi_p1_analysis_pending") === test.id) localStorage.removeItem("rbi_p1_analysis_pending"); } catch (_) { /* ignore */ }
     p1RenderAnalysis(test);
     // the review cards show the AI's "why" for each wrong answer
     if (state.p1_lastResultTest && state.p1_lastResultTest.id === test.id) renderP1ResultReviewList();
+    const jj = p1AnalysisJobs.get(test.id);
+    document.dispatchEvent(new CustomEvent("ai:analysis-done", { detail: { testId: test.id, ok: !!p1LoadAnalyses()[test.id], error: !!(jj && jj.status === "error") } }));
   }
+}
+
+// After a reload: an objective analysis that was still running is started again
+function p1ResumeAnalysis() {
+  let id = "";
+  try { id = localStorage.getItem("rbi_p1_analysis_pending") || ""; } catch (_) { return; }
+  if (!id || !window.AIEval || !AIEval.isReady("analysis")) return;
+  const test = loadJSON("rbi_p1_history", []).find(t => t && t.id === id);
+  if (!test || p1LoadAnalyses()[id]) { try { localStorage.removeItem("rbi_p1_analysis_pending"); } catch (_) { /* ignore */ } return; }
+  p1RunAnalysis(test);
 }
 
 function p1RenderAnalysisStatus(test) {

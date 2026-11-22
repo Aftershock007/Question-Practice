@@ -1572,7 +1572,7 @@ function renderHistory() {
             ${q.modelAnswer ? `<button type="button" class="btn-toggle-model-mini" data-test-id="${escapeHTML(t.id)}" data-idx="${idx}">Toggle Model Answer</button>` : ""}
           </div>
           ${q.modelAnswer ? `<div class="q-review-model-box" id="model-${escapeHTML(t.id)}-${idx}" style="display:none;"><strong>Model Answer:</strong><br>${escapeHTML(q.modelAnswer)}</div>` : ""}
-          ${window.AIEval ? AIEval.historyBlockHTML(t, q) : ""}
+          <div data-ai-hist-slot="${escapeHTML(t.id + "::" + q.id)}">${window.AIEval ? AIEval.historyBlockHTML(t, q) : ""}</div>
         </div>
       `;
     });
@@ -1636,6 +1636,146 @@ function renderHistory() {
   // Subject > Chapter tests > chapter > Full / Partial chapter, and Subject > Mix tests
   if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, history, t => cardsById.get(t.id), "p2");
   else { listElem.innerHTML = ""; history.forEach(t => listElem.appendChild(cardsById.get(t.id))); }
+}
+
+// ---- AI work in the background ---------------------------------------------
+// Grading, the objective analysis and the AI Checks keep running while you use other screens.
+// A pill in the header shows what is running; History and the calendar update as soon as a
+// mark is written; a notice says when the work is finished.
+let aiBgTimer = null;
+
+function aiBackgroundWork() {
+  const items = [];
+  (window.AIEval && AIEval.activity ? AIEval.activity() : []).forEach(g =>
+    items.push({ kind: "grading", testId: g.testId, text: `AI grading: ${g.done} of ${g.total} answer${g.total === 1 ? "" : "s"} done` }));
+  if (typeof p1AnalysisJobs !== "undefined") p1AnalysisJobs.forEach((j, id) => { if (j.status === "running") items.push({ kind: "analysis", testId: id, text: "AI analysing your objective test" }); });
+  if (typeof mcqVerify !== "undefined" && mcqVerify.running) items.push({ kind: "mcq-check", testId: "", text: `AI Check: ${mcqVerify.done} of ${mcqVerify.total} questions` });
+  if (typeof descVerify !== "undefined" && descVerify.running) items.push({ kind: "desc-check", testId: "", text: `AI Check: ${descVerify.done} of ${descVerify.total} questions` });
+  return items;
+}
+
+// The header pill (shown on every screen while AI works in the background)
+function updateAIBackgroundStatus() {
+  const el = $("ai-bg-status");
+  if (!el) return;
+  const items = aiBackgroundWork();
+  el.hidden = !items.length;
+  if (items.length) {
+    el.innerHTML = `<span class="ai-spinner" aria-hidden="true"></span><span>${escapeHTML(items[0].text)}${items.length > 1 ? ` · +${items.length - 1} more` : ""}</span>`;
+    el.dataset.kind = items[0].kind;
+    el.dataset.testId = items[0].testId || "";
+    el.title = items.map(i => i.text).join("\n") + "\nClick to open";
+    if (!aiBgTimer) aiBgTimer = setInterval(updateAIBackgroundStatus, 1000);
+  } else if (aiBgTimer) {
+    clearInterval(aiBgTimer);
+    aiBgTimer = null;
+  }
+}
+
+// Open the screen that belongs to a piece of AI work
+function openAIWork(kind, testId) {
+  if (kind === "grading" || kind === "result") {
+    const t = loadJSON("rbi_history", []).find(x => x.id === testId);
+    if (!t) return;
+    setPhase("phase2");
+    renderResult(t);
+    showScreen("result");
+  } else if (kind === "analysis") {
+    setPhase("phase1");
+    reviewP1HistoricalTest(testId);
+  } else if (kind === "mcq-check") {
+    setPhase("phase1");
+    showScreen("setup");
+  } else if (kind === "desc-check") {
+    setPhase("phase2");
+    showScreen("setup");
+  }
+}
+
+// A notice in the corner with an optional "Open" button (never shown during an exam)
+function showAINotice(text, kind, testId) {
+  const inExam = !($("screen-exam") || {}).hidden || !($("screen-exam-p1") || {}).hidden;
+  if (inExam) return;
+  let box = $("ai-done-toast");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "ai-done-toast";
+    box.className = "ai-done-toast";
+    box.setAttribute("role", "status");
+    document.body.appendChild(box);
+    box.addEventListener("click", (e) => {
+      const open = e.target.closest("[data-ai-open]");
+      if (open) openAIWork(open.dataset.aiOpen, open.dataset.testId || "");
+      if (open || e.target.closest("[data-ai-dismiss]")) box.classList.remove("is-visible");
+    });
+  }
+  box.innerHTML = `<span class="ai-done-text">${escapeHTML(text)}</span>` +
+    (kind ? `<button type="button" class="ai-btn-primary" data-ai-open="${escapeHTML(kind)}" data-test-id="${escapeHTML(testId || "")}">Open</button>` : "") +
+    `<button type="button" class="ai-done-close" data-ai-dismiss aria-label="Dismiss">&times;</button>`;
+  box.classList.remove("is-visible");
+  void box.offsetWidth;
+  box.classList.add("is-visible");
+  clearTimeout(showAINotice.timer);
+  showAINotice.timer = setTimeout(() => box.classList.remove("is-visible"), 15000);
+}
+
+// A mark was written in the background: refresh History and the calendar if they are on screen
+function refreshAfterGrade(testId) {
+  const hist = $("screen-history");
+  if (hist && !hist.hidden) {
+    const history = loadJSON("rbi_history", []);
+    const t = history.find(x => x.id === testId);
+    if (t) {
+      const slot = document.querySelector(`#history-card-${CSS.escape(testId)} .history-score-slot`);
+      if (slot) slot.innerHTML = historyScoreBadgeHTML(t);
+      (t.questions || []).forEach(q => {
+        const v = t.scores && t.scores[q.id] != null ? t.scores[q.id] : "";
+        document.querySelectorAll(`.score-input[data-test-id="${CSS.escape(testId)}"][data-qid="${CSS.escape(q.id)}"]`).forEach(inp => { if (document.activeElement !== inp) inp.value = v; });
+        const box = document.querySelector(`[data-ai-hist-slot="${CSS.escape(testId + "::" + q.id)}"]`);
+        if (box && window.AIEval) box.innerHTML = AIEval.historyBlockHTML(t, q);
+      });
+    }
+    renderHistoryStats(history);
+  }
+  const calScreen = $("screen-calendar");
+  if (calScreen && !calScreen.hidden && typeof renderCalendar === "function") renderCalendar();
+}
+
+function wireAIBackground() {
+  document.addEventListener("ai:activity", updateAIBackgroundStatus);
+  document.addEventListener("ai:graded", (e) => { refreshAfterGrade(e.detail.testId); updateAIBackgroundStatus(); });
+  document.addEventListener("ai:run-done", (e) => {
+    updateAIBackgroundStatus();
+    const { testId, failed } = e.detail || {};
+    const onIt = !($("screen-result") || {}).hidden && state.lastResultTest && state.lastResultTest.id === testId;
+    if (onIt) return;
+    const t = loadJSON("rbi_history", []).find(x => x.id === testId);
+    if (!t) return;
+    const qs = t.questions || [];
+    const graded = qs.filter(q => t.scores && t.scores[q.id] != null && t.scores[q.id] !== "");
+    const got = graded.reduce((a, q) => a + Number(t.scores[q.id] || 0), 0);
+    const max = graded.reduce((a, q) => a + (Number(q.marks) || 10), 0);
+    showAINotice(`AI Analysis finished (${formatDateHM(t.date)}): ${Number(got.toFixed(2))} / ${max} marks` + (failed ? ` · ${failed} answer${failed === 1 ? "" : "s"} could not be graded` : ""), "result", testId);
+  });
+  document.addEventListener("ai:analysis-done", (e) => {
+    updateAIBackgroundStatus();
+    const { testId, ok } = e.detail || {};
+    const onIt = !($("screen-result-p1") || {}).hidden && state.p1_lastResultTest && state.p1_lastResultTest.id === testId;
+    if (!onIt) showAINotice(ok ? "The topic-wise AI analysis of your objective test is ready." : "The AI analysis of your objective test could not finish.", "analysis", testId);
+  });
+  document.addEventListener("ai:check-done", (e) => {
+    updateAIBackgroundStatus();
+    const d = e.detail || {};
+    const screen = d.kind === "mcq" ? $("screen-setup-p1") : $("screen-setup");
+    if (screen && !screen.hidden) return;
+    showAINotice(`AI Check finished: ${d.passed} passed` + (d.issues ? `, ${d.issues} need attention` : "") + (d.failed ? `, ${d.failed} could not be checked` : "") + ".", d.kind === "mcq" ? "mcq-check" : "desc-check", "");
+  });
+  document.addEventListener("ai:resumed", (e) => {
+    updateAIBackgroundStatus();
+    showAINotice(`Grading of ${e.detail.count} answer${e.detail.count === 1 ? "" : "s"} was interrupted by a page reload and has started again.`, "", "");
+  });
+  const pill = $("ai-bg-status");
+  if (pill) pill.addEventListener("click", () => openAIWork(pill.dataset.kind, pill.dataset.testId));
 }
 
 // Score summary badge of one descriptive test in History
@@ -6166,7 +6306,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Initial load
   setPhase(state.phase);
-  // "Resume your test?" waits until you have signed in (auth.js)
-  if (typeof window.whenSignedIn === "function") window.whenSignedIn(checkResumeActiveTest);
-  else checkResumeActiveTest();
+  // AI work keeps running in the background; the header shows it on every screen
+  wireAIBackground();
+  // after sign-in (auth.js): "resume your test?", then AI work a page reload interrupted
+  const afterSignIn = () => {
+    checkResumeActiveTest();
+    if (window.AIEval && AIEval.resumePending) AIEval.resumePending();
+    if (typeof p1ResumeAnalysis === "function") p1ResumeAnalysis();
+    updateAIBackgroundStatus();
+  };
+  if (typeof window.whenSignedIn === "function") window.whenSignedIn(afterSignIn);
+  else afterSignIn();
 });
