@@ -312,6 +312,7 @@ const state = {
   endTime: 0,          // Date.now() value when time ends
   questionShownAt: 0,  // Date.now() when current question was shown
   lastAutoSave: 0,     // timestamp of last throttled exam autosave
+  autoSaveTimer: null, // save shortly after typing stops
   lastResultTest: null, // test object currently being viewed on Phase 2 result screen
   setup_page: 1,       // current page for Phase 2 setup questions list
 
@@ -800,6 +801,7 @@ function startTest(testType) {
   renderPalette();
   showQuestion(0);
   showScreen("exam");
+  focusExamAnswer();
 
   const header = $("app-header");
   if (header) header.style.display = "none";
@@ -844,6 +846,7 @@ function showQuestion(index) {
   }
 
   state.currentIndex = index;
+  state.test.currentIndex = index;          // a reload resumes on this question
   state.questionShownAt = Date.now();
 
   state.visitedQuestions = state.visitedQuestions || new Set([0]);
@@ -885,6 +888,14 @@ function showQuestion(index) {
   updateWordCount();
   renderPalette();
   updateExamSummary();
+}
+
+// Put the cursor at the end of the answer box (only works once the exam screen is visible)
+function focusExamAnswer() {
+  const ta = $("exam-answer");
+  if (!ta || !state.test) return;
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
 }
 
 // Persist the current answer text and accumulate elapsed time for active question
@@ -948,6 +959,8 @@ function handleAnswerInput() {
     }
     saveJSON("rbi_active_test", state.test);
   }
+  clearTimeout(state.autoSaveTimer);
+  state.autoSaveTimer = setTimeout(() => { if (state.test) saveJSON("rbi_active_test", state.test); }, 700);
 }
 
 // Update the live word counter and apply visual threshold warning styles
@@ -1138,6 +1151,7 @@ function finishTest(auto) {
     clearInterval(state.timerId);
     state.timerId = null;
   }
+  clearTimeout(state.autoSaveTimer);
 
   if (!state.test) return;
   // Only read the textarea when the exam screen is actually live (not when finishing a
@@ -1224,9 +1238,11 @@ function checkResumeActiveTest() {
         resumeExam();
         return;
       } else {
+        setPhase("phase2");
         finishTest(false);
       }
     } else {
+      setPhase("phase2");
       finishTest(true);
     }
   }
@@ -1234,7 +1250,9 @@ function checkResumeActiveTest() {
 
 // Resume an active exam without resetting answers
 function resumeExam() {
-  state.currentIndex = 0;
+  const last = Number(state.test.currentIndex);
+  const index = Number.isInteger(last) && last >= 0 && last < state.test.questions.length ? last : 0;
+  state.currentIndex = index;
   state.questionShownAt = 0;
   state.visitedQuestions = new Set(state.test.visitedQuestions || [0]);
   state.markedForReview = new Set(state.test.markedForReview || []);
@@ -1243,8 +1261,9 @@ function resumeExam() {
   if (header) header.style.display = "none";
 
   renderPalette();
-  showQuestion(0);
+  showQuestion(index);
   showScreen("exam");
+  focusExamAnswer();
 
   const nav = document.querySelector("#app-header nav");
   if (nav) nav.hidden = true;
@@ -4732,7 +4751,7 @@ function showP1Question(index) {
   if (qMarks) qMarks.textContent = `Marks: +${(q.marks || 1.0).toFixed(2)}`;
 
   const qNeg = $("p1-exam-neg");
-  if (qNeg) qNeg.textContent = `Negative: -${(q.negativeMarks || 0.25).toFixed(2)}`;
+  if (qNeg) qNeg.textContent = `Negative: -${Number(q.negativeMarks ?? 0.25).toFixed(2)}`;
 
   const qText = $("p1-exam-question-text");
   renderPassageSlot("p1-exam-passage", state.p1_test.questions, index);
@@ -4761,6 +4780,7 @@ function showP1Question(index) {
   state.p1_questionShownAt = Date.now();
   renderP1Palette();
   updateP1ExamSummary();
+  saveJSON("rbi_p1_active_test", state.p1_test);
   // a long question / passage scrolls the page: bring the next question's top back into view
   const qBox = $("p1-exam-qpos");
   if (qBox && qBox.getBoundingClientRect().top < 0) qBox.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4806,7 +4826,7 @@ function clearP1Option() {
 
   document.querySelectorAll("#p1-exam-options-list .mcq-option-item").forEach(item => {
     item.classList.remove("selected");
-    item.setAttribute("aria-pressed", "false");
+    item.setAttribute(item.getAttribute("role") === "checkbox" ? "aria-checked" : "aria-pressed", "false");
   });
 
   renderP1Palette();
@@ -4825,6 +4845,7 @@ function markP1ForReview() {
   } else {
     state.p1_test.statuses[idx] = "review";
   }
+  saveJSON("rbi_p1_active_test", state.p1_test);
 
   if (idx < state.p1_test.questions.length - 1) {
     showP1Question(idx + 1);
@@ -4845,6 +4866,7 @@ function saveAndNextP1() {
   } else {
     state.p1_test.statuses[idx] = "not-answered";
   }
+  saveJSON("rbi_p1_active_test", state.p1_test);
 
   if (idx < state.p1_test.questions.length - 1) {
     showP1Question(idx + 1);
@@ -4946,7 +4968,7 @@ function finishP1Test(auto = false) {
 
   const test = state.p1_test;
   const pos = test.positiveMarks || 1.0;
-  const neg = test.negativeMarks || 0.25;
+  const neg = Number(test.negativeMarks ?? 0.25);     // 0 = no negative marking (|| would turn it into 0.25)
 
   let correctCount = 0;
   let incorrectCount = 0;
@@ -5090,7 +5112,7 @@ function renderP1ResultReviewList() {
     const statusBadge = isCorrect
       ? `<span class="rev-badge rev-badge-ok">Correct (+${(test.positiveMarks || 1).toFixed(2)})</span>`
       : isIncorrect
-      ? `<span class="rev-badge rev-badge-bad">Incorrect (-${(test.negativeMarks || 0.25).toFixed(2)})</span>`
+      ? `<span class="rev-badge rev-badge-bad">Incorrect (-${Number(test.negativeMarks ?? 0.25).toFixed(2)})</span>`
       : `<span class="rev-badge">Unattempted (0.00)</span>`;
 
     const optionsHtml = (q.options || []).map(opt => {
@@ -5227,7 +5249,7 @@ function renderP1History() {
 
   if (history.length === 0) {
     if (statsElem) statsElem.innerHTML = "";
-    // the subject / chapter folders are there even before the first test
+    // no tests: no folders yet (they appear with the first test)
     if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, [], () => "", "p1");
     else listElem.innerHTML = `<div class="empty-state">No objective tests yet. Finish a test from <strong>New Test</strong> and it will appear here.</div>`;
     return;
@@ -5288,6 +5310,18 @@ function renderP1History() {
   // Subject > Chapter tests > chapter > Full / Partial chapter, and Subject > Mix tests
   if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, history, cardHTML, "p1");
   else listElem.innerHTML = history.map(cardHTML).join("");
+}
+
+// Tests taken with negative marking 0 were scored with -0.25 per wrong answer: fix their saved score
+function repairZeroNegativeScores() {
+  const history = loadJSON("rbi_p1_history", []);
+  let changed = false;
+  history.forEach(t => {
+    if (!t || Number(t.negativeMarks) !== 0 || t.negativeMarks === null || t.negativeMarks === "" || !Number.isFinite(Number(t.correctCount))) return;
+    const right = Math.round(Number(t.correctCount) * (Number(t.positiveMarks) || 1) * 100) / 100;
+    if (Math.abs((Number(t.score) || 0) - right) > 0.001) { t.score = right; changed = true; }
+  });
+  if (changed) saveJSON("rbi_p1_history", history);
 }
 
 // Review a test attempt from Phase-1 History
@@ -5768,6 +5802,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           if (state.markedForReview) {
             state.markedForReview.delete(currentQ.id);
+            state.test.markedForReview = Array.from(state.markedForReview);   // the saved copy too
           }
           saveJSON("rbi_active_test", state.test);
           updateWordCount();
@@ -5791,6 +5826,8 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         state.markedForReview.add(currentQ.id);
       }
+      state.test.markedForReview = Array.from(state.markedForReview);
+      saveJSON("rbi_active_test", state.test);
       if (state.currentIndex < state.test.questions.length - 1) {
         showQuestion(state.currentIndex + 1);
       } else {
@@ -5823,6 +5860,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   });
+
+  // Reload, closing the tab or switching away during an exam: save the answer on screen now
+  const saveOnLeave = () => {
+    if (state.test && state.questionShownAt > 0) storeCurrentAnswer();
+    if (state.p1_test && state.p1_questionShownAt > 0) saveCurrentP1QuestionTime();
+  };
+  window.addEventListener("pagehide", saveOnLeave);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") saveOnLeave(); });
 
   // Context menu prevention during exam
   window.addEventListener("contextmenu", (e) => {
@@ -6303,6 +6348,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // AI evaluation: settings dialog, result & history assessments (see ai_eval.js)
   if (window.AIEval) AIEval.init();
+
+  repairZeroNegativeScores();
 
   // Initial load
   setPhase(state.phase);

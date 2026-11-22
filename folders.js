@@ -14,20 +14,10 @@
 const FOLDER_SUBJECTS = ["Economics (ESI)", "Finance", "Management", "English", "General Awareness", "Quantitative Aptitude", "Reasoning"];
 const FOLDER_OTHER = "Other";
 const FOLDER_UNSORTED = "Not sorted yet";
-const FOLDER_REGISTRY_KEY = "rbi_folder_chapters";   // { [subject]: ["Chapter 1: ...", ...] } - folders exist even when empty
 
-function folderRegistry() {
-  try { const o = JSON.parse(localStorage.getItem(FOLDER_REGISTRY_KEY) || "{}"); return o && typeof o === "object" && !Array.isArray(o) ? o : {}; } catch (_) { return {}; }
-}
-
-// A chapter (or custom subject) you create gets its folders straight away
-function folderRegister(f) {
-  if (!f || !f.subject) return;
-  const reg = folderRegistry();
-  const list = reg[f.subject] || (reg[f.subject] = []);
-  if (f.kind === "chapter" && f.chapter && !list.some(c => c.toLowerCase().replace(/\s+/g, " ").trim() === f.chapter.toLowerCase().replace(/\s+/g, " ").trim())) list.push(f.chapter);
-  try { localStorage.setItem(FOLDER_REGISTRY_KEY, JSON.stringify(reg)); } catch (_) { /* folders still come from the tests */ }
-}
+// Folders come only from your tests: a folder appears with its first test and goes away
+// with its last one. (An older version kept empty chapter folders in this key.)
+try { localStorage.removeItem("rbi_folder_chapters"); } catch (_) { /* nothing to clean */ }
 
 // "Economics (ESI)" etc. from the subject / paper the parser guessed
 function folderSubjectFromGuess(guess) {
@@ -61,9 +51,9 @@ function folderChapterFromName(fileName, title) {
   return "";
 }
 
-// Chapter names already used for a subject (for the chapter suggestions)
+// Chapter names used by your tests and the questions on New Test (for the chapter suggestions)
 function folderKnownChapters(subject) {
-  const out = new Set(folderRegistry()[subject] || []);
+  const out = new Set();
   const add = f => { if (f && f.subject === subject && f.chapter) out.add(f.chapter); };
   loadJSON("rbi_p1_history", []).forEach(t => add(testFolderOf(t)));
   loadJSON("rbi_history", []).forEach(t => add(testFolderOf(t)));
@@ -181,7 +171,6 @@ function askFileFolder(fileName, rawText, guessSubject, count) {
 // Tag freshly imported questions with their folder (and the topic where the file gave none)
 function applyFolderToQuestions(questions, folder) {
   if (!folder) return;
-  folderRegister(folder);
   const tag = { subject: folder.subject, kind: folder.kind, chapter: folder.chapter || "", coverage: folder.coverage || "" };
   // the subject you chose replaces the guessed one (objective: q.subject, subjective: q.paper)
   const paper = { "Economics (ESI)": "ESI", "Finance": "Finance", "Management": "Management", "English": "English Descriptive" }[folder.subject];
@@ -229,7 +218,9 @@ const ICON_BACK = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.
 const ICON_UP = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15.5V5M5 9.5 10 4.5l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const explorerState = {};   // phaseKey -> { path: [keys], back: [[keys]...] }
 
-// The folder tree of a list of tests
+// The folder tree of a list of tests: only folders that hold at least one test exist
+// (a subject, chapter or Full / Partial folder appears with its first test and is gone
+// when its last test is deleted or moved)
 function buildHistoryTree(tests) {
   const root = { key: "", name: "History", kind: "root", children: [], tests: [] };
   const child = (parent, key, name, kind) => {
@@ -238,21 +229,6 @@ function buildHistoryTree(tests) {
     return c;
   };
   const chapterKey = name => "c:" + String(name || "").toLowerCase().replace(/\s+/g, " ").trim();
-  // every subject always has "Chapter tests" and "Mix tests"; every chapter "Full" and "Partial"
-  const seed = (subject, chapters) => {
-    const sn = child(root, "s:" + subject, subject, "subject");
-    const ct = child(sn, "chapter", "Chapter tests", "group");
-    child(sn, "mix", "Mix tests", "group");
-    (chapters || []).forEach(chName => {
-      const ch = child(ct, chapterKey(chName), chName, "chapter");
-      child(ch, "full", "Full chapter", "coverage");
-      child(ch, "partial", "Partial chapter", "coverage");
-    });
-  };
-  const reg = folderRegistry();
-  FOLDER_SUBJECTS.forEach(subj => seed(subj, reg[subj]));
-  Object.keys(reg).filter(subj => !FOLDER_SUBJECTS.includes(subj)).forEach(subj => seed(subj, reg[subj]));
-  tests.forEach(t => { const f = testFolderOf(t); if (f && f.subject) seed(f.subject, f.kind === "chapter" && f.chapter ? [f.chapter] : []); });
   tests.forEach(t => {
     const f = testFolderOf(t);
     if (!f) { child(root, "unsorted", FOLDER_UNSORTED, "unsorted").tests.push(t); return; }
@@ -351,7 +327,7 @@ function renderHistoryFolders(listElem, tests, cardFor, phaseKey) {
           ${tiles ? `<div class="ex-grid">${tiles}</div>` : ""}
           ${node.kind === "unsorted" ? `<p class="hist-folder-hint">These tests were taken before folders existed, or from questions typed by hand. Use "Move to folder" on a test to sort it.</p>` : ""}
           ${node.tests.length ? `<div class="ex-files-head">${node.tests.length} test${node.tests.length === 1 ? "" : "s"} in this folder</div><div class="ex-files"></div>` : ""}
-          ${!tiles && !node.tests.length ? `<p class="ex-empty">This folder is empty.</p>` : ""}
+          ${!tiles && !node.tests.length ? `<p class="ex-empty">${node.kind === "root" ? "No tests yet. Finish a test and its subject and chapter folders appear here by themselves." : "This folder is empty."}</p>` : ""}
         </section>
       </div>
     </div>`;
@@ -386,7 +362,6 @@ async function moveHistoryTestToFolder(storageKey, testId) {
   });
   if (!picked) return;
   t.folder = { subject: picked.subject, kind: picked.kind, chapter: picked.chapter, coverage: picked.coverage };
-  folderRegister(t.folder);
   saveJSON(storageKey, history);
   if (storageKey === "rbi_p1_history") renderP1History(); else renderHistory();
 }

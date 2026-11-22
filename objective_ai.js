@@ -292,7 +292,7 @@ function mcqIsCorrect(userAns, correct) {
 function p1TopicStats(test) {
   const by = new Map();
   const pos = test.positiveMarks || 1;
-  const neg = test.negativeMarks || 0.25;
+  const neg = Number(test.negativeMarks ?? 0.25);     // 0 = no negative marking
   (test.questions || []).forEach((q, i) => {
     const topic = mcqTopicOf(q);
     const k = topic.toLowerCase();
@@ -349,7 +349,7 @@ function p1AnalysisPrompt(test, stats) {
   const chapter = [...new Set(test.questions.map(q => q.chapter).filter(Boolean))].join(", ");
   const subjects = [...new Set(test.questions.map(q => q.subject).filter(Boolean))].join(", ");
   L.push(`Objective test: ${test.questions.length} MCQs${subjects ? " · " + subjects : ""}${chapter ? " · chapter: " + chapter : ""}.`);
-  L.push(`Marking: +${test.positiveMarks || 1} correct, -${test.negativeMarks || 0.25} wrong. Score ${test.score} / ${test.maxScore}, accuracy ${test.accuracy}%.`);
+  L.push(`Marking: +${test.positiveMarks || 1} correct, -${test.negativeMarks ?? 0.25} wrong. Score ${test.score} / ${test.maxScore}, accuracy ${test.accuracy}%.`);
   L.push("");
   L.push("TOPIC-WISE RESULT (weakest first):");
   stats.forEach(t => L.push(`- ${t.topic}: ${t.correct} correct, ${t.wrong} wrong of ${t.attempted} attempted (accuracy ${t.accuracy}%, net ${t.net}/${t.max})`));
