@@ -614,7 +614,7 @@ has no error of that kind, but do not skip real ones.
   const SCHEMES_KEY = "rbi_ai_schemes";       // { [hash]: { points: [{id, point, weight}], createdAt } }
   const GRADE_RUNS = 2;                       // independent gradings per answer
   const RUN_SPREAD = 0.12;                    // runs further apart than 12% of the marks get a third, deciding run
-  const ANCHOR_BELOW = 0.35;                  // the mark may fall at most 35% of the marks below the checklist coverage...
+  const ANCHOR_BELOW = 0.25;                  // the mark may fall at most 25% of the marks below the checklist coverage...
   const ANCHOR_ABOVE = 0.15;                  // ...and rise at most 15% above it
   const COVER_VALUE = { full: 1, partial: 0.5, missing: 0 };
 

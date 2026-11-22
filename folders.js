@@ -14,6 +14,20 @@
 const FOLDER_SUBJECTS = ["Economics (ESI)", "Finance", "Management", "English", "General Awareness", "Quantitative Aptitude", "Reasoning"];
 const FOLDER_OTHER = "Other";
 const FOLDER_UNSORTED = "Not sorted yet";
+const FOLDER_REGISTRY_KEY = "rbi_folder_chapters";   // { [subject]: ["Chapter 1: ...", ...] } - folders exist even when empty
+
+function folderRegistry() {
+  try { const o = JSON.parse(localStorage.getItem(FOLDER_REGISTRY_KEY) || "{}"); return o && typeof o === "object" && !Array.isArray(o) ? o : {}; } catch (_) { return {}; }
+}
+
+// A chapter (or custom subject) you create gets its folders straight away
+function folderRegister(f) {
+  if (!f || !f.subject) return;
+  const reg = folderRegistry();
+  const list = reg[f.subject] || (reg[f.subject] = []);
+  if (f.kind === "chapter" && f.chapter && !list.some(c => c.toLowerCase().replace(/\s+/g, " ").trim() === f.chapter.toLowerCase().replace(/\s+/g, " ").trim())) list.push(f.chapter);
+  try { localStorage.setItem(FOLDER_REGISTRY_KEY, JSON.stringify(reg)); } catch (_) { /* folders still come from the tests */ }
+}
 
 // "Economics (ESI)" etc. from the subject / paper the parser guessed
 function folderSubjectFromGuess(guess) {
@@ -49,7 +63,7 @@ function folderChapterFromName(fileName, title) {
 
 // Chapter names already used for a subject (for the chapter suggestions)
 function folderKnownChapters(subject) {
-  const out = new Set();
+  const out = new Set(folderRegistry()[subject] || []);
   const add = f => { if (f && f.subject === subject && f.chapter) out.add(f.chapter); };
   loadJSON("rbi_p1_history", []).forEach(t => add(testFolderOf(t)));
   loadJSON("rbi_history", []).forEach(t => add(testFolderOf(t)));
@@ -165,6 +179,7 @@ function askFileFolder(fileName, rawText, guessSubject, count) {
 // Tag freshly imported questions with their folder (and the topic where the file gave none)
 function applyFolderToQuestions(questions, folder) {
   if (!folder) return;
+  folderRegister(folder);
   const tag = { subject: folder.subject, kind: folder.kind, chapter: folder.chapter || "", coverage: folder.coverage || "" };
   // the subject you chose replaces the guessed one (objective: q.subject, subjective: q.paper)
   const paper = { "Economics (ESI)": "ESI", "Finance": "Finance", "Management": "Management", "English": "English Descriptive" }[folder.subject];
@@ -220,13 +235,29 @@ function buildHistoryTree(tests) {
     if (!c) { c = { key, name, kind, children: [], tests: [] }; parent.children.push(c); }
     return c;
   };
+  const chapterKey = name => "c:" + String(name || "").toLowerCase().replace(/\s+/g, " ").trim();
+  // every subject always has "Chapter tests" and "Mix tests"; every chapter "Full" and "Partial"
+  const seed = (subject, chapters) => {
+    const sn = child(root, "s:" + subject, subject, "subject");
+    const ct = child(sn, "chapter", "Chapter tests", "group");
+    child(sn, "mix", "Mix tests", "group");
+    (chapters || []).forEach(chName => {
+      const ch = child(ct, chapterKey(chName), chName, "chapter");
+      child(ch, "full", "Full chapter", "coverage");
+      child(ch, "partial", "Partial chapter", "coverage");
+    });
+  };
+  const reg = folderRegistry();
+  FOLDER_SUBJECTS.forEach(subj => seed(subj, reg[subj]));
+  Object.keys(reg).filter(subj => !FOLDER_SUBJECTS.includes(subj)).forEach(subj => seed(subj, reg[subj]));
+  tests.forEach(t => { const f = testFolderOf(t); if (f && f.subject) seed(f.subject, f.kind === "chapter" && f.chapter ? [f.chapter] : []); });
   tests.forEach(t => {
     const f = testFolderOf(t);
     if (!f) { child(root, "unsorted", FOLDER_UNSORTED, "unsorted").tests.push(t); return; }
     const subject = child(root, "s:" + f.subject, f.subject, "subject");
     if (f.kind !== "chapter") { child(subject, "mix", "Mix tests", "group").tests.push(t); return; }
     const chapters = child(subject, "chapter", "Chapter tests", "group");
-    const ch = child(chapters, "c:" + String(f.chapter || "").toLowerCase().replace(/\s+/g, " ").trim(), f.chapter, "chapter");
+    const ch = child(chapters, chapterKey(f.chapter), f.chapter, "chapter");
     child(ch, f.coverage === "partial" ? "partial" : "full", f.coverage === "partial" ? "Partial chapter" : "Full chapter", "coverage").tests.push(t);
   });
   const order = (a, b) => {
@@ -250,6 +281,16 @@ function explorerNode(root, path) {
     trail.push(node);
   }
   return { node, trail };
+}
+
+// History opens in the folder of the test you just finished
+function historyOpenFolderOf(test, phaseKey) {
+  const f = testFolderOf(test);
+  const path = !f ? ["unsorted"] : f.kind === "chapter"
+    ? ["s:" + f.subject, "chapter", "c:" + String(f.chapter || "").toLowerCase().replace(/\s+/g, " ").trim(), f.coverage === "partial" ? "partial" : "full"]
+    : ["s:" + f.subject, "mix"];
+  explorerState[phaseKey] = { path, back: [], loaded: true };
+  try { sessionStorage.setItem("rbi_hist_path_" + phaseKey, JSON.stringify(path)); } catch (_) { /* per-tab convenience */ }
 }
 
 // Draw the explorer into listElem. cardFor(test) gives the test's card (element or HTML).
@@ -343,6 +384,110 @@ async function moveHistoryTestToFolder(storageKey, testId) {
   });
   if (!picked) return;
   t.folder = { subject: picked.subject, kind: picked.kind, chapter: picked.chapter, coverage: picked.coverage };
+  folderRegister(t.folder);
   saveJSON(storageKey, history);
   if (storageKey === "rbi_p1_history") renderP1History(); else renderHistory();
+}
+
+// ---- Self-assessment: performance by subject and chapter (bar chart) ------
+// Score % = marks scored / marks possible over every test in that folder
+// (objective: net score, never below 0; subjective: graded answers only).
+function testScoreParts(t, kind) {
+  if (kind === "mcq") return { got: Math.max(0, Number(t.score) || 0), max: Number(t.maxScore) || 0 };
+  let got = 0;
+  let max = 0;
+  (t.questions || []).forEach(q => {
+    const sc = t.scores ? t.scores[q.id] : null;
+    if (sc !== null && sc !== undefined && sc !== "" && !isNaN(sc)) { got += Number(sc); max += Number(q.marks) || 10; }
+  });
+  return { got, max };
+}
+
+function perfBucket() { return { got: 0, max: 0, tests: 0, best: null, last: null, lastAt: 0 }; }
+function perfAdd(b, parts, at) {
+  if (!parts.max) return;
+  const pct = parts.got / parts.max * 100;
+  b.got += parts.got;
+  b.max += parts.max;
+  b.tests++;
+  b.best = b.best === null ? pct : Math.max(b.best, pct);
+  if (at >= b.lastAt) { b.last = pct; b.lastAt = at; }
+}
+
+// Draw the chart into container (history: newest first)
+function renderPerformanceChart(container, history, kind) {
+  if (!container) return;
+  const subjects = new Map();
+  let unsorted = perfBucket();
+  const all = perfBucket();
+  history.forEach(t => {
+    const parts = testScoreParts(t, kind);
+    const at = new Date(t.date || t.completedAt).getTime() || 0;
+    perfAdd(all, parts, at);
+    const f = testFolderOf(t);
+    if (!f || !f.subject) { perfAdd(unsorted, parts, at); return; }
+    if (!subjects.has(f.subject)) subjects.set(f.subject, { total: perfBucket(), chapters: new Map(), mix: perfBucket() });
+    const s = subjects.get(f.subject);
+    perfAdd(s.total, parts, at);
+    if (f.kind === "chapter") {
+      const key = String(f.chapter || "").toLowerCase().replace(/\s+/g, " ").trim();
+      if (!s.chapters.has(key)) s.chapters.set(key, { name: f.chapter, total: perfBucket(), full: perfBucket(), partial: perfBucket() });
+      const c = s.chapters.get(key);
+      perfAdd(c.total, parts, at);
+      perfAdd(f.coverage === "partial" ? c.partial : c.full, parts, at);
+    } else perfAdd(s.mix, parts, at);
+  });
+  const pctOf = b => (b.max ? b.got / b.max * 100 : null);
+  const fmt = v => (Math.round(v * 10) / 10).toString();
+  const describe = (name, b) => `${name}: ${Math.round(pctOf(b))}% (${fmt(b.got)} of ${fmt(b.max)} marks) over ${b.tests} test${b.tests === 1 ? "" : "s"} · best ${Math.round(b.best)}% · latest ${Math.round(b.last)}%`;
+  const bar = (name, b, level, extra) => {
+    const pct = pctOf(b);
+    if (pct === null) return `<div class="perf-row perf-l${level} is-empty"><span class="perf-name">${escapeHTML(name)}</span><span class="perf-track"></span><span class="perf-val">No marks yet</span></div>`;
+    return `<div class="perf-row perf-l${level}" tabindex="0" data-tip="${escapeHTML(describe(name, b))}" aria-label="${escapeHTML(describe(name, b))}">
+      <span class="perf-name">${escapeHTML(name)}${extra || ""}</span>
+      <span class="perf-track"><span class="perf-fill" style="width:${Math.max(1.5, Math.min(100, pct))}%"></span></span>
+      <span class="perf-val"><strong>${Math.round(pct)}%</strong> <span>${b.tests} test${b.tests === 1 ? "" : "s"}</span></span>
+    </div>`;
+  };
+  const order = (a, b) => {
+    const ia = FOLDER_SUBJECTS.indexOf(a), ib = FOLDER_SUBJECTS.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+  };
+  const rows = [...subjects.keys()].sort(order).map(name => {
+    const s = subjects.get(name);
+    const chapters = [...s.chapters.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    const inner = chapters.map(c => {
+      const split = [c.full.tests ? `Full ${Math.round(pctOf(c.full))}%` : "", c.partial.tests ? `Partial ${Math.round(pctOf(c.partial))}%` : ""].filter(Boolean).join(" · ");
+      return bar(c.name, c.total, 2, split ? `<em class="perf-split">${escapeHTML(split)}</em>` : "");
+    }).join("") + (s.mix.tests ? bar("Mix tests", s.mix, 2) : "");
+    return `<details class="perf-subject"><summary>${bar(name, s.total, 1)}</summary><div class="perf-children">${inner || '<p class="perf-none">No chapter tests yet.</p>'}</div></details>`;
+  }).join("");
+  const overall = pctOf(all);
+  container.innerHTML = all.tests ? `
+    <section class="perf-card" aria-label="Performance by subject and chapter">
+      <div class="perf-head">
+        <div><h3>Performance by subject</h3><p>Score as a share of the marks possible. Open a subject to see every chapter; hover a bar for best and latest scores.</p></div>
+        <div class="perf-kpis">
+          <span><strong>${history.length}</strong> test${history.length === 1 ? "" : "s"}</span>
+          ${overall !== null ? `<span><strong>${Math.round(overall)}%</strong> overall</span>` : ""}
+        </div>
+      </div>
+      <div class="perf-scale" aria-hidden="true"><span></span><span class="perf-ticks">${[0, 25, 50, 75, 100].map(v => `<i style="left:${v}%">${v}%</i>`).join("")}</span><span></span></div>
+      <div class="perf-rows">${rows}${unsorted.tests ? bar(FOLDER_UNSORTED, unsorted, 1) : ""}</div>
+    </section>` : "";
+  // one tooltip for every bar (pointer and keyboard)
+  let tip = document.getElementById("perf-tip");
+  if (!tip) { tip = document.createElement("div"); tip.id = "perf-tip"; tip.className = "perf-tip"; tip.setAttribute("role", "tooltip"); document.body.appendChild(tip); }
+  const show = (row, x, y) => {
+    tip.textContent = row.dataset.tip;
+    tip.classList.add("is-visible");
+    const r = tip.getBoundingClientRect();
+    tip.style.left = Math.min(window.innerWidth - r.width - 8, Math.max(8, x + 14)) + "px";
+    tip.style.top = Math.max(8, y - r.height - 12) + "px";
+  };
+  const hide = () => tip.classList.remove("is-visible");
+  container.onpointermove = (e) => { const row = e.target.closest(".perf-row[data-tip]"); if (row) show(row, e.clientX, e.clientY); else hide(); };
+  container.onpointerleave = hide;
+  container.onfocusin = (e) => { const row = e.target.closest(".perf-row[data-tip]"); if (row) { const r = row.getBoundingClientRect(); show(row, r.left + r.width / 2, r.top); } };
+  container.onfocusout = hide;
 }

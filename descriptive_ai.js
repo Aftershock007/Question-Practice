@@ -84,7 +84,8 @@ async function descVerifyBatch(batch, signal) {
       topic,
       model: res.model
     };
-    if (topic && !q.topic) q.topic = topic;
+    // the AI's sub-topic replaces none, or a document title the parser used as the topic
+    if (topic && (!q.topic || /practice|descriptive|questions?\b|answer\s*writing|mock|test\b/i.test(q.topic))) q.topic = topic;
     // the reference checklist for consistent marks, built from the answer you uploaded
     if (AIEval.storeScheme && Array.isArray(r.key_points)) AIEval.storeScheme(q, { points: r.key_points });
   });

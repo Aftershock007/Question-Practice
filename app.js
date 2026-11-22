@@ -46,6 +46,27 @@ function formatTime(totalSeconds) {
 }
 
 // Seconds -> "12 min 30 sec"
+// 754 s -> "00:12" (hh:mm)
+function formatHM(totalSeconds) {
+  const m = Math.max(0, Math.round((Number(totalSeconds) || 0) / 60));
+  return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+}
+
+// A date as "22 Nov 2026 · 09:04"
+function formatDateHM(d) {
+  const x = new Date(d);
+  if (isNaN(x)) return "";
+  return x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) + " · " +
+    String(x.getHours()).padStart(2, "0") + ":" + String(x.getMinutes()).padStart(2, "0");
+}
+
+// The round score dial of a History test card (pct null = not scored yet)
+function scoreRingHTML(pct, caption) {
+  const tone = pct === null ? "none" : pct >= 60 ? "good" : pct >= 40 ? "mid" : "low";
+  return `<div class="tcard-ring tone-${tone}" style="--pct:${pct === null ? 0 : Math.max(0, Math.min(100, pct))}"><span>${pct === null ? "–" : Math.round(pct) + "%"}</span></div>` +
+    (caption ? `<div class="tcard-ring-caption">${caption}</div>` : "");
+}
+
 function formatDuration(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));
   return Math.floor(s / 60) + " min " + (s % 60) + " sec";
@@ -1087,6 +1108,22 @@ function handlePasteOrDrop(e) {
     : "Pasting is not allowed in the exam. Type your answer yourself.");
 }
 
+// After an exam the New Test page starts empty (the questions live on in History),
+// and History opens in the folder this test belongs to
+function clearSetupAfterExam(kind, test) {
+  if (kind === "mcq") {
+    state.p1_setup.questions = [];
+    state.p1_setup.importNotes = [];
+    state.p1_setup_page = 1;
+    saveP1Setup();
+  } else {
+    state.setup.questions = [];
+    state.setup_page = 1;
+    saveSetup();
+  }
+  if (typeof historyOpenFolderOf === "function") historyOpenFolderOf(test, kind === "mcq" ? "p1" : "p2");
+}
+
 // Finalize the test, calculate time spent, and archive the attempt to history
 function finishTest(auto) {
   if (state.timerId) {
@@ -1109,6 +1146,7 @@ function finishTest(auto) {
   const history = loadJSON("rbi_history", []);
   history.unshift(test);
   saveJSON("rbi_history", history);
+  clearSetupAfterExam("write", test);
 
   if (typeof autoCompleteTodoOnExam === "function") {
     autoCompleteTodoOnExam("write", test);
@@ -1365,6 +1403,8 @@ function calculateStreak(history) {
 function renderHistoryStats(history) {
   const statsElem = $("history-stats");
   if (!statsElem) return;
+  // subject- and chapter-wise bars instead of averages
+  if (typeof renderPerformanceChart === "function") { renderPerformanceChart(statsElem, history, "write"); return; }
 
   const totalTests = history.length;
   let totalQuestionsAnswered = 0;
@@ -1443,7 +1483,8 @@ function renderHistory() {
   if (clearBtn) clearBtn.hidden = history.length === 0;
 
   if (history.length === 0) {
-    listElem.innerHTML = `<div class="empty-state">No descriptive tests yet. Finish a test from <strong>New Test</strong> and it will appear here.</div>`;
+    if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, [], () => "", "p2");
+    else listElem.innerHTML = `<div class="empty-state">No descriptive tests yet. Finish a test from <strong>New Test</strong> and it will appear here.</div>`;
     return;
   }
 
@@ -1528,22 +1569,33 @@ function renderHistory() {
       `;
     });
 
-    const scoreBadge = `<span class="history-score-slot">${historyScoreBadgeHTML(t)}</span>`;
-
+    const fld = typeof testFolderOf === "function" ? testFolderOf(t) : null;
+    card.classList.add("tcard-host");
     card.innerHTML = `
-      <div class="history-card-header">
-        <div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
-          <strong>${escapeHTML(dateStr)}</strong> - ${t.questions.length} question(s) · Time used: ${usedStr} of ${totalMin} min${autoNote}
-          ${scoreBadge}
+      <div class="tcard">
+        <div class="tcard-left history-score-slot">${historyScoreBadgeHTML(t)}</div>
+        <div class="tcard-main">
+          <div class="tcard-top">
+            <span class="tcard-type">${escapeHTML(t.testType || "Subjective Practice")}</span>
+            <span class="tcard-date">${escapeHTML(formatDateHM(t.date))}</span>
+          </div>
+          <div class="tcard-title">${escapeHTML(fld && fld.subject ? (fld.kind === "chapter" ? fld.chapter : fld.subject + " · Mix test") : (t.questions[0] && t.questions[0].paper) || "Descriptive test")}</div>
+          <div class="tcard-chips">
+            <span class="tcard-chip">${t.questions.length} question${t.questions.length === 1 ? "" : "s"}</span>
+            <span class="tcard-chip">${totalWords} words</span>
+            <span class="tcard-chip" title="Time used of the time allowed">Time ${formatHM(t.usedSeconds || 0)} / ${formatHM(totalMin * 60)}</span>
+            ${t.autoSubmitted ? `<span class="tcard-chip tcard-chip-warn">Auto-submitted</span>` : ""}
+          </div>
         </div>
-        <div class="actions">
+        <div class="tcard-actions">
+          <button type="button" class="btn-open-results ai-btn-primary tcard-primary" data-test-id="${escapeHTML(t.id)}">Open results</button>
           <button type="button" class="btn-toggle-answer-review btn-soft" data-test-id="${escapeHTML(t.id)}">Review answers</button>
-          <button type="button" class="btn-open-results" data-test-id="${escapeHTML(t.id)}">Open results</button>
           <button type="button" class="btn-retake btn-soft" data-test-id="${escapeHTML(t.id)}">Retake</button>
           <button type="button" class="btn-soft btn-move-folder" data-store="rbi_history" data-test-id="${escapeHTML(t.id)}">Move to folder</button>
           <button type="button" class="btn-delete-test btn-soft btn-soft-danger" data-test-id="${escapeHTML(t.id)}">Delete</button>
         </div>
       </div>
+      <details class="tcard-more"><summary>Marks per question</summary>
       <div class="table-scroll">
       <table class="history-table">
         <thead>
@@ -1561,6 +1613,7 @@ function renderHistory() {
         </tbody>
       </table>
       </div>
+      </details>
       <div class="test-answers-review-container" id="review-container-${escapeHTML(t.id)}" style="display: none;">
         <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #003366; display: flex; align-items: center; justify-content: space-between;">
           <span>Answers and evaluation</span>
@@ -1594,8 +1647,8 @@ function historyScoreBadgeHTML(t) {
     if (a && a.wordCount) words += a.wordCount;
   });
   return any
-    ? `<span class="score-badge">Score ${Number(total.toFixed(2))} / ${max}</span>`
-    : `<span class="score-pending">${words} words written · score not entered yet</span>`;
+    ? scoreRingHTML(max ? total / max * 100 : 0, `<strong>${Number(total.toFixed(2))}</strong> / ${max}`)
+    : scoreRingHTML(null, `${words} words<br>not graded yet`);
 }
 
 // Update and persist a candidate score assigned to a specific historical question
@@ -4645,6 +4698,7 @@ function finishP1Test(auto = false) {
   const history = loadJSON("rbi_p1_history", []);
   history.unshift(test);
   saveJSON("rbi_p1_history", history);
+  clearSetupAfterExam("mcq", test);
 
   if (typeof autoCompleteTodoOnExam === "function") {
     autoCompleteTodoOnExam("mcq", test);
@@ -4882,7 +4936,9 @@ function renderP1History() {
 
   if (history.length === 0) {
     if (statsElem) statsElem.innerHTML = "";
-    listElem.innerHTML = `<div class="empty-state">No objective tests yet. Finish a test from <strong>New Test</strong> and it will appear here.</div>`;
+    // the subject / chapter folders are there even before the first test
+    if (typeof renderHistoryFolders === "function") renderHistoryFolders(listElem, [], () => "", "p1");
+    else listElem.innerHTML = `<div class="empty-state">No objective tests yet. Finish a test from <strong>New Test</strong> and it will appear here.</div>`;
     return;
   }
 
@@ -4891,7 +4947,10 @@ function renderP1History() {
   const avgAccuracy = (history.reduce((acc, t) => acc + (t.accuracy || 0), 0) / totalTests).toFixed(1);
   const totalSolved = history.reduce((acc, t) => acc + ((t.correctCount || 0) + (t.incorrectCount || 0)), 0);
 
-  if (statsElem) {
+  if (statsElem && typeof renderPerformanceChart === "function") {
+    statsElem.classList.remove("history-stats-bar");
+    renderPerformanceChart(statsElem, history, "mcq");
+  } else if (statsElem) {
     statsElem.innerHTML = `
       <div class="stat-pill"><span>Total Tests:</span> <strong>${totalTests}</strong></div>
       <div class="stat-pill"><span>Avg Score:</span> <strong>${avgScore}</strong></div>
@@ -4901,31 +4960,38 @@ function renderP1History() {
   }
 
   const cardHTML = t => {
-    const dateStr = new Date(t.date || t.completedAt).toLocaleString();
+    const fld = typeof testFolderOf === "function" ? testFolderOf(t) : null;
+    const pct = t.maxScore ? Math.max(0, t.score) / t.maxScore * 100 : 0;
+    const n = t.questions.length || 1;
+    const seg = (cls, v, label) => v ? `<span class="tbar-${cls}" style="flex:${v}" title="${label}: ${v}"></span>` : "";
     return `
-      <div class="history-card" style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
-          <div>
-            <strong>${dateStr}</strong>
-            <span style="margin-left:8px; font-size:12px; color:var(--muted);">${t.testType ? escapeHTML(t.testType) + " · " : ""}${t.questions.length} Questions</span>
+      <article class="history-card tcard-host">
+        <div class="tcard">
+          <div class="tcard-left">${scoreRingHTML(pct, `<strong>${t.score.toFixed(2)}</strong> / ${t.maxScore.toFixed(0)}`)}</div>
+          <div class="tcard-main">
+            <div class="tcard-top">
+              <span class="tcard-type">${escapeHTML(t.testType || "Objective Practice")}</span>
+              <span class="tcard-date">${escapeHTML(formatDateHM(t.date || t.completedAt))}</span>
+            </div>
+            <div class="tcard-title">${escapeHTML(fld && fld.subject ? (fld.kind === "chapter" ? fld.chapter : fld.subject + " · Mix test") : (t.questions[0] && t.questions[0].subject) || "Objective test")}</div>
+            <div class="tcard-bar" role="img" aria-label="${t.correctCount} correct, ${t.incorrectCount} incorrect, ${t.unattemptedCount} not attempted of ${n}">
+              ${seg("ok", t.correctCount, "Correct")}${seg("bad", t.incorrectCount, "Incorrect")}${seg("none", t.unattemptedCount, "Not attempted")}
+            </div>
+            <div class="tcard-chips">
+              <span class="tcard-chip"><i class="dot dot-ok"></i>${t.correctCount} correct</span>
+              <span class="tcard-chip"><i class="dot dot-bad"></i>${t.incorrectCount} wrong</span>
+              <span class="tcard-chip"><i class="dot dot-none"></i>${t.unattemptedCount} left</span>
+              <span class="tcard-chip">Accuracy ${t.accuracy}%</span>
+              <span class="tcard-chip">Time ${formatHM(t.timeSpent || 0)}</span>
+            </div>
           </div>
-          <div>
-            <span style="font-size:16px; font-weight:700; color:#003366;">${t.score.toFixed(2)} / ${t.maxScore.toFixed(2)}</span>
-            <span style="margin-left:8px; font-size:13px; font-weight:600; color:#15803d;">(${t.accuracy}% Acc)</span>
+          <div class="tcard-actions">
+            <button type="button" class="btn-p1-history-review ai-btn-primary tcard-primary" data-id="${t.id}">Review test</button>
+            <button type="button" class="btn-soft btn-move-folder" data-store="rbi_p1_history" data-test-id="${escapeHTML(t.id)}">Move to folder</button>
+            <button type="button" class="btn-soft btn-soft-danger btn-p1-history-delete" data-id="${t.id}">Delete</button>
           </div>
         </div>
-        <div style="display:flex; flex-wrap:wrap; gap:6px 12px; font-size:13px; color:var(--muted); margin-bottom:10px;">
-          <span><i class="dot dot-ok"></i>Correct <strong>${t.correctCount}</strong></span>
-          <span><i class="dot dot-bad"></i>Incorrect <strong>${t.incorrectCount}</strong></span>
-          <span><i class="dot dot-none"></i>Unattempted <strong>${t.unattemptedCount}</strong></span>
-          <span>Time <strong>${formatDuration(t.timeSpent || 0)}</strong></span>
-        </div>
-        <div style="display:flex; gap:8px;">
-          <button type="button" class="btn-p1-history-review" data-id="${t.id}" style="padding:6px 14px; font-size:13px;">Review Test &amp; Questions</button>
-          <button type="button" class="btn-soft btn-move-folder" data-store="rbi_p1_history" data-test-id="${escapeHTML(t.id)}" style="padding:6px 12px; font-size:13px;">Move to folder</button>
-          <button type="button" class="danger btn-p1-history-delete" data-id="${t.id}" style="padding:6px 12px; font-size:13px;">Delete</button>
-        </div>
-      </div>
+      </article>
     `;
   };
   // Subject > Chapter tests > chapter > Full / Partial chapter, and Subject > Mix tests
