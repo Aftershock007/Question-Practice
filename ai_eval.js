@@ -373,15 +373,18 @@ Keys, in this exact order (section numbers refer to the format above):
 - "missing_anchors": exactly 5 specific reports, committees, schemes, datasets
   or theories to add.
 - "verify_flags": recent figures you tagged [VERIFY LATEST FIGURE] ([] if none).
+  A figure you merely cannot confirm goes ONLY here, never in factual_errors.
 - "error_log": up to 8 items {"quote": the candidate's exact words, "code":
   "RP-1" to "RP-8" (or "TYPO" for a no-penalty slip), "problem": what is wrong,
-  "correction": the corrected wording or fact}.                         [Section 3]
+  "correction": the corrected wording or fact} - the mark-relevant errors
+  (content, logic, structure and recurring language patterns).        [Section 3A]
 - "parameters": one item per parameter of the chosen track, each {"name",
   "max_marks", "cap_applied" ("" if none, else e.g. "45% - sub-part missed"),
-  "awarded", "justification": the evidence for the mark}.             [Section 4A]
+  "awarded", "justification": the evidence for the mark}. The max_marks must
+  add up to exactly {{MARKS}} (scale the track's allocation - RULE 5).  [Section 4A]
 - "penalties": every Stage-2 deduction, each {"code": "RP-1" to "RP-8",
   "trigger": the exact trigger found in the script, "deduction": a positive
-  number such as 0.25}.                                                [Section 4B]
+  number such as 0.25 from the column for {{MARKS}} marks (RULE 5)}.  [Section 4B]
 - "stage1_raw_sum", "total_penalties", "final_score": numbers, where
   final_score = max(0, stage1_raw_sum - total_penalties), never above {{MARKS}}.
 - "grade": "A", "B", "C", "D" or "F" (STRICT SIMULATOR GRADE BRACKETS). [Section 5]
@@ -400,9 +403,16 @@ Keys, in this exact order (section numbers refer to the format above):
   "Inflation targeting" or "Leadership styles"). Use the TOPIC given above
   when it is not "Not specified".
 - "concept_gaps": up to 5 concepts of that topic the candidate got wrong,
-  confused or left out, each one short line ([] if none).
-- "writing_audit": a line-by-line language and style audit of the candidate's
-  script, so they can improve their next exam. Check EVERY sentence. Object with:
+  confused or left out, each one short line ([] if none). These are gaps in
+  understanding the topic itself; missing reports or committees belong in
+  missing_anchors instead.
+- "writing_audit": the Writing Audit of Section 3B - a line-by-line language,
+  fact and style audit of the candidate's script so they can improve their next
+  exam. Check EVERY sentence. Rules: copy every "quote", "wrong" and "examples"
+  entry character-for-character from the script (RULE 7 - no paraphrase, no
+  "..."); never list Indian/British spellings (RULE 6); a typing slip still goes
+  in spelling_errors; the audit is feedback and adds NO deduction beyond the
+  Stage 2 penalties. Object with:
   - "grammar_errors": every grammar, tense, agreement, article, preposition,
     punctuation or sentence-construction error (up to 20), each {"quote": the
     candidate's exact words, "type": "grammar" | "tense" | "agreement" |
@@ -411,13 +421,16 @@ Keys, in this exact order (section numbers refer to the format above):
     "correction": the corrected wording}.
   - "spelling_errors": every misspelt word (up to 25), each {"wrong": as typed,
     "correct": correct spelling, "context": the 3-8 words around it}.
-  - "factual_errors": every wrong, outdated or unsupported fact, figure, date,
-    name, committee or report (up to 10), each {"quote": exact words, "problem":
-    what is wrong, "correct_fact": the correct fact, tagged [VERIFY LATEST
-    FIGURE] if it may have changed}.
+  - "factual_errors": every PROVABLY wrong fact, figure, date, name, committee
+    or report (up to 10), each {"quote": exact words, "problem": what is wrong,
+    "correct_fact": the correct fact}. Unverifiable recent figures go to
+    verify_flags, not here.
   - "style": {"verdict": "RBI-ready" | "Nearly there" | "Not yet", "score": a
     number 0-10 for how close the writing style is to a top RBI Grade B
-    Phase-2 script, "assessment": 3-5 sentences on tone, register, objectivity,
+    Phase-2 script OF THIS TRACK (A: sober third-person institutional register
+    with headings and numbered points; B: continuous essay prose; C: one
+    third-person paragraph; D: complete-sentence answers), "assessment": 3-5
+    sentences on tone, register, objectivity,
     analytical depth and policy orientation compared with what RBI examiners
     expect, "issues": every style problem seen (conversational tone, first
     person, rhetorical questions, vague claims, opinion without evidence,
@@ -434,6 +447,8 @@ Keys, in this exact order (section numbers refer to the format above):
     limit and how easy the script is for an examiner to mark.
   - "improvement_plan": 5-8 detailed, specific steps for the next exam, most
     important first, each naming exactly what to practise and how.
+  For a blank, off-topic or under-60-word script return empty lists, style
+  verdict "Not yet" and a short improvement plan.
 
 Rules: all marks are JSON numbers (not strings) in 0.25 steps. Strings are plain
 text (no markdown tables, no ** markers). Quote the candidate exactly in "quote"
@@ -965,7 +980,7 @@ has no error of that kind, but do not skip real ones.
   }
 
   // Validate and re-add the model's numbers so the breakdown you see always adds up.
-  function normalizeReport(o, q) {
+  function normalizeReport(o, q, answerText) {
     const max = maxMarksOf(q);
     const parameters = objList(o.parameters, 8).map(p => {
       const pmax = num(p.max_marks != null ? p.max_marks : p.max);
@@ -1022,7 +1037,7 @@ has no error of that kind, but do not skip real ones.
       actions: strList(o.action_plan, 5, 500),
       topic: sanitizeTopic(o.topic) || sanitizeTopic(q && q.topic),
       conceptGaps: strList(o.concept_gaps, 6, 400).filter(c => !/^none\.?$/i.test(c)),
-      writing: normalizeWriting(o.writing_audit)
+      writing: normalizeWriting(o.writing_audit, answerText)
     };
   }
 
@@ -1031,9 +1046,40 @@ has no error of that kind, but do not skip real ones.
     return /^(?:not specified|none|n\/a|unknown)$/i.test(t) ? "" : t;
   }
 
-  // The language / style audit of the script ({} when the model did not send one)
-  function normalizeWriting(w) {
+  // "programme" -> "program", "labour" -> "labor", "organisation" -> "organization": Indian English, not a mistake
+  function isBritishVariant(wrong, correct) {
+    const a = String(wrong || "").toLowerCase().trim();
+    const b = String(correct || "").toLowerCase().trim();
+    if (!a || !b || a === b) return false;
+    // only the standard British / American pairs (a looser rule would also hide real slips such as "presense")
+    const toUS = (x) => x
+      .replace(/isation(s)?$/, "ization$1").replace(/ise(s|d)?$/, "ize$1").replace(/ising$/, "izing").replace(/yse(s|d)?$/, "yze$1")
+      .replace(/our(s|ed|ing|able|ite|ites)?$/, "or$1").replace(/tre(s)?$/, "ter$1").replace(/amme(s)?$/, "am$1").replace(/ogue(s)?$/, "og$1")
+      .replace(/^(def|lic|off|pret)ence(s)?$/, "$1ense$2");
+    return toUS(a) === toUS(b) || toUS(a) === b || a === toUS(b);
+  }
+
+  // Does a quoted passage really occur in the candidate's script? (drops invented "errors";
+  // tolerant of changed punctuation, quotes and "..." gaps)
+  function plainText(v) {
+    return String(v || "").toLowerCase().replace(/[‘’`]/g, "'").replace(/[^a-z0-9']+/g, " ").trim();
+  }
+  function quoteInScript(quote, scriptPlain) {
+    if (!scriptPlain) return true;                          // no script text to compare with
+    const qp = plainText(String(quote || "").replace(/\.{3}|…/g, " "));
+    if (!qp) return false;
+    if (scriptPlain.includes(qp)) return true;
+    const words = qp.split(" ").filter(x => x.length > 2);
+    if (!words.length) return false;
+    const have = new Set(scriptPlain.split(" "));
+    return words.filter(x => have.has(x)).length / words.length >= 0.8;
+  }
+
+  // The language / style audit of the script (null when the model did not send one)
+  function normalizeWriting(w, answerText) {
     if (!w || typeof w !== "object" || Array.isArray(w)) return null;
+    const script = plainText(answerText);
+    const scriptWords = new Set(script.split(" "));
     const obj = v => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
     const style = obj(w.style);
     const structure = obj(w.structure);
@@ -1045,13 +1091,21 @@ has no error of that kind, but do not skip real ones.
     else if (verdict) verdict = "Not yet";
     const score = num(style.score);
     const out = {
-      grammar: objList(w.grammar_errors, 25).map(x => ({ quote: str(x.quote, 500), type: str(x.type, 40).toLowerCase(), explanation: str(x.explanation || x.error || x.problem, 500), correction: str(x.correction || x.fix, 600) })).filter(x => x.quote || x.correction),
-      spelling: objList(w.spelling_errors, 30).map(x => ({ wrong: str(x.wrong || x.word, 80), correct: str(x.correct || x.correction, 80), context: str(x.context, 200) })).filter(x => x.wrong && x.correct && x.wrong.toLowerCase() !== x.correct.toLowerCase()),
-      facts: objList(w.factual_errors, 12).map(x => ({ quote: str(x.quote, 500), problem: str(x.problem || x.issue, 600), fact: str(x.correct_fact || x.correction, 600) })).filter(x => x.quote || x.problem),
+      grammar: objList(w.grammar_errors, 25).map(x => ({ quote: str(x.quote, 500), type: str(x.type, 40).toLowerCase(), explanation: str(x.explanation || x.error || x.problem, 500), correction: str(x.correction || x.fix, 600) }))
+        .filter(x => x.quote && x.correction && quoteInScript(x.quote, script) && plainText(x.quote) !== plainText(x.correction)),
+      // the misspelt word must be in the script; British / Indian spellings are not errors
+      spelling: objList(w.spelling_errors, 30).map(x => ({ wrong: str(x.wrong || x.word, 80), correct: str(x.correct || x.correction, 80), context: str(x.context, 200) }))
+        .filter(x => x.wrong && x.correct && x.wrong.toLowerCase() !== x.correct.toLowerCase() && (!script || plainText(x.wrong).split(" ").every(t => scriptWords.has(t))) && !isBritishVariant(x.wrong, x.correct)),
+      // "[VERIFY LATEST FIGURE]" items are figures to double-check, not proven errors
+      facts: objList(w.factual_errors, 12).map(x => {
+        const problem = str(x.problem || x.issue, 600);
+        const fact = str(x.correct_fact || x.correction, 600);
+        return { quote: str(x.quote, 500), problem, fact, verify: /\[?\s*VERIFY\b/i.test(problem + " " + fact) };
+      }).filter(x => (x.quote || x.problem) && (!x.quote || quoteInScript(x.quote, script))),
       style: { verdict, score: score === null ? null : clamp(round1(score), 0, 10), assessment: str(style.assessment, 1500), issues: strList(style.issues, 10, 300) },
       structure: { assessment: str(structure.assessment, 1200), issues: strList(structure.issues, 8, 300) },
       vocabulary: { assessment: str(vocab.assessment, 800), weak: objList(vocab.weak_words, 12).map(x => ({ used: str(x.used, 120), better: str(x.better, 160) })).filter(x => x.used && x.better) },
-      craft: { assessment: str(craft.assessment, 800), examples: strList(craft.examples, 6, 600) },
+      craft: { assessment: str(craft.assessment, 800), examples: strList(craft.examples, 6, 600).filter(x => quoteInScript(x, script)) },
       presentation: str(w.presentation, 800),
       plan: strList(w.improvement_plan, 10, 500)
     };
@@ -1122,7 +1176,7 @@ has no error of that kind, but do not skip real ones.
       const obj = extractJSON(res.text);
       if (obj) {
         try {
-          const report = normalizeReport(obj, q);
+          const report = normalizeReport(obj, q, ans.text);
           if (!report.projection && ans.wordCount >= 60) report.projection = projectionFor(report.score, report.max, true);
           return Object.assign(report, {
             v: REPORT_VERSION,
@@ -1860,7 +1914,7 @@ has no error of that kind, but do not skip real ones.
 
   // Counts for the chips at the top of the writing analysis
   function writingCounts(w) {
-    return w ? { grammar: w.grammar.length, spelling: w.spelling.length, facts: w.facts.length } : { grammar: 0, spelling: 0, facts: 0 };
+    return w ? { grammar: w.grammar.length, spelling: w.spelling.length, facts: w.facts.filter(f => !f.verify).length } : { grammar: 0, spelling: 0, facts: 0 };
   }
 
   function writingHTML(w) {
@@ -1883,9 +1937,15 @@ has no error of that kind, but do not skip real ones.
       ? '<ul class="ai-spell">' + w.spelling.map(x => '<li><span class="ai-wrong">' + esc(x.wrong) + '</span> <span aria-hidden="true">&rarr;</span> <span class="ai-right">' + esc(x.correct) + "</span>" + (x.context ? ' <span class="ai-muted">(' + esc(x.context) + ")</span>" : "") + "</li>").join("") + "</ul>"
       : '<p class="ai-muted">No spelling mistakes found.</p>';
     h += "<h6>Factual accuracy</h6>";
-    h += w.facts.length
-      ? w.facts.map(f => '<div class="ai-err">' + (f.quote ? "<blockquote>\u201c" + esc(f.quote) + "\u201d</blockquote>" : "") + "<p>" + inline(f.problem) + "</p>" + (f.fact ? '<p class="ai-fix"><strong>Correct fact:</strong> ' + inline(f.fact) + "</p>" : "") + "</div>").join("")
+    const wrongFacts = w.facts.filter(f => !f.verify);
+    const checkFacts = w.facts.filter(f => f.verify);
+    h += wrongFacts.length
+      ? wrongFacts.map(f => '<div class="ai-err">' + (f.quote ? "<blockquote>\u201c" + esc(f.quote) + "\u201d</blockquote>" : "") + "<p>" + inline(f.problem) + "</p>" + (f.fact ? '<p class="ai-fix"><strong>Correct fact:</strong> ' + inline(f.fact) + "</p>" : "") + "</div>").join("")
       : '<p class="ai-muted">No factual errors found.</p>';
+    if (checkFacts.length) {
+      h += "<h6>Check these figures (could not be verified, not counted as errors)</h6>" +
+        checkFacts.map(f => '<div class="ai-err">' + (f.quote ? "<blockquote>\u201c" + esc(f.quote) + "\u201d</blockquote>" : "") + "<p>" + inline(f.problem) + "</p>" + (f.fact ? '<p class="ai-fix"><strong>Latest known:</strong> ' + inline(f.fact) + "</p>" : "") + "</div>").join("");
+    }
     if (w.structure.assessment || w.structure.issues.length) h += "<h6>Structure and flow</h6>" + (w.structure.assessment ? "<p>" + inline(w.structure.assessment) + "</p>" : "") + (w.structure.issues.length ? listHTML(w.structure.issues, "") : "");
     if (w.vocabulary.assessment || w.vocabulary.weak.length) {
       h += "<h6>Vocabulary and register</h6>" + (w.vocabulary.assessment ? "<p>" + inline(w.vocabulary.assessment) + "</p>" : "") +
@@ -2024,7 +2084,10 @@ has no error of that kind, but do not skip real ones.
       w.style.issues.forEach(x => L.push("- " + x));
       L.push("", "**Grammar and punctuation (" + w.grammar.length + ")**", ...w.grammar.map(g => "- \u201c" + g.quote + "\u201d" + (g.type ? " [" + g.type + "]" : "") + ": " + g.explanation + " Correct: " + g.correction));
       L.push("", "**Spelling (" + w.spelling.length + ")**", ...w.spelling.map(x => "- " + x.wrong + " -> " + x.correct + (x.context ? " (" + x.context + ")" : "")));
-      L.push("", "**Factual accuracy (" + w.facts.length + ")**", ...w.facts.map(f => "- " + (f.quote ? "\u201c" + f.quote + "\u201d: " : "") + f.problem + (f.fact ? " Correct fact: " + f.fact : "")));
+      const wrongFacts = w.facts.filter(f => !f.verify);
+      L.push("", "**Factual accuracy (" + wrongFacts.length + ")**", ...wrongFacts.map(f => "- " + (f.quote ? "\u201c" + f.quote + "\u201d: " : "") + f.problem + (f.fact ? " Correct fact: " + f.fact : "")));
+      const checkFacts = w.facts.filter(f => f.verify);
+      if (checkFacts.length) L.push("", "**Check these figures (" + checkFacts.length + ")**", ...checkFacts.map(f => "- " + (f.quote ? "\u201c" + f.quote + "\u201d: " : "") + f.problem + (f.fact ? " Latest known: " + f.fact : "")));
       if (w.structure.assessment) L.push("", "**Structure:** " + w.structure.assessment, ...w.structure.issues.map(x => "- " + x));
       if (w.vocabulary.assessment || w.vocabulary.weak.length) L.push("", "**Vocabulary:** " + w.vocabulary.assessment, ...w.vocabulary.weak.map(x => "- " + x.used + " -> " + x.better));
       if (w.craft.assessment) L.push("", "**Sentences:** " + w.craft.assessment, ...w.craft.examples.map(x => "- \u201c" + x + "\u201d"));
@@ -2444,7 +2507,7 @@ has no error of that kind, but do not skip real ones.
       PROVIDERS, REPORT_SCHEMA, JSON_CONTRACT, extractJSON, normalizeReport, httpError, explainError,
       isPlaceholderKey, resolveProvider, getSettings, projectionFor, gradeFor, buildPrompt, generate,
       listModels, testConnection, gradeAnswer, questionMarkdown, testMarkdown, reportHTML, panelHTML,
-      AIError, normalizeWriting, topicStats
+      AIError, normalizeWriting, topicStats, quoteInScript, isBritishVariant
     }
   };
 })();

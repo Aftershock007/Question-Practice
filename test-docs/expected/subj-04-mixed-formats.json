@@ -1,0 +1,19 @@
+{
+ "kind": "desc",
+ "questions": [
+  {
+   "topic": "Monetary Transmission",
+   "marks": 15,
+   "wordLimit": 600,
+   "question": "Explain monetary policy transmission in India and the role of the external benchmark regime.",
+   "answerStart": "Monetary transmission is the process by which changes in the"
+  },
+  {
+   "topic": "Financial Inclusion",
+   "marks": 10,
+   "wordLimit": 400,
+   "question": "What is financial inclusion? Discuss two recent measures that promote it.",
+   "answerStart": "Financial inclusion means access to affordable financial ser"
+  }
+ ]
+}

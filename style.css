@@ -5714,6 +5714,7 @@ input[type="radio"] { accent-color: var(--accent); }
 }
 .p1-chk-ok { color: var(--ok); background: var(--ok-soft); border-color: var(--ok-line); }
 .p1-chk-pending { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-line); }
+.p1-chk-failed { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
 .p1-q-topic { font-size: 11px; color: var(--muted); }
 #btn-start-p1-test:disabled { opacity: 0.55; cursor: not-allowed; }
 

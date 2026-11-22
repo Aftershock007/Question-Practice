@@ -429,6 +429,17 @@ function calPlanTests(row) {
 // ------------------------------------------------------------
 // Exams taken (used to mark days and show scores)
 // ------------------------------------------------------------
+// Test histories, read once per calendar render (calContext clears the cache)
+let calHistCache = null;
+function calHistory(kind) {
+  if (!calHistCache) calHistCache = {};
+  if (!calHistCache[kind]) {
+    const list = loadJSON(kind === "mcq" ? "rbi_p1_history" : "rbi_history", []);
+    calHistCache[kind] = Array.isArray(list) ? list : [];
+  }
+  return calHistCache[kind];
+}
+
 function calExamsByDate() {
   const map = {};
   const push = (raw, item) => {
@@ -436,15 +447,14 @@ function calExamsByDate() {
     const d = getLocalDateString(new Date(raw));
     (map[d] = map[d] || []).push(item);
   };
-  const mcq = loadJSON("rbi_p1_history", []);
-  (Array.isArray(mcq) ? mcq : []).forEach(t => push(t.completedAt || t.date, { kind: "mcq", test: t }));
-  const desc = loadJSON("rbi_history", []);
-  (Array.isArray(desc) ? desc : []).forEach(t => push(t.date, { kind: "write", test: t }));
+  calHistory("mcq").forEach(t => push(t.completedAt || t.date, { kind: "mcq", test: t }));
+  calHistory("write").forEach(t => push(t.date, { kind: "write", test: t }));
   return map;
 }
 
 // Everything a render needs, computed once per render
 function calContext() {
+  calHistCache = null;   // fresh histories for every render / lookup
   const manualByDate = new Map();
   for (const t of cal.todos) {
     const item = {
@@ -619,19 +629,18 @@ function calIsPhase2McqTest(test) {
 // Called by app.js when a test is submitted: kind = "write" (descriptive) or "mcq".
 // The test is linked to one TODO of the same test type: the TODO you started it from,
 // else an open TODO of today, else a new TODO is recorded for today. Objective tests
-// complete the TODO at once; subjective tests complete it when every answer is graded.
+// Called by app.js when a test is submitted: kind = "write" (descriptive) or "mcq".
+// The test is linked to one TODO of the type chosen when it started: the TODO you started it
+// from (if it has that type), else an open TODO of today, else a new TODO is recorded for today.
+// Objective tests complete the TODO at once; subjective tests complete it when every answer is graded.
 function autoCompleteTodoOnExam(kind, test) {
   calEnsureLoaded();
-  const launch = loadJSON(CAL_KEYS.launch, null);
-  localStorage.removeItem(CAL_KEYS.launch);
   if (!test) return;
   const type = test.testType || (kind === "write" ? "Subjective Practice" : "Objective Practice");
-  let todo = null;
-  if (launch && launch.target === kind && Date.now() - (launch.ts || 0) < 24 * 3600 * 1000) {
-    const t = calFindTodoById(launch.id);
-    if (t && !t.link && calIsTestType(t.type) && (!t.mode || t.mode === kind)) todo = t;
-  }
-  if (!todo) todo = calFindOpenTestTodo(calToday(), type, kind, test);
+  let todo = calTodoForTest(kind, type, test);
+  // the "started from this TODO" note is used up by a test of its kind (or when it is a day old)
+  const launch = loadJSON(CAL_KEYS.launch, null);
+  if (launch && (launch.target === kind || Date.now() - (launch.ts || 0) >= 24 * 3600 * 1000)) localStorage.removeItem(CAL_KEYS.launch);
   if (!todo) {
     const n = (test.questions || []).length;
     const created = calAddTodo({
@@ -642,6 +651,30 @@ function autoCompleteTodoOnExam(kind, test) {
   }
   if (todo) calAttachExam(todo, kind, test);
   refreshCalendars();
+}
+
+// The TODO you pressed "Start" on, if that was less than a day ago and for this kind of test
+function calActiveLaunch(kind) {
+  const launch = loadJSON(CAL_KEYS.launch, null);
+  return launch && launch.target === kind && Date.now() - (launch.ts || 0) < 24 * 3600 * 1000 ? launch : null;
+}
+
+// The TODO a test of this kind and type completes: the TODO it was started from (when it has
+// this type), else an open TODO of today. null = a new TODO will be recorded.
+function calTodoForTest(kind, type, test) {
+  const launch = calActiveLaunch(kind);
+  if (launch) {
+    const t = calFindTodoById(launch.id);
+    if (t && !t.link && !t.done && t.type === type && (!t.mode || t.mode === kind)) return t;
+  }
+  return calFindOpenTestTodo(calToday(), type, kind, test);
+}
+
+// Title of the TODO a test would complete (shown in the "What kind of test is this?" dialog)
+function calPreviewTodo(kind, type, questions) {
+  calEnsureLoaded();
+  const t = calTodoForTest(kind, type, { questions: questions || [] });
+  return t ? t.title : "";
 }
 
 // A TODO (plan or your own) by id, wherever it is in the calendar
@@ -722,8 +755,7 @@ function calReconcileLinks(onlyTestId) {
 // The test a TODO is linked to, with its marks: { kind, test, scoreText, pending, missing }
 function calLinkedResult(link) {
   if (!link) return null;
-  const list = loadJSON(link.kind === "mcq" ? "rbi_p1_history" : "rbi_history", []);
-  const test = (Array.isArray(list) ? list : []).find(t => t && t.id === link.testId) || null;
+  const test = calHistory(link.kind === "mcq" ? "mcq" : "write").find(t => t && t.id === link.testId) || null;
   if (!test) return { kind: link.kind, test: null, scoreText: "test deleted from History", pending: false, missing: true };
   if (link.kind === "mcq") {
     return { kind: "mcq", test, scoreText: `${Number(test.score || 0).toFixed(2)} / ${Number(test.maxScore || 0).toFixed(2)} · ${test.accuracy || 0}% accuracy`, pending: false };
@@ -748,10 +780,10 @@ function calWriteScore(test) {
 // Which test type to suggest when a test starts: the TODO it was started from, or today's open test TODO
 function calSuggestTestType(mode) {
   calEnsureLoaded();
-  const launch = loadJSON(CAL_KEYS.launch, null);
-  if (launch && launch.target === mode && Date.now() - (launch.ts || 0) < 24 * 3600 * 1000) {
+  const launch = calActiveLaunch(mode);
+  if (launch) {
     const t = calFindTodoById(launch.id);
-    if (t && calIsTestType(t.type)) return { type: t.type, title: t.title };
+    if (t && calIsTestType(t.type) && !t.link && !t.done) return { type: t.type, title: t.title };
   }
   const ctx = calContext();
   const open = calDayInfo(ctx.today, ctx).todos.filter(t => !t.done && !t.link && calIsTestType(t.type) && (!t.mode || t.mode === mode));
@@ -833,6 +865,15 @@ function calShellHTML() {
           <label class="cal-btn-primary" title="Use your own timetable (.xlsx or .csv) as the study plan">Upload Timetable<input type="file" accept=".xlsx,.csv" data-role="import" hidden></label>
           <button type="button" class="btn-soft btn-soft-danger" data-action="clear-plan" data-role="remove-timetable">Remove Timetable</button>
         </div>
+        <details class="cal-more-actions">
+          <summary>More options</summary>
+          <div class="cal-settings-actions">
+            <button type="button" class="btn-soft" data-action="load-official">Use built-in 415-day plan</button>
+            <button type="button" class="btn-soft" data-action="template">Download template (.csv)</button>
+            <button type="button" class="btn-soft" data-action="export-plan">Export plan (.csv)</button>
+            <button type="button" class="btn-soft" data-action="export-todos">Export my TODOs (.csv)</button>
+          </div>
+        </details>
         <p class="cal-settings-status" data-role="status" aria-live="polite"></p>
       </div>
     </details>
@@ -1530,7 +1571,8 @@ async function calImportFile(root, input) {
       const title = sanitizeDashes(String(r[taskCol] || "").trim());
       if (!title) continue;
       const typeText = typeCol >= 0 ? String(r[typeCol] || "").trim().toLowerCase() : "";
-      const type = TODO_TYPES.find(t => t.value.toLowerCase() === typeText);
+      const legacy = Object.keys(CAL_LEGACY_TYPES).find(k => k.toLowerCase() === typeText);
+      const type = TODO_TYPES.find(t => t.value.toLowerCase() === typeText) || (legacy ? { value: CAL_LEGACY_TYPES[legacy] } : null);
       const todo = calAddTodo({
         title,
         type: type ? type.value : "Other",

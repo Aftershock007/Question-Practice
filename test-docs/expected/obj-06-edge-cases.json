@@ -1,0 +1,80 @@
+{
+ "kind": "mcq",
+ "questions": [
+  {
+   "number": 1,
+   "stem": "Which of the following is the central bank of India?",
+   "options": [
+    "SBI",
+    "RBI",
+    "NABARD",
+    "SIDBI",
+    "EXIM Bank"
+   ],
+   "answer": "b",
+   "explanation": "The Reserve Bank of India is the central bank of the country.\nNote: It started operations on 1 April 1935."
+  },
+  {
+   "number": 2,
+   "stem": "Consider the following statements:",
+   "options": [
+    "1 only",
+    "2 only",
+    "Both 1 and 2",
+    "Neither 1 nor 2",
+    "None of the above"
+   ],
+   "answer": "c",
+   "explanation": "Both statements are correct.\n(a) is wrong because statement 2 is also correct.\n(e) is wrong because one option above is correct."
+  },
+  {
+   "number": 3,
+   "stem": "Which of the following are money market instruments? One or more options may be correct.",
+   "options": [
+    "Treasury bills",
+    "Commercial paper",
+    "Equity shares",
+    "Certificates of deposit",
+    "Debentures"
+   ],
+   "answer": "abd",
+   "multi": true
+  },
+  {
+   "number": 4,
+   "stem": "Under the RBI Act, the Monetary Policy Committee must meet at least how many times a year?",
+   "options": [
+    "2",
+    "4",
+    "6",
+    "12"
+   ],
+   "answer": "b",
+   "defect": "fewer-options"
+  },
+  {
+   "number": 5,
+   "stem": "How many members form the quorum for a meeting of the Monetary Policy Committee?\nNote: Answer on the basis of the RBI Act, 1934.",
+   "options": [
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ],
+   "answer": "c"
+  },
+  {
+   "number": 6,
+   "stem": "In which year was the Reserve Bank of India nationalised?",
+   "options": [
+    "1935",
+    "1947",
+    "1949",
+    "1969",
+    "1991"
+   ],
+   "answer": "c"
+  }
+ ]
+}

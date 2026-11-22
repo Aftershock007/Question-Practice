@@ -17,7 +17,8 @@ A personal, offline typing test and descriptive answer practice website designed
   - The answer key is never shown on the setup screen. Instead you see how many questions have a key and which ones do not.
   - Every imported question is checked: text and options read completely, answer key found, no duplicate numbers. With an AI key, the AI also solves each question and confirms the key (about 1 minute per 20 questions, 4 minutes for 192).
   - Questions that fail go to a separate **Needs attention** section with the reason, and are kept out of the exam: edit them, use the AI's answer, keep them after checking yourself, or remove them. Question numbers missing from the file and answer keys without a question are listed there too.
-  - The exam can start only when the check has finished, and it contains only the questions that passed.
+  - The exam can start only when the check has finished, and it contains only the questions that passed. If the AI cannot be reached (for example the free daily limit is used up), the affected questions are marked **AI check failed**: press **Check them again** later, or start with them after a clear warning.
+  - A question with fewer options than the rest of the file (a real 4-option question among 5-option ones) waits for the AI to confirm it, instead of being rejected outright.
 - **Phase-2 Descriptive Typing Practice:**
   - Four dedicated papers: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
   - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support, and optional paste prevention.
@@ -40,7 +41,7 @@ A personal, offline typing test and descriptive answer practice website designed
 - **Included Example Practice Documents:**
   - `Spotlight-Questions-1-6-Nov-2026.docx`: 200 General Awareness Phase-1 MCQs with options and full answer key table.
   - `CH-1-National_Income-Answer-Writing.docx`: ESI Chapter 1 National Income descriptive practice questions with model answers.
-  - `test-docs/`: 8 import test files (5 objective, 3 subjective) as DOCX and PDF, each in a different layout, with their expected results in `test-docs/expected/`. `obj-04-quant-di` contains deliberate defects (a wrong key, a missing key, a skipped question number, a key without a question) to show the Needs attention section. Rebuild them with `python3 test-docs/make_test_docs.py`.
+  - `test-docs/`: 11 import test files (7 objective, 4 subjective) as DOCX and PDF, each in a different layout, with their expected results in `test-docs/expected/`. `obj-04-quant-di` contains deliberate defects (a wrong key, a missing key, a skipped question number, a key without a question) to show the Needs attention section; `obj-06-edge-cases` and `obj-07-key-table-extra-column` cover options on the question line, "Answer: Option B", notes inside questions and explanations, explanation lines that start with "(a)", and answer tables with extra columns. Rebuild them with `python3 test-docs/make_test_docs.py`.
 - **History Tracking:** Comprehensive logs of test scores, accuracy %, time spent, and performance trends for both phases.
 
 ---
@@ -61,7 +62,7 @@ After a subjective test, each answer is sent with the evaluation prompt from `pr
 - **Score and grade** out of the question's marks, plus the **likely real RBI score**. The grader is deliberately about 2-3 marks stricter per answer than the real panel.
 - **In plain words**: a short summary of what the mark means and the most important fix.
 - **What worked / where you lost marks / what to fix next.**
-- **Writing analysis**: every grammar and punctuation error with the rule and the correction, every misspelt word, every wrong or outdated fact with the correct one, a verdict on whether the style is up to RBI standard (score out of 10, with the problems listed), structure, vocabulary (weak words and better ones), sentence construction, presentation, and a step-by-step plan for the next exam.
+- **Writing analysis** (only errors that really occur in your answer are shown, Indian/British spellings such as "programme" or "labour" are never marked wrong, and figures the AI cannot verify are listed separately instead of as errors): every grammar and punctuation error with the rule and the correction, every misspelt word, every wrong or outdated fact with the correct one, a verdict on whether the style is up to RBI standard (score out of 10, with the problems listed), structure, vocabulary (weak words and better ones), sentence construction, presentation, and a step-by-step plan for the next exam.
 - **Topic and concept gaps** for each answer, a **topic-wise performance** table for the test, and one across all your subjective tests.
 - Expandable details: marks per criterion with the reason for each, red-pen penalties, which parts of the question you covered or missed, line-by-line mistakes with corrections, missing reports/committees/data, **your own sentences rewritten**, and an **exam-format model answer**.
 - A **test summary**: total score, biggest mark leaks across the test, a fatigue check and your next drills. Download it all as a `.md` report.

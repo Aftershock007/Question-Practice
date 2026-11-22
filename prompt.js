@@ -78,6 +78,19 @@ ANTI-INFLATION OPERATING RULES:
   UNLESS the number is absurd, internally contradictory, or conceptually wrong.
 - RULE 4 (ARITHMETIC LOCK): Use clean 0.25 or 0.50 increments. Double-check
   Stage 1 sum, Stage 2 sum, and (Stage 1 - Stage 2) subtraction before printing.
+- RULE 5 (MARK SCALING): Each track's parameter allocation is written for its
+  usual maximum. If Maximum Marks ({{MARKS}}) is different, scale every
+  parameter in proportion so the parameter maxima add up to EXACTLY {{MARKS}}.
+  Use the Stage 2 penalty column that matches {{MARKS}}; for any other maximum,
+  multiply the 10M values by ({{MARKS}} / 10) and round to the nearest 0.25.
+- RULE 6 (INDIAN ENGLISH): Indian/British spellings (programme, labour,
+  organisation, analyse, centre, defence, licence, behaviour) and Indian number
+  words (lakh, crore) are CORRECT. Never "correct" them to American spelling and
+  never count them as errors. Standard abbreviations (RBI, GDP, MSME, NPA) are
+  correct as written.
+- RULE 7 (QUOTE FAITHFULLY): Whenever you quote the candidate, copy their words
+  exactly as typed (including their mistakes). Never invent, paraphrase or
+  "tidy up" a quote, and never report an error that is not in the script.
 
 --------------------------------------------------------------------------------
 SUBMISSION METADATA
@@ -107,6 +120,8 @@ OFFICIAL REFERENCE / BENCHMARK POINTS
 STAGE 1: DYNAMIC 4-TRACK RUBRIC & EVIDENCE GATES (SELECT EXACTLY ONE TRACK)
 --------------------------------------------------------------------------------
 Route the script to Track A, B, C, or D based on {{PAPER}} and QUESTION.
+If the paper is "Other" or unclear, use Track A unless the QUESTION asks for an
+essay (Track B), a precis (Track C) or answers on a comprehension passage (Track D).
 Within every parameter, you MUST apply the EVIDENCE-GATE CEILING:
   * Tier 1 (0% - 35% of param): Superficial, generic, assertion-only, or partial.
   * Tier 2 (36% - 55% of param): Competent textbook coverage, misses analytical
@@ -219,9 +234,10 @@ P4. ESSAY ARCHITECTURE & PROSE COHESION (20%)
 P5. LANGUAGE MASTERY, SYNTAX & STRICT WORD BAND (15%)
 - Crisp, plain, grammatically sound prose with varied sentence rhythm (clarity
   beats pompous vocabulary).
-- Tight Word Band: RBI 2026 specified a tight ~600-620 word band. Staying within
-  90%-105% earns full discipline credit; 80%-89% or 106%-112% caps P5 at 50%;
-  below 80% or overshooting by >12% yields 0 on P5.
+- Tight Word Band (measured against the Prescribed Limit of {{WORD_LIMIT}} words;
+  RBI 2026 essays used a tight ~600-620 word band): 90%-105% of the limit earns
+  full discipline credit; 80%-89% or 106%-112% caps P5 at 50%; below 80% or
+  above 112% yields 0 on P5.
 
 ================================================================================
 TRACK C: PAPER 2 - ENGLISH PRECIS WRITING (Typically 30 Marks | ~1/3 Length)
@@ -273,10 +289,16 @@ generosity bias, deduct EVERY applicable penalty below from the Stage 1 Raw Sum
 | RP-2: Platitude / Fluff | Generic textbook slogan without policy/institutional mechanism (per instance, max 3x) | -0.25 | -0.25 | -0.50 |
 | RP-3: Bare Name-Drop | Mentioning a scheme/report/theory without stating its function, target, or link (per instance, max 3x) | -0.25 | -0.25 | -0.50 |
 | RP-4: Structural Failure | Wall of text (ESI/FM), bullets/headings in Essay, >1 para in Precis | -0.75 | -1.25 | -2.50 |
-| RP-5: Word/Pacing Breach | Under 75% or Over 112% of word limit (or >108% in Precis) | -0.50 | -0.75 | -1.50 |
+| RP-5: Word/Pacing Breach | Track A: under 72% or over 112% of the Prescribed Limit; Essay: under 80% or over 112%; Precis: under 86% or over 110%; RC: only when a word limit is given | -0.50 | -0.75 | -1.50 |
 | RP-6: Factual / Logic Error | Provably wrong mechanism, formula, committee, or stat (per error) | -1.00 | -1.25 | -2.00 |
 | RP-7: Lifting / Outside Info | Precis/RC verbatim 5+ word lift or injecting outside opinions (per instance) | N/A | N/A | -1.00 |
 | RP-8: Language / Register | Rhetorical questions, informal/emotional tone, or recurring grammar errors (per distinct pattern, max 3x) | -0.25 | -0.25 | -0.50 |
+
+Penalty values for other maximum marks: see RULE 5 (10M values x {{MARKS}} / 10).
+A language problem is penalised only through RP-8 (recurring grammar or register
+patterns) and a wrong fact only through RP-6: listing it again in the Writing
+Audit (Section 3B) never adds a second deduction. Isolated typing slips carry no
+penalty (RULE 2).
 
 MANDATORY STRICTNESS SANITY CHECK (RUN INTERNALLY BEFORE PRINTING SECTION 5):
 Before finalizing Section 5, test your Final Strict Score against this question:
@@ -320,14 +342,34 @@ any marks in Section 4 or printing the Final Verdict in Section 5.
    - Bare Name-Drops / Unsubstantiated Claims: [List items mentioned without substance]
    - Top 5 Missing Institutional Anchors: List 5 exact RBI reports, committees,
      schemes, datasets, or management theories that would elevate this to Grade A.
-   - Fresh-Data Flags: List any recent macro stats tagged [VERIFY LATEST FIGURE].
+   - Fresh-Data Flags: List any recent macro stats tagged [VERIFY LATEST FIGURE]
+     (figures you cannot confirm are NOT factual errors - list them only here).
 
-3. LINE-BY-LINE RED-PEN ERROR LOG
+3. LINE-BY-LINE RED-PEN ERROR LOG & WRITING AUDIT
+   3A. RED-PEN ERROR LOG (the errors that cost marks)
    - Quote exact weak/wrong phrases from the candidate's script -> tag error code
      (RP-1 through RP-8) -> provide the crisp correction.
    - Distinguish minor single-key exam typos (no penalty) from real grammar/logic
      failures (penalized under RP-8).
    - Flag any provably fabricated data or wrong committee in ALL CAPS.
+   3B. WRITING AUDIT (complete feedback for the next exam; adds NO deduction of
+       its own - see the note under the Stage 2 table). Check EVERY sentence:
+   - Grammar & punctuation: every tense, agreement, article, preposition,
+     punctuation or sentence-construction error -> exact quote -> the rule that
+     is broken (one plain sentence) -> the corrected wording.
+   - Spelling: every misspelt word -> correct spelling (typing slips included;
+     never Indian/British spellings - RULE 6).
+   - Factual accuracy: every PROVABLY wrong fact, figure, date, name, committee
+     or report -> exact quote -> the correct fact. Figures you merely cannot
+     verify belong in the Fresh-Data Flags of Section 2, not here.
+   - Style verdict for THIS track: RBI-ready / Nearly there / Not yet, with a
+     score out of 10 and the specific problems (Track A: sober third-person
+     institutional register with headings and numbered points; Track B:
+     continuous essay prose; Track C: one third-person paragraph; Track D:
+     complete-sentence answers in the candidate's own words).
+   - Structure & flow, vocabulary (weak word -> exam-grade word), sentence
+     construction (run-ons, fragments, over-long sentences) and presentation.
+   - Improvement plan: 5-8 specific steps for the next exam, most important first.
 
 4. TWO-STAGE SCORING SHEET (ZERO-BASE TABLE + RED-PEN PENALTY LEDGER)
 

@@ -1,0 +1,44 @@
+{
+ "kind": "mcq",
+ "questions": [
+  {
+   "number": 1,
+   "stem": "Which reserve must banks keep as cash balances with the RBI?",
+   "options": [
+    "SLR",
+    "CRR",
+    "LCR",
+    "NSFR",
+    "LTV"
+   ],
+   "answer": "b",
+   "explanation": "CRR is kept as cash balances with the RBI; SLR is kept in liquid assets by the bank itself."
+  },
+  {
+   "number": 2,
+   "stem": "Which Basel III ratio measures liquid assets against 30-day net cash outflows?",
+   "options": [
+    "NSFR",
+    "Leverage ratio",
+    "LCR",
+    "CET1",
+    "CRAR"
+   ],
+   "answer": "c",
+   "explanation": "The Liquidity Coverage Ratio compares high-quality liquid assets with net cash outflows over 30 days."
+  },
+  {
+   "number": 3,
+   "stem": "Which body regulates the capital markets in India?",
+   "options": [
+    "RBI",
+    "IRDAI",
+    "PFRDA",
+    "SEBI",
+    "NABARD"
+   ],
+   "answer": "d",
+   "explanation": "SEBI regulates the securities and capital markets."
+  }
+ ]
+}

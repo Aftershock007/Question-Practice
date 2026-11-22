@@ -247,6 +247,76 @@ table(d, [["Questions"] + [str(i) for i in range(1, 9)], ["1 to 8"] + [q[2] for 
 save(d, "obj-05-reasoning", {"kind": "mcq", "questions": exp})
 
 # ---------------------------------------------------------------------------
+# obj-06: EDGE CASES - options on the question line, "Answer: Option B",
+# "Note:" lines inside a question and an explanation, explanation lines that
+# start with "(a)" / "(e)", "One or more options may be correct", and a real
+# 4-option question in a 5-option file (flagged until the AI confirms it)
+# ---------------------------------------------------------------------------
+d = doc_new("Banking Edge Cases Practice")
+exp = []
+d.add_paragraph("1. Which of the following is the central bank of India? (a) SBI (b) RBI (c) NABARD (d) SIDBI (e) EXIM Bank")
+d.add_paragraph("Answer: Option B")
+d.add_paragraph("Explanation: The Reserve Bank of India is the central bank of the country.")
+d.add_paragraph("Note: It started operations on 1 April 1935.")
+exp.append({"number": 1, "stem": "Which of the following is the central bank of India?", "options": ["SBI", "RBI", "NABARD", "SIDBI", "EXIM Bank"], "answer": "b",
+            "explanation": "The Reserve Bank of India is the central bank of the country.\nNote: It started operations on 1 April 1935."})
+d.add_paragraph("2. Consider the following statements:")
+d.add_paragraph("1. The repo rate is the rate at which the RBI lends to banks.")
+d.add_paragraph("2. The Standing Deposit Facility absorbs liquidity.")
+d.add_paragraph("Which of the statements given above is/are correct?")
+for l, o in zip("abcd", ["1 only", "2 only", "Both 1 and 2", "Neither 1 nor 2"]):
+    d.add_paragraph(f"({l}) {o}")
+d.add_paragraph("(e) None of the above")
+d.add_paragraph("Answer: (c)")
+d.add_paragraph("Explanation: Both statements are correct.")
+d.add_paragraph("(a) is wrong because statement 2 is also correct.")
+d.add_paragraph("(e) is wrong because one option above is correct.")
+exp.append({"number": 2, "stem": "Consider the following statements:", "options": ["1 only", "2 only", "Both 1 and 2", "Neither 1 nor 2", "None of the above"], "answer": "c",
+            "explanation": "Both statements are correct.\n(a) is wrong because statement 2 is also correct.\n(e) is wrong because one option above is correct."})
+d.add_paragraph("3. Which of the following are money market instruments? One or more options may be correct.")
+for l, o in zip("abcde", ["Treasury bills", "Commercial paper", "Equity shares", "Certificates of deposit", "Debentures"]):
+    d.add_paragraph(f"({l}) {o}")
+d.add_paragraph("Answer: (a), (b), (d)")
+exp.append({"number": 3, "stem": "Which of the following are money market instruments? One or more options may be correct.", "options": ["Treasury bills", "Commercial paper", "Equity shares", "Certificates of deposit", "Debentures"], "answer": "abd", "multi": True})
+d.add_paragraph("4. Under the RBI Act, the Monetary Policy Committee must meet at least how many times a year?")
+for l, o in zip("abcd", ["2", "4", "6", "12"]):
+    d.add_paragraph(f"({l}) {o}")
+d.add_paragraph("Answer: (b)")
+exp.append({"number": 4, "stem": "Under the RBI Act, the Monetary Policy Committee must meet at least how many times a year?", "options": ["2", "4", "6", "12"], "answer": "b", "defect": "fewer-options"})
+d.add_paragraph("5. How many members form the quorum for a meeting of the Monetary Policy Committee?")
+d.add_paragraph("Note: Answer on the basis of the RBI Act, 1934.")
+for l, o in zip("abcde", ["2", "3", "4", "5", "6"]):
+    d.add_paragraph(f"({l}) {o}")
+d.add_paragraph("Answer: (c)")
+exp.append({"number": 5, "stem": "How many members form the quorum for a meeting of the Monetary Policy Committee?\nNote: Answer on the basis of the RBI Act, 1934.", "options": ["2", "3", "4", "5", "6"], "answer": "c"})
+d.add_paragraph("6. In which year was the Reserve Bank of India nationalised?")
+for l, o in zip("abcde", ["1935", "1947", "1949", "1969", "1991"]):
+    d.add_paragraph(f"({l}) {o}")
+d.add_paragraph("Answer: (c)")
+exp.append({"number": 6, "stem": "In which year was the Reserve Bank of India nationalised?", "options": ["1935", "1947", "1949", "1969", "1991"], "answer": "c"})
+save(d, "obj-06-edge-cases", {"kind": "mcq", "questions": exp})
+
+# ---------------------------------------------------------------------------
+# obj-07: "Q1." numbering, "a)" options two per line, answer table with an
+# extra column ("Q.No. | Answer | Marks | Explanation")
+# ---------------------------------------------------------------------------
+Q7 = [
+    ("Which reserve must banks keep as cash balances with the RBI?", ["SLR", "CRR", "LCR", "NSFR", "LTV"], "b", "CRR is kept as cash balances with the RBI; SLR is kept in liquid assets by the bank itself."),
+    ("Which Basel III ratio measures liquid assets against 30-day net cash outflows?", ["NSFR", "Leverage ratio", "LCR", "CET1", "CRAR"], "c", "The Liquidity Coverage Ratio compares high-quality liquid assets with net cash outflows over 30 days."),
+    ("Which body regulates the capital markets in India?", ["RBI", "IRDAI", "PFRDA", "SEBI", "NABARD"], "d", "SEBI regulates the securities and capital markets."),
+]
+d = doc_new("Financial System Practice MCQs")
+exp = []
+for i, (stem, opts, ans, why) in enumerate(Q7, 1):
+    d.add_paragraph(f"Q{i}. {stem}")
+    d.add_paragraph(f"a) {opts[0]}    b) {opts[1]}")
+    d.add_paragraph(f"c) {opts[2]}    d) {opts[3]}    e) {opts[4]}")
+    exp.append({"number": i, "stem": stem, "options": opts, "answer": ans, "explanation": why})
+d.add_heading("Answer Key", 1)
+table(d, [["Q.No.", "Answer", "Marks", "Explanation"]] + [[str(i), q[2], "1", q[3]] for i, q in enumerate(Q7, 1)])
+save(d, "obj-07-key-table-extra-column", {"kind": "mcq", "questions": exp})
+
+# ---------------------------------------------------------------------------
 # Subjective files
 # ---------------------------------------------------------------------------
 def bullets(d, items):
@@ -324,4 +394,26 @@ for i, (q, ans) in enumerate(ENG, 1):
         d.add_paragraph(a)
     exp.append({"question": q[:80], "answerStart": ans[0][:60]})
 save(d, "subj-03-english", {"kind": "desc", "questions": exp})
+# ---------------------------------------------------------------------------
+# subj-04: "Q1. Topic" + "Question (15 Marks, 600 Words): ..." is ONE question;
+# an answer that ends with a table row before an un-numbered question
+# ---------------------------------------------------------------------------
+d = doc_new("ESI Answer Writing: Mixed Formats")
+exp = []
+d.add_paragraph("Q1. Monetary Transmission")
+d.add_paragraph("Question (15 Marks, 600 Words): Explain monetary policy transmission in India and the role of the external benchmark regime.")
+ans1 = ["Monetary transmission is the process by which changes in the policy repo rate pass through to market interest rates, credit and ultimately inflation and output.",
+        "Since October 2019, banks link new floating-rate retail and MSME loans to an external benchmark such as the repo rate, which has made transmission faster and more transparent."]
+for a in ans1:
+    d.add_paragraph(a)
+table(d, [["Channel", "Effect"], ["Interest rate", "Changes the cost of credit"], ["Exchange rate", "Changes import prices"]])
+exp.append({"topic": "Monetary Transmission", "marks": 15, "wordLimit": 600, "question": "Explain monetary policy transmission in India and the role of the external benchmark regime.", "answerStart": ans1[0][:60]})
+d.add_heading("Financial Inclusion", 1)
+d.add_paragraph("Question (10 Marks): What is financial inclusion? Discuss two recent measures that promote it.")
+ans2 = ["Financial inclusion means access to affordable financial services for all sections of society, especially the poor and the unbanked.",
+        "Two recent measures are the expansion of Jan Dhan accounts and the growth of UPI-based payments in rural areas."]
+for a in ans2:
+    d.add_paragraph(a)
+exp.append({"topic": "Financial Inclusion", "marks": 10, "wordLimit": 400, "question": "What is financial inclusion? Discuss two recent measures that promote it.", "answerStart": ans2[0][:60]})
+save(d, "subj-04-mixed-formats", {"kind": "desc", "questions": exp})
 print("done")

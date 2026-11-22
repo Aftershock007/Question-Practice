@@ -33,7 +33,8 @@ function mcqLocalIssues(q, ctx) {
   const key = String(q.correctAnswer || "").toLowerCase();
   if (!q.text || !q.text.trim() || q.text === "Imported Question") issues.push({ code: "empty-text", msg: "The question text could not be read." });
   if (opts.length < 2) issues.push({ code: "few-options", msg: "The options could not be read." });
-  else if (ctx && ctx.usualOptions && opts.length < ctx.usualOptions) issues.push({ code: "few-options", msg: `Only ${opts.length} of ${ctx.usualOptions} options were found.` });
+  // fewer options than the rest of the file: a soft problem the AI check can clear (some questions really have 4)
+  else if (ctx && ctx.usualOptions && opts.length < ctx.usualOptions) issues.push({ code: "fewer-options", msg: `Only ${opts.length} of ${ctx.usualOptions} options were found.` });
   if (opts.some(o => !String(o.text || "").trim())) issues.push({ code: "empty-option", msg: "One of the options is empty." });
   if (!key) issues.push({ code: "no-key", msg: "No answer key was found for this question." });
   else if (key.split("").some(l => !labels.includes(l))) issues.push({ code: "key-not-in-options", msg: `The answer key points to an option that is not in the question.` });
@@ -59,22 +60,36 @@ function mcqPrepareImported(questions) {
   return questions;
 }
 
-// "ok" | "unchecked" | "pending" | "issue"
+// "ok" | "unchecked" | "pending" | "failed" (the AI check could not run) | "issue"
 function mcqStatus(q) {
   const c = q.check;
   if (!c) return "ok";                               // added by hand / older data
   if (c.user === "ok") return "ok";
-  if ((c.local || []).some(i => MCQ_BLOCKING.includes(i.code))) return "issue";
-  if (!c.ai) return "unchecked";
+  const local = c.local || [];
+  if (local.some(i => MCQ_BLOCKING.includes(i.code))) return "issue";
+  const soft = local.some(i => i.code === "fewer-options");
+  if (!c.ai) return soft ? "issue" : "unchecked";
   if (c.ai.status === "pending") return "pending";
-  if (c.ai.status === "issue" || c.ai.status === "error") return "issue";
-  return "ok";
+  if (c.ai.status === "issue") return "issue";
+  if (c.ai.status === "error") return soft ? "issue" : "failed";
+  return "ok";                                       // the AI confirmed it (also clears "fewer options")
+}
+
+// A check interrupted by a page reload leaves questions "pending": make them "not checked" again
+function mcqClearStalePending() {
+  if (mcqVerify.running) return;
+  let changed = false;
+  (state.p1_setup.questions || []).forEach(q => {
+    if (q.check && q.check.ai && q.check.ai.status === "pending") { q.check.ai = null; changed = true; }
+  });
+  if (changed) saveP1Setup();
 }
 
 // Plain-language reasons why a question needs attention
 function mcqIssueReasons(q) {
   const c = q.check || {};
-  const out = (c.local || []).map(i => i.msg);
+  const aiOk = c.ai && c.ai.status === "ok";
+  const out = (c.local || []).filter(i => !(aiOk && i.code === "fewer-options")).map(i => i.msg);
   if (c.ai && c.ai.status === "issue") out.push(...(c.ai.problems || []));
   if (c.ai && c.ai.status === "error") out.push("The AI check could not be completed for this question: " + (c.ai.note || "no reply") + ".");
   return out;
@@ -96,7 +111,7 @@ function mcqVerifyPrompt(batch, topics) {
   lines.push("For EVERY question below, decide:");
   lines.push("1. text_ok: is the question text complete and readable on its own (not cut off, not merged with another question or a section heading)? A data table, passage or list printed before the question is fine. A question-type tag such as SINGLE CORRECT, ASSERTION or DATA at the start is fine.");
   lines.push("2. options_ok: do the options belong to this question and form a complete, sensible set?");
-  lines.push("3. key_correct: solve the question yourself, then say whether the given answer key is correct. MULTI-CORRECT questions have several correct options and the key lists all of them. When an explanation is given, check that the key agrees with it. Mark key_correct false ONLY when you are confident the key is wrong.");
+  lines.push("3. key_correct: solve the question yourself, then say whether the given answer key is correct. Questions marked MULTI-CORRECT, or that say one or more options may be correct, can have several correct options and the key then lists all of them. When an explanation is given, check that the key agrees with it. Mark key_correct false ONLY when you are confident the key is wrong.");
   lines.push("4. topic: the sub-topic the question tests." + (topics.length ? " Use one of these chapter topics when it fits: " + topics.map(t => "\"" + t + "\"").join(", ") + ". Otherwise give a short topic name (2-5 words)." : " Give a broad sub-topic name of 2-5 words, such as \"Data Interpretation\", \"Percentages\", \"Syllogism\" or \"Banking Regulation\" - not a name for a single question. Questions on the same sub-topic MUST get exactly the same name, so the whole file uses only a handful of topics."));
   lines.push("");
   lines.push('Return ONE JSON object: {"results": [{"n": the question\'s n, "text_ok": true or false, "options_ok": true or false, "key_correct": true or false, "your_answer": "the option letter(s) you believe are correct, e.g. \\"c\\" or \\"ae\\"", "confidence": "high" | "medium" | "low", "problem": "one short plain sentence describing what is wrong, or \\"\\" when everything is fine", "topic": "..."}]}');
@@ -125,7 +140,8 @@ function mcqApplyVerdict(q, r, meta) {
   const problems = [];
   if (!textOk) problems.push("The question text looks incomplete or mixed up with other text.");
   if (!optsOk) problems.push("The options look incomplete or do not belong to this question.");
-  const keyWrong = q.correctAnswer && !keyOk && conf !== "low";
+  // ("key wrong" with the AI's own answer equal to the key is a contradiction: trust the key)
+  const keyWrong = q.correctAnswer && !keyOk && conf !== "low" && !(aiAnswer && aiAnswer === q.correctAnswer);
   if (keyWrong) problems.push("The answer key does not look right for this question.");
   const note = String(r.problem || "").trim().slice(0, 400);
   q.check.ai = {
@@ -139,7 +155,8 @@ function mcqApplyVerdict(q, r, meta) {
     by: meta.model,
     at: Date.now()
   };
-  if (!q.topic && q.check.ai.topic) q.aiTopic = sanitizeDashes(q.check.ai.topic);
+  // a re-check keeps the (grouped) topic the question already has
+  if (!q.topic && !q.aiTopic && q.check.ai.topic) q.aiTopic = sanitizeDashes(q.check.ai.topic);
 }
 
 async function mcqVerifyBatch(batch, topics, signal) {
@@ -164,7 +181,8 @@ async function mcqVerifyQuestions(only) {
   if (mcqVerify.running) return;
   if (!window.AIEval || !AIEval.isReady()) return;
   const all = state.p1_setup.questions || [];
-  const todo = (only || all.filter(q => q.check && !q.check.user && !(q.check.ai && q.check.ai.status !== "pending")))
+  // default: every question without an AI verdict, including ones whose check failed earlier
+  const todo = (only || all.filter(q => q.check && !q.check.user && (!q.check.ai || q.check.ai.status === "pending" || q.check.ai.status === "error")))
     .filter(q => q.check && !(q.check.local || []).some(i => i.code === "empty-text" || i.code === "few-options"));
   if (!todo.length) return;
   todo.forEach(q => { q.check.ai = { status: "pending" }; });
@@ -194,7 +212,8 @@ async function mcqVerifyQuestions(only) {
     }
   };
   await Promise.all(Array.from({ length: Math.min(MCQ_VERIFY_PARALLEL, batches.length) }, worker));
-  if (!mcqVerify.controller.signal.aborted) {
+  // group drifting AI topic names after a whole-file check (not after re-checking a few questions)
+  if (!mcqVerify.controller.signal.aborted && todo.length >= MCQ_VERIFY_BATCH) {
     mcqVerify.message = "Grouping topics…";
     try { await mcqConsolidateTopics(mcqVerify.controller.signal); } catch (err) { console.warn("Topic grouping failed:", err && err.message); }
   }
@@ -219,7 +238,7 @@ async function mcqConsolidateTopics(signal) {
   const names = [...new Set(qs.map(q => q.aiTopic))];
   // a file with topic headings: the AI already picked from those headings, keep them
   if ((state.p1_setup.topics || []).length) return;
-  if (names.length <= 8 || !window.AIEval || !AIEval.isReady()) return;
+  if (names.length <= 10 || !window.AIEval || !AIEval.isReady()) return;
   const chapter = [...new Set(qs.map(q => q.chapter).filter(Boolean))].join(", ");
   const counts = names.map(n => `- ${n} (${qs.filter(q => q.aiTopic === n).length} questions)`).join("\n");
   const res = await AIEval.runJSON({
@@ -400,8 +419,12 @@ async function p1RunAnalysis(test) {
     p1SaveAnalysis(test.id, p1NormalizeAnalysis(res.data, stats, res));
     p1AnalysisJobs.delete(test.id);
   } catch (err) {
-    j.status = "error";
-    j.error = err;
+    if (err && err.kind === "cancelled") {
+      p1AnalysisJobs.delete(test.id);            // stopped by you: back to the "Explain" button
+    } else {
+      j.status = "error";
+      j.error = err;
+    }
   } finally {
     clearInterval(timer);
     p1RenderAnalysis(test);
@@ -513,6 +536,14 @@ function p1AnalysisHTML(a, test) {
       </div>
       ${a.model ? `<p class="ai-meta">Explained by ${escapeHTML(a.provider)} · ${escapeHTML(a.model)} · ${escapeHTML(new Date(a.at).toLocaleString())}</p>` : ""}
     </div>`;
+}
+
+// Remove the stored AI analyses of deleted objective tests
+function p1DeleteAnalyses(testIds) {
+  const all = p1LoadAnalyses();
+  let changed = false;
+  (testIds || []).forEach(id => { if (all[id]) { delete all[id]; changed = true; } });
+  if (changed) saveJSON(P1_ANALYSIS_KEY, all);
 }
 
 // The AI's note on one question of a test (shown in the question review cards)
