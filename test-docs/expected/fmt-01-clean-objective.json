@@ -1,0 +1,212 @@
+{
+ "kind": "mcq",
+ "chapter": "National Income",
+ "questions": [
+  {
+   "number": 1,
+   "text": "Which of the following is NOT a part of India's domestic (economic) territory?",
+   "options": [
+    "An Air India aircraft flying between London and New York",
+    "The Indian Embassy in Tokyo",
+    "A fishing vessel run by an Indian resident in international waters",
+    "The World Bank office in New Delhi",
+    "An oil rig run by ONGC in India's Exclusive Economic Zone"
+   ],
+   "answer": "d",
+   "explanation": "Offices of international organisations such as the World Bank are not part of India's domestic territory, even when they are located inside India.",
+   "level": "Easy",
+   "topic": "National Income Concepts",
+   "passage": ""
+  },
+  {
+   "number": 2,
+   "text": "Consider the following statements:\n1. National income is the sum of factor incomes earned by normal residents.\n2. Transfer payments are included in national income.\n3. Net factor income from abroad is added to domestic income to get national income.\nWhich of the statements given above is/are correct?",
+   "options": [
+    "1 only",
+    "1 and 3 only",
+    "2 and 3 only",
+    "1, 2 and 3",
+    "None of the above"
+   ],
+   "answer": "b",
+   "explanation": "Transfer payments are not payments for productive services, so they are excluded.\nNI = NDP at FC + NFIA\nStatement 2 is therefore wrong.",
+   "level": "Moderate",
+   "topic": "National Income Concepts",
+   "passage": ""
+  },
+  {
+   "number": 3,
+   "text": "Assertion (A): GDP at market price is greater than GDP at factor cost when net indirect taxes are positive.\nReason (R): GDP at MP = GDP at FC + Net Indirect Taxes.",
+   "options": [
+    "Both A and R are true and R is the correct explanation of A",
+    "Both A and R are true but R is not the correct explanation of A",
+    "A is true but R is false",
+    "A is false but R is true",
+    "Both A and R are false"
+   ],
+   "answer": "a",
+   "explanation": "Net indirect taxes (indirect taxes minus subsidies) are the only difference between the two measures.",
+   "level": "",
+   "topic": "National Income Concepts",
+   "passage": ""
+  },
+  {
+   "number": 4,
+   "text": "Match List I with List II:\nList I | List II\nA. Income method | 1. Sum of final expenditures\nB. Expenditure method | 2. Sum of factor incomes\nC. Value added method | 3. Sum of value added by all producers",
+   "options": [
+    "A-2, B-1, C-3",
+    "A-1, B-2, C-3",
+    "A-3, B-1, C-2",
+    "A-2, B-3, C-1"
+   ],
+   "answer": "a",
+   "explanation": "Each method measures the same flow at a different stage: income, spending and production.\nMethod | Measures\nIncome | Factor payments\nExpenditure | Final spending",
+   "level": "Easy",
+   "topic": "Methods of Measurement",
+   "passage": ""
+  },
+  {
+   "number": 5,
+   "text": "Which of the following are excluded while estimating national income? (More than one option may be correct.)",
+   "options": [
+    "Sale of second-hand goods",
+    "Old-age pensions",
+    "Imputed rent of owner-occupied houses",
+    "Purchase of shares",
+    "Wages of government employees"
+   ],
+   "answer": "abd",
+   "explanation": "Second-hand sales and share purchases are not current production, and pensions are transfer payments. Imputed rent and government wages are included.",
+   "level": "",
+   "topic": "Methods of Measurement",
+   "passage": ""
+  },
+  {
+   "number": 6,
+   "text": "2011-12 is the base year of the current GDP series. Which organisation compiles it?",
+   "options": [
+    "Reserve Bank of India",
+    "National Statistical Office",
+    "NITI Aayog",
+    "Ministry of Finance",
+    "Finance Commission"
+   ],
+   "answer": "b",
+   "explanation": "",
+   "level": "",
+   "topic": "Methods of Measurement",
+   "passage": ""
+  },
+  {
+   "number": 7,
+   "text": "According to the passage, which sectors led growth in 2025-26?",
+   "options": [
+    "Agriculture and mining",
+    "Services and construction",
+    "Manufacturing and exports",
+    "Government spending and defence",
+    "Mining and utilities"
+   ],
+   "answer": "b",
+   "explanation": "",
+   "level": "",
+   "topic": "Methods of Measurement",
+   "passage": "Read the following passage carefully and answer the questions given below it.\nIndia's real GDP grew 7.8% in 2025-26, led by services and construction. Private consumption, which accounts for well over half of GDP, grew steadily as rural demand recovered.\nEconomists caution that headline growth hides uneven gains. Real wages in several informal sectors have barely moved, and household savings in financial assets fell to a multi-year low."
+  },
+  {
+   "number": 8,
+   "text": "What does the passage say about household savings in financial assets?",
+   "options": [
+    "They rose sharply",
+    "They stayed unchanged",
+    "They fell to a multi-year low",
+    "They doubled",
+    "The passage does not say"
+   ],
+   "answer": "c",
+   "explanation": "",
+   "level": "",
+   "topic": "Methods of Measurement",
+   "passage": "Read the following passage carefully and answer the questions given below it.\nIndia's real GDP grew 7.8% in 2025-26, led by services and construction. Private consumption, which accounts for well over half of GDP, grew steadily as rural demand recovered.\nEconomists caution that headline growth hides uneven gains. Real wages in several informal sectors have barely moved, and household savings in financial assets fell to a multi-year low."
+  },
+  {
+   "number": 9,
+   "text": "Which word is most nearly OPPOSITE in meaning to \"uneven\" as used in the passage?",
+   "options": [
+    "Irregular",
+    "Balanced",
+    "Rough",
+    "Unequal",
+    "Patchy"
+   ],
+   "answer": "b",
+   "explanation": "\"Uneven\" here means unequal; \"balanced\" is its opposite.",
+   "level": "",
+   "topic": "Methods of Measurement",
+   "passage": "Read the following passage carefully and answer the questions given below it.\nIndia's real GDP grew 7.8% in 2025-26, led by services and construction. Private consumption, which accounts for well over half of GDP, grew steadily as rural demand recovered.\nEconomists caution that headline growth hides uneven gains. Real wages in several informal sectors have barely moved, and household savings in financial assets fell to a multi-year low."
+  },
+  {
+   "number": 10,
+   "text": "By roughly what percentage did nominal GDP grow from 2023-24 to 2024-25?",
+   "options": [
+    "6.5%",
+    "8.2%",
+    "9.8%",
+    "11.4%",
+    "12.6%"
+   ],
+   "answer": "c",
+   "explanation": "(324 - 295) / 295 x 100 = 9.83%, about 9.8%.",
+   "level": "",
+   "topic": "Methods of Measurement",
+   "passage": "Study the table below and answer the questions that follow.\nYear | Nominal GDP (Rs lakh crore) | Real GDP (Rs lakh crore)\n2023-24 | 295 | 173\n2024-25 | 324 | 184"
+  },
+  {
+   "number": 11,
+   "text": "What was the GDP deflator in 2024-25 (approximately)?",
+   "options": [
+    "156",
+    "168",
+    "176",
+    "182",
+    "190"
+   ],
+   "answer": "c",
+   "explanation": "GDP deflator = Nominal GDP / Real GDP x 100 = 324 / 184 x 100 = 176.1",
+   "level": "Hard",
+   "topic": "Methods of Measurement",
+   "passage": "Study the table below and answer the questions that follow.\nYear | Nominal GDP (Rs lakh crore) | Real GDP (Rs lakh crore)\n2023-24 | 295 | 173\n2024-25 | 324 | 184"
+  },
+  {
+   "number": 12,
+   "text": "Which of the following statements about double counting is correct?",
+   "options": [
+    "It occurs when intermediate goods are counted along with final goods",
+    "It occurs when exports are excluded",
+    "It is avoided by adding the value of intermediate goods",
+    "It arises only in the income method",
+    "Both (b) and (c)"
+   ],
+   "answer": "a",
+   "explanation": "Counting intermediate goods along with final goods counts the same value twice. The value added method avoids it.\nNote: Only final goods enter GDP.",
+   "level": "Easy",
+   "topic": "Problems in Measurement",
+   "passage": ""
+  },
+  {
+   "number": 13,
+   "text": "Note: Answer on the basis of the System of National Accounts 2008.\nWhich of the following is treated as capital formation?",
+   "options": [
+    "Purchase of a car by a household for personal use",
+    "Construction of a new factory building",
+    "Payment of wages to factory workers",
+    "Purchase of raw material by a firm for current production"
+   ],
+   "answer": "b",
+   "explanation": "Only the factory building adds to the stock of fixed capital. The household car is final consumption.",
+   "level": "",
+   "topic": "Problems in Measurement",
+   "passage": ""
+  }
+ ]
+}

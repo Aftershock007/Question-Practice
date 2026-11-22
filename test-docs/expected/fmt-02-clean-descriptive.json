@@ -1,0 +1,113 @@
+{
+ "kind": "desc",
+ "questions": [
+  {
+   "number": 1,
+   "topic": "GDP and Welfare",
+   "marks": 15,
+   "wordLimit": 600,
+   "question": "“Higher GDP does not always mean higher welfare.” Critically examine this statement in the Indian context and suggest better measures of well-being.",
+   "answerStart": "Gross Domestic Product (GDP) is the market value of all fina",
+   "answerHas": [
+    "• Ignores income distribution",
+    "In India, the top 10% earn about 58%",
+    "HDI | Health and education with income",
+    "Q2 FY26 data also show",
+    "Conclusion\n\nGDP growth is necessary"
+   ],
+   "passage": ""
+  },
+  {
+   "number": 2,
+   "topic": "Fiscal Deficit",
+   "marks": 10,
+   "wordLimit": 400,
+   "question": "India's fiscal deficit fell to 4.8% of GDP in 2024-25.\nIn this context, discuss:\n(a) the quality of fiscal consolidation; and\n(b) the risks to the glide path.",
+   "answerStart": "Fiscal deficit is the excess of total expenditure over total",
+   "answerHas": [
+    "1. Quality of consolidation",
+    "\n2. Risks"
+   ],
+   "passage": ""
+  },
+  {
+   "number": 3,
+   "topic": "Base Year Revision",
+   "marks": 15,
+   "wordLimit": 600,
+   "question": "2022-23 was proposed as the new base year for India's GDP series. Examine why base years are revised and how the revision affects growth estimates.",
+   "answerStart": "Base years are revised so that the weights of sectors and pr",
+   "answerHas": [
+    "• New data sources"
+   ],
+   "passage": ""
+  },
+  {
+   "number": 4,
+   "topic": "Asset Quality",
+   "marks": 10,
+   "wordLimit": 400,
+   "question": "Identify the main causes of the rise in Shakti Bank's bad loans.",
+   "answerStart": "The main causes are the fast growth of unsecured loans, weak",
+   "answerHas": [],
+   "passage": "Read the case below and answer the questions that follow.\nCase Study: Shakti Bank\nShakti Bank is a mid-sized private bank. Its gross NPA ratio rose from 3.1% to 6.4% in two years, mostly from unsecured personal loans.\nYear | Gross NPA (%) | Unsecured share of loans (%)\nFY24 | 3.1 | 22\nFY26 | 6.4 | 35"
+  },
+  {
+   "number": 5,
+   "topic": "Asset Quality",
+   "marks": 10,
+   "wordLimit": 400,
+   "question": "Suggest a plan to restore asset quality.",
+   "answerStart": "• Tighten credit appraisal",
+   "answerHas": [
+    "\n• Strengthen recovery"
+   ],
+   "passage": "Read the case below and answer the questions that follow.\nCase Study: Shakti Bank\nShakti Bank is a mid-sized private bank. Its gross NPA ratio rose from 3.1% to 6.4% in two years, mostly from unsecured personal loans.\nYear | Gross NPA (%) | Unsecured share of loans (%)\nFY24 | 3.1 | 22\nFY26 | 6.4 | 35"
+  },
+  {
+   "number": 6,
+   "topic": "Precis Writing",
+   "marks": 10,
+   "wordLimit": 100,
+   "question": "Write a précis of the following passage in about one-third of its length.\nBanks are the backbone of an economy because they collect savings and lend them to productive uses. When banks are healthy, credit flows to farms, factories and households. When they are weighed down by bad loans, they become cautious and growth slows.",
+   "answerStart": "Banks channel savings into productive lending. Healthy banks",
+   "answerHas": [],
+   "passage": ""
+  },
+  {
+   "number": 7,
+   "topic": "Letter Writing",
+   "marks": 10,
+   "wordLimit": 250,
+   "question": "You are the branch manager of a bank in Pune. Write a letter to the Regional Manager requesting two more cash counters.",
+   "answerStart": "To",
+   "answerHas": [
+    "Subject: Request for two additional cash counters",
+    "Yours faithfully,"
+   ],
+   "passage": ""
+  },
+  {
+   "number": 8,
+   "topic": "Inflation",
+   "marks": 10,
+   "wordLimit": 400,
+   "question": "What is core inflation? Why does the RBI watch it closely?",
+   "answerStart": "Core inflation excludes volatile food and fuel prices.",
+   "answerHas": [
+    "It shows the underlying trend"
+   ],
+   "passage": ""
+  },
+  {
+   "number": 9,
+   "topic": "Potential Output",
+   "marks": 15,
+   "wordLimit": 600,
+   "question": "Explain the concept of potential output.",
+   "answerStart": "",
+   "answerHas": [],
+   "passage": ""
+  }
+ ]
+}

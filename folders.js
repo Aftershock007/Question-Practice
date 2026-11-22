@@ -37,7 +37,7 @@ function folderChapterFromName(fileName, title) {
   const tidy = s => sanitizeDashes(String(s || ""))
     .replace(/\.(docx|pdf)$/i, "")
     .replace(/[_]+/g, " ")
-    .replace(/\s*-\s*(?:Practice\s*Questions?|Questions?|Answer\s*Writing(?:\s*\d+)?|MCQs?|Test|Quiz|Notes)\b.*$/i, "")
+    .replace(/\s*-\s*(?:Practice\s*Questions?|Questions?|Answer\s*Writing(?:\s*\d+)?|MCQs?|Objective|Descriptive|Subjective|Test|Quiz|Notes)\b.*$/i, "")
     .replace(/\s*-\s*Google Docs$/i, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -155,11 +155,14 @@ function askFolder(opts) {
 
 // Ask for an uploaded file's folder, with guesses from its name and title
 function askFileFolder(fileName, rawText, guessSubject, count) {
-  const title = String(rawText || "").split("\n").map(l => l.trim()).find(Boolean) || "";
+  const head = String(rawText || "").split("\n", 40).map(l => l.replace(/\*\*/g, "").trim()).filter(Boolean);
+  const title = head[0] || "";
   const chapter = folderChapterFromName(fileName, title);
+  // a "Subject: Finance" line at the top (files converted with AI_CONVERT_PROMPT.md) names it outright;
   // the file name and title are better clues than the parser's guess (which falls back to General Awareness)
+  const subjectLine = (head.slice(0, 12).map(l => l.match(/^Subject\s*:\s*(.+)$/i)).find(Boolean) || [])[1] || "";
   const cleanName = String(fileName || "").replace(/[_]+/g, " ");
-  const subject = folderSubjectFromGuess(cleanName) || folderSubjectFromGuess(title) || folderSubjectFromGuess(guessSubject);
+  const subject = folderSubjectFromGuess(subjectLine) || folderSubjectFromGuess(cleanName) || folderSubjectFromGuess(title) || folderSubjectFromGuess(guessSubject);
   return askFolder({
     title: "Which subject and chapter is this file?",
     sub: `${fileName}${count ? " · " + count + " question" + (count === 1 ? "" : "s") : ""}`,

@@ -1,0 +1,43 @@
+{
+ "kind": "both",
+ "mcq": [
+  {
+   "number": 1,
+   "text": "Which index is used for inflation targeting in India?",
+   "answer": "b",
+   "options": 5,
+   "topic": "Measures of Inflation",
+   "explanation": "The target is set on headline CPI (Combined)."
+  },
+  {
+   "number": 2,
+   "text": "Who sets the inflation target?",
+   "answer": "b",
+   "options": 4,
+   "topic": "Measures of Inflation",
+   "explanation": ""
+  },
+  {
+   "number": 3,
+   "text": "Which of the following can cause cost-push inflation?",
+   "answer": "ac",
+   "options": 4,
+   "topic": "Types of Inflation",
+   "explanation": "Cost-push inflation comes from higher costs of production.\nCause | Type\nOil price rise | Cost-push\nMoney supply growth | Demand-pull"
+  }
+ ],
+ "desc": [
+  {
+   "number": 1,
+   "topic": "Inflation Targeting",
+   "marks": 10,
+   "wordLimit": 400,
+   "question": "Has flexible inflation targeting worked in India? Discuss.",
+   "answerStart": "- Average CPI inflation fell after 2016.",
+   "answerHas": [
+    "\n- Supply shocks"
+   ],
+   "passage": ""
+  }
+ ]
+}

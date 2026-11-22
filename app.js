@@ -2663,6 +2663,8 @@ function isPassageIntro(line) {
 
 function parseQuestionsAndAnswers(rawText) {
   if (!rawText || !rawText.trim()) return [];
+  // a file converted to the clean format is read by its labels
+  if (isCleanFormat(rawText)) return parseCleanFormat(rawText).desc;
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   // origLines keep leading spaces (indentation of nested bullets) for model answers;
@@ -3032,7 +3034,9 @@ async function handleDocImport(event) {
     // An MCQ file (options [a]-[e]) must not be imported as descriptive questions.
     // Descriptive files parse to 0 MCQs, so 3 is a safe threshold.
     const mcqLike = parseMCQDocument(rawText, inferMCQSubject(rawText)).filter(q => (q.options || []).length >= 4);
-    if (mcqLike.length >= 3) {
+    // a clean-format file can hold both kinds: this screen takes its descriptive part
+    const cleanBoth = isCleanFormat(rawText) && parseQuestionsAndAnswers(rawText).length > 0;
+    if (mcqLike.length >= 3 && !cleanBoth) {
       if (statusElem) statusElem.textContent = "";
       if (confirm(`"${file.name}" is an objective (MCQ) file with ${mcqLike.length} MCQs, not descriptive questions.\n\nOK = add them to the Objective (MCQ) test instead\nCancel = do not import`)) {
         const folder = typeof askFileFolder === "function" ? await askFileFolder(file.name, rawText, inferMCQSubject(rawText), mcqLike.length) : {};
@@ -3072,7 +3076,8 @@ async function handleDocImport(event) {
     // the AI Check runs only when you press "AI Check"
 
     if (statusElem) {
-      statusElem.textContent = `Added ${parsedQuestions.length} question(s) from ${file.name}.`;
+      statusElem.textContent = `Added ${parsedQuestions.length} question(s) from ${file.name}.` +
+        (cleanBoth && mcqLike.length ? ` Its ${mcqLike.length} MCQs are imported on the Objective New Test screen.` : "");
       setTimeout(() => { statusElem.textContent = ""; }, 6000);
     }
   } catch (err) {
@@ -3507,10 +3512,288 @@ function parseMCQAnswerKey(lines, multiSection) {
   return { entries, order };
 }
 
+// ---- Clean format: files converted with the AI prompt in AI_CONVERT_PROMPT.md ----------
+// A file whose header holds the line "Format: RBI-PRACTICE-V1" labels every part, so it is
+// read by those labels instead of the layout heuristics:
+//   Type: Objective / Type: Descriptive    the kind of questions below it (one file may hold both)
+//   Topic: <name>                          objective: heading over the questions below it;
+//                                          descriptive: the line under the question's number
+//   Directions (Q6-Q10): <instruction>     shared passage / table / case (the lines below it) for Q6-Q10
+//   Q12. <question> / (a) ... (e) / Answer: (b) or (a), (c) / Level: Easy / Explanation: ...
+//   Q3. (15 Marks, 600 Words) / Topic: ... / <question> / Answer: / <model answer>
+const CLEAN_FORMAT_RE = /^Format\s*:\s*RBI[\s-]*PRACTICE[\s-]*V\s*1\b/i;
+const CLEAN_Q_RE = /^(?:Q|Question)\s*\.?\s*(\d{1,4})\s*[.):]\s*(.*)$/i;
+const CLEAN_TYPE_RE = /^Type\s*:\s*(Objective|MCQs?|Descriptive|Subjective)\b/i;
+const CLEAN_TOPIC_RE = /^Topic\s*:\s*(.*\S)/i;
+const CLEAN_DIR_RE = /^Directions?\s*(?:\(\s*(?:Q(?:s|uestions?)?\.?\s*(?:No\.?\s*)?)?(\d{1,4})\s*(?:(?:-|to|and|&)\s*(?:Q\.?\s*)?(\d{1,4})\s*)?\))?\s*[:.\-]\s*(.*)$/i;
+const CLEAN_OPT_RE = /^(?:[\(\[]([a-eA-E])[\)\]]\s*|([a-eA-E])[.)]\s+)(.*)$/;
+const CLEAN_ANS_RE = /^(?:Correct\s+)?(?:Answer|Ans)\b\s*(?:is\s*)?[:.\-]\s*(.*)$/i;
+const CLEAN_LEVEL_RE = /^(?:Level|Difficulty)\s*[:.\-]\s*(Easy|Moderate|Medium|Hard|Difficult|Tough|Very\s+Hard)\s*\.?$/i;
+const CLEAN_EXPL_RE = /^(?:Explanation|Solution|Exp)\s*(?:[:.\-]\s*(.*))?$/i;
+// "(15 Marks, 600 Words)", "[10 Marks]", "15 Marks 600 Words", "(600 Words, 15 Marks)" + the text after it
+const CLEAN_MARKS_RE = /^[\(\[]?\s*((?:\d{1,4}\s*(?:Marks?|Words?)\b[\s,;|\/\-]*){1,2})[\)\]]?\s*[:.\-]?\s*(.*)$/i;
+const CLEAN_DESC_ANS_RE = /^(?:(?:Model|Reference|Suggested)\s+)?Answer\s*(?::\s*(.*))?$/i;
+
+// A line as the labels see it: without Markdown heading / bold markers ("**Answer:** (b)")
+function cleanLabelView(line) {
+  return String(line || "").replace(/\*\*/g, "").replace(/^\s*#{1,6}\s+/, "").trim();
+}
+
+// Was this file converted to the clean format? ("Format: RBI-PRACTICE-V1" near the top)
+function isCleanFormat(rawText) {
+  return String(rawText || "").split("\n", 40).map(cleanLabelView).filter(Boolean).slice(0, 15).some(l => CLEAN_FORMAT_RE.test(l));
+}
+
+// "(b)", "B", "Option C", "(a), (c) and (d)" -> { letters: "b" / "acd", rest: the text after them }
+function cleanAnswerLetters(value) {
+  const s = String(value || "").trim().replace(/^options?\s*/i, "");
+  const m = s.match(/^((?:[\(\[]?[a-eA-E][\)\]]?)(?:\s*(?:,|&|\/|\+|\band\b)?\s*[\(\[]?[a-eA-E][\)\]]?)*)(?=$|[\s.,;:)\]\-])\s*[.,;:\-]?\s*(.*)$/);
+  if (!m) return { letters: "", rest: s };
+  const letters = [...new Set(m[1].toLowerCase().replace(/\band\b/g, " ").match(/[a-e]/g) || [])].sort().join("");
+  return { letters, rest: m[2].trim() };
+}
+
+// Read a clean-format file: { mcq, desc }. mcq is shaped like parseMCQDocument's result (with
+// .meta), desc like parseQuestionsAndAnswers'. Question, option, explanation and answer lines
+// are kept exactly as written; only the labels are taken off.
+function parseCleanFormat(rawText, defaultSubject = "General Awareness") {
+  const lines = String(rawText || "").replace(/\r\n?/g, "\n").split("\n")
+    .map(l => ({ orig: l.replace(/\s+$/, ""), t: l.trim(), v: cleanLabelView(l) }))
+    .filter(l => l.t);
+  // header: line 1 is the title ("Chapter 1: National Income"), then "Subject:", "Type:", "Format:"
+  const first = lines.length ? lines[0].v : "";
+  const title = /^(?:Format|Type|Subject|Topic|Directions?)\b/i.test(first) || CLEAN_Q_RE.test(first) ? "" : first;
+  const ch = title.match(/^(?:Chapter|Ch)\s*[-.:]?\s*\d{1,3}\s*[-:.]\s*(.+)$/i);
+  const chapter = ch ? sanitizeDashes(ch[1].trim()) : "";
+  const subjectLine = (lines.slice(0, 15).map(l => l.v.match(/^Subject\s*:\s*(.+)$/i)).find(Boolean) || [])[1] || "";
+  const paperOf = s => (/\besi\b|econom/i.test(s) ? "ESI" : /finance/i.test(s) ? "Finance" : /management/i.test(s) ? "Management" : /english/i.test(s) ? "English Descriptive" : "");
+  const paper = paperOf(subjectLine) || paperOf(title) || "Other";
+  const kindOf = v => { const m = v.match(CLEAN_TYPE_RE); return m ? (/^(?:objective|mcq)/i.test(m[1]) ? "mcq" : "desc") : ""; };
+  // without a "Type:" line the labels tell: MCQ answers are option letters, descriptive questions carry marks
+  const guessKind = () => {
+    const letterAnswers = lines.filter(l => { const m = l.v.match(CLEAN_ANS_RE); return m && cleanAnswerLetters(m[1]).letters; }).length;
+    const marked = lines.filter(l => { const m = l.v.match(CLEAN_Q_RE); return m && CLEAN_MARKS_RE.test(m[2]); }).length;
+    return marked > letterAnswers ? "desc" : "mcq";
+  };
+  let kind = lines.map(l => kindOf(l.v)).find(Boolean) || guessKind();
+
+  const mcq = [];
+  const desc = [];
+  let topic = "";        // objective: the heading over the questions that follow
+  let nextTopic = "";    // descriptive: a "Topic:" line written above its question
+  let passage = null;    // { from, to, open, lines, reading }
+  let block = null;      // the question being read
+  let section = 0;
+  let lastNum = 0;
+
+  // An objective block: question lines, the options, then Answer / Level / Explanation
+  const mcqOf = (b) => {
+    const L = b.lines;
+    const optOf = l => { const m = l.v.match(CLEAN_OPT_RE); return m ? { label: (m[1] || m[2]).toLowerCase(), text: m[3].trim() } : null; };
+    const isTail = l => CLEAN_ANS_RE.test(l.v) || CLEAN_LEVEL_RE.test(l.v) || CLEAN_EXPL_RE.test(l.v);
+    const firstA = L.findIndex(l => { const o = optOf(l); return !!o && o.label === "a"; });
+    let end = L.findIndex((l, i) => i > firstA && isTail(l));
+    if (end < 0) end = L.length;
+    // the options are the last "(a) (b) ..." run before the answer: a statement list
+    // "(a) ... (d)" inside the question stays question text
+    let ia = -1;
+    for (let i = end - 1; i >= 0; i--) { const o = optOf(L[i]); if (o && o.label === "a") { ia = i; break; } }
+    const stem = (b.rest ? [b.rest] : []).concat(L.slice(0, ia >= 0 ? ia : end).map(l => l.t));
+    const options = [];
+    const skipped = [];
+    for (let i = ia; ia >= 0 && i < end; i++) {
+      const o = optOf(L[i]);
+      const prev = options.length ? options[options.length - 1].label : "`";
+      if (o && o.label > prev) {
+        for (let c = prev.charCodeAt(0) + 1; c < o.label.charCodeAt(0); c++) skipped.push(String.fromCharCode(c));
+        options.push(o);
+      } else if (options.length) {
+        options[options.length - 1].text += "\n" + L[i].t;   // an option that runs over two lines
+      }
+    }
+    // "(a) X (b) Y (c) Z (d) W" on one line, or after the question on its own line
+    if (options.length <= 1) {
+      const src = options.length ? "(a) " + options[0].text : stem[stem.length - 1] || "";
+      const sp = mcqSplitOptions(src, null, "a");
+      if (sp && sp.opts.length >= 2) {
+        if (!options.length) { stem.pop(); if (sp.stem) stem.push(sp.stem); }
+        options.splice(0, options.length, ...sp.opts.map(o => ({ label: o.label, text: o.text })));
+      }
+    }
+    let answer = "";
+    let level = "";
+    let gotAnswer = false;
+    let gotExpl = false;
+    const expl = [];
+    for (let i = end; i < L.length; i++) {
+      const v = L[i].v;
+      let m;
+      if (!gotAnswer && (m = v.match(CLEAN_ANS_RE))) {
+        gotAnswer = true;
+        let value = m[1];
+        // "Answer:" with the letter on the next line
+        const next = L[i + 1] ? cleanAnswerLetters(L[i + 1].v) : null;
+        if (!value.trim() && next && next.letters && !next.rest) value = L[++i].v;
+        const a = cleanAnswerLetters(value);
+        answer = a.letters;
+        // text after the letter starts the explanation; an answer written as words is kept, not guessed
+        if (a.rest && !/^not\s+(?:given|available|known)\b/i.test(a.rest)) expl.push(a.letters ? a.rest : "Answer: " + a.rest);
+        continue;
+      }
+      if (!level && (m = v.match(CLEAN_LEVEL_RE))) { level = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase(); continue; }
+      if (!gotExpl && (m = v.match(CLEAN_EXPL_RE))) { gotExpl = true; if (m[1] && m[1].trim()) expl.push(m[1].trim()); continue; }
+      expl.push(L[i].t);
+    }
+    const q = {
+      id: makeId("mcq"),
+      subject: defaultSubject,
+      topic: b.topic,
+      chapter,
+      number: b.number,
+      section: b.section,
+      text: stem.filter(s => s.trim()).join("\n").trim() || "Imported Question",
+      options: options.map(o => ({ label: o.label, text: o.text.trim() })),
+      correctAnswer: answer,
+      explanation: expl.join("\n").trim(),
+      marks: 1.0,
+      negativeMarks: 0.25,
+      parseIssues: skipped.length ? [{ code: "options-skipped", msg: `Option ${skipped.map(s => "(" + s + ")").join(", ")} could not be found.` }] : []
+    };
+    if (b.passage) q.passage = b.passage;
+    if (level) q.level = level;
+    return q;
+  };
+
+  // A descriptive block: "(15 Marks, 600 Words)" on the number line, question lines, "Answer:", the model answer
+  const descOf = (b) => {
+    let marks = 0;
+    let words = 0;
+    let rest = b.rest;
+    // the marks / word limit in "(15 Marks, 600 Words)" (either order)
+    const meta = (s) => {
+      const m = s.match(CLEAN_MARKS_RE);
+      if (!m) return null;
+      const mk = m[1].match(/(\d{1,3})\s*Marks?/i);
+      const wd = m[1].match(/(\d{2,4})\s*Words?/i);
+      return { marks: mk ? Number(mk[1]) : 0, words: wd ? Number(wd[1]) : 0, rest: m[2] };
+    };
+    const mm = meta(rest);
+    if (mm) { marks = mm.marks; words = mm.words; rest = mm.rest; }
+    const qLines = rest.trim() ? [rest.trim()] : [];
+    const aLines = [];
+    let inAnswer = false;
+    for (const l of b.lines) {
+      let m;
+      if (inAnswer) { aLines.push(l.orig); continue; }
+      if ((m = l.v.match(CLEAN_DESC_ANS_RE))) { inAnswer = true; if (m[1] && m[1].trim()) aLines.push(m[1].trim()); continue; }
+      const lm = !qLines.length && !marks && !words ? meta(l.v) : null;
+      if (lm && !lm.rest) { marks = lm.marks; words = lm.words; continue; }
+      if ((m = l.v.match(/^(?:Maximum\s+)?Marks?\s*[:.\-]\s*(\d{1,3})\s*$/i))) { marks = Number(m[1]); continue; }
+      if ((m = l.v.match(/^(?:Word\s*limit|Words?)\s*[:.\-]\s*(\d{2,4})\s*(?:words?)?\s*$/i))) { words = Number(m[1]); continue; }
+      qLines.push(l.t);
+    }
+    // no "Answer:" line: the first paragraph is the question, the rest its model answer
+    if (!inAnswer && qLines.length > 1) aLines.push(...qLines.splice(1));
+    marks = marks || 10;
+    let modelAnswer = joinAnswerLines(aLines);
+    if (/^(?:not\s+given|none|n\/?a)\.?$/i.test(modelAnswer.trim())) modelAnswer = "";
+    const q = { paper, topic: b.topic || chapter, text: qLines.join("\n").trim() || "Imported Question", marks, wordLimit: words || defaultWordLimit(marks), modelAnswer };
+    if (b.passage) q.passage = b.passage;
+    return q;
+  };
+
+  const finish = () => {
+    if (!block) return;
+    if (block.kind === "mcq") mcq.push(mcqOf(block));
+    else desc.push(descOf(block));
+    block = null;
+  };
+  const begin = (num, rest) => {
+    finish();
+    if (kind === "mcq") {
+      if (num === 1 && lastNum > 1) section++;      // numbering starts again: the next set
+      lastNum = num;
+    }
+    let shared = "";
+    if (passage) {
+      // the block sits right above its first question: a range that misses that question was mistyped
+      if (passage.reading && !passage.open && (num < passage.from || num > passage.to)) {
+        passage.to = num + Math.abs(passage.to - passage.from);
+        passage.from = num;
+      }
+      passage.reading = false;
+      if (passage.open || (num >= passage.from && num <= passage.to)) shared = passage.lines.join("\n").trim();
+      else if (num > passage.to) passage = null;
+    }
+    block = { kind, number: num, rest: rest.trim(), lines: [], passage: shared, topic: kind === "mcq" ? topic : nextTopic, section, sawOption: false, inAnswer: false };
+    nextTopic = "";
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const L = lines[i];
+    const v = L.v;
+    const k = kindOf(v);
+    if (k) { finish(); kind = k; topic = ""; nextTopic = ""; passage = null; continue; }
+    const qm = v.match(CLEAN_Q_RE);
+    if (qm) { begin(Number(qm[1]), qm[2]); continue; }
+    const dm = v.match(CLEAN_DIR_RE);
+    if (dm) {
+      finish();
+      const from = dm[1] ? Number(dm[1]) : NaN;
+      passage = { from, to: dm[2] ? Number(dm[2]) : from, open: isNaN(from), lines: dm[3].trim() ? [dm[3].trim()] : [], reading: true };
+      continue;
+    }
+    const tm = v.match(CLEAN_TOPIC_RE);
+    if (tm) {
+      const name = sanitizeDashes(tm[1].trim());
+      if ((block ? block.kind : kind) === "mcq") {
+        // right under the question's number (before its options) it names that question's topic
+        if (block && !block.sawOption) { block.topic = name; topic = name; continue; }
+        finish();
+        topic = name;
+        if (passage && passage.open) passage = null;
+        continue;
+      }
+      if (block && !block.inAnswer) { block.topic = name; continue; }
+      // after an answer, a "Topic:" line just above the next question (or its passage) is that question's
+      const next = lines[i + 1];
+      if (!block || !next || CLEAN_Q_RE.test(next.v) || CLEAN_DIR_RE.test(next.v)) { nextTopic = name; continue; }
+    }
+    if (block) {
+      if (block.kind === "mcq" && CLEAN_OPT_RE.test(v)) block.sawOption = true;
+      if (block.kind === "desc" && !block.inAnswer && CLEAN_DESC_ANS_RE.test(v)) block.inAnswer = true;
+      block.lines.push(L);
+      continue;
+    }
+    if (passage && passage.reading) passage.lines.push(L.t);
+    // anything else before the first question is the file header (title, "Subject:", "Format:")
+  }
+  finish();
+
+  const topics = [];
+  mcq.forEach(q => { if (q.topic && !topics.includes(q.topic)) topics.push(q.topic); });
+  const sections = new Set(mcq.map(q => q.section)).size;
+  const missingNumbers = [];
+  for (let s = 0; s < sections; s++) {
+    const nums = mcq.filter(q => q.section === s).map(q => q.number);
+    if (!nums.length) continue;
+    const have = new Set(nums);
+    const low = Math.min(...nums);
+    for (let n = low <= 3 ? 1 : low; n <= Math.max(...nums); n++) if (!have.has(n)) missingNumbers.push({ section: s, number: n });
+  }
+  Object.defineProperty(mcq, "meta", {
+    value: { topics, missingNumbers, orphanKeys: [], sections, chapter, keyEntries: 0, cleanFormat: true },
+    enumerable: false
+  });
+  return { mcq, desc };
+}
+
 // Parse plain text from DOCX or PDF into MCQ objects with options and answer keys.
 // The returned array also carries .meta: { topics, missingNumbers, orphanKeys, sections }.
 function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   if (!rawText || !rawText.trim()) return [];
+  // a file converted to the clean format is read by its labels
+  if (isCleanFormat(rawText)) return parseCleanFormat(rawText, defaultSubject).mcq;
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const allLines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
