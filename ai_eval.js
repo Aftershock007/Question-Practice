@@ -2665,12 +2665,15 @@ has no error of that kind, but do not skip real ones.
     return (
       '<section class="ai-engine" data-engine="' + id + '">' +
         '<div class="ai-engine-head"><span class="ai-engine-num">' + e.n + '</span><div><strong>' + esc(e.label) + '</strong><p class="ai-field-note">' + esc(e.uses) + "</p></div></div>" +
-        '<details class="ai-engine-adv"><summary>Model: <span data-f="summary">' + esc(s.model + (def.kind === "gemini" && s.thinking !== "default" ? " · " + s.thinking + " tier" : "")) + "</span></summary>" +
+        // the reasoning tier is always visible: you choose low, medium or high for each model
+        '<div class="ai-tier" role="radiogroup" aria-label="Reasoning tier for model ' + e.n + '" data-f="thinkwrap"' + (def.kind === "gemini" ? "" : " hidden") + ">" +
+          '<span class="ai-tier-label">Reasoning</span>' +
+          ["low", "medium", "high"].map(t => '<label class="ai-tier-opt"><input type="radio" name="tier-' + id + '" value="' + t + '"' + (t === s.thinking ? " checked" : "") + '><span>' + t[0].toUpperCase() + t.slice(1) + "</span></label>").join("") +
+        "</div>" +
+        (def.kind === "gemini" ? "" : '<p class="ai-field-note">This provider has no reasoning tiers; its model decides.</p>') +
+        '<details class="ai-engine-adv"><summary>Model: <span data-f="summary">' + esc(s.model) + "</span></summary>" +
           '<div class="ai-engine-grid">' +
             '<label>Provider<select data-f="provider">' + Object.values(PROVIDERS).map(p => '<option value="' + p.id + '"' + (p.id === s.provider ? " selected" : "") + ">" + esc(p.label) + "</option>").join("") + "</select></label>" +
-            '<label' + (def.kind === "gemini" ? "" : " hidden") + ' data-f="thinkwrap">Thinking level (tier)<select data-f="thinking">' +
-              ["default", "low", "medium", "high"].map(t => '<option value="' + t + '"' + (t === s.thinking ? " selected" : "") + ">" + (t === "default" ? "Model default" : t[0].toUpperCase() + t.slice(1)) + "</option>").join("") +
-            "</select></label>" +
           "</div>" +
           '<label' + (def.customBaseUrl ? "" : " hidden") + ' data-f="basewrap">Server URL (OpenAI-compatible)<input data-f="baseUrl" type="url" spellcheck="false" value="' + esc(s.baseUrl) + '"></label>' +
           '<label>Model</label><div class="ai-input-row"><input data-f="model" type="text" list="ai-models-' + id + '" autocomplete="off" spellcheck="false" value="' + esc(s.model) + '">' +
@@ -2704,7 +2707,8 @@ has no error of that kind, but do not skip real ones.
     const get = name => { const f = field(id, name); return f ? String(f.value || "").trim() : ""; };
     s.provider = PROVIDERS[get("provider")] ? get("provider") : s.provider;
     s.model = get("model") || s.model;
-    s.thinking = get("thinking") || s.thinking;
+    const tier = card(id) && card(id).querySelector('input[name="tier-' + id + '"]:checked');
+    if (tier) s.thinking = tier.value;
     s.baseUrl = get("baseUrl");
     return s;
   }
@@ -2784,10 +2788,10 @@ has no error of that kind, but do not skip real ones.
       const c = e.target.closest("[data-engine]");
       if (!c) return;
       const id = c.dataset.engine;
-      if (e.target.dataset.f === "model" || e.target.dataset.f === "thinking") {
+      if (e.target.dataset.f === "model") {
         const s = readEngine(id);
         const sum = field(id, "summary");
-        if (sum) sum.textContent = s.model + (PROVIDERS[s.provider].kind === "gemini" && s.thinking !== "default" ? " · " + s.thinking + " tier" : "");
+        if (sum) sum.textContent = s.model;
       }
     });
 
