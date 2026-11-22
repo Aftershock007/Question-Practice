@@ -779,7 +779,6 @@ function calShellHTML() {
   return `
     <div class="setup-header cal-page-head">
       <div class="setup-title-group">
-        <span class="eyebrow">Your 415-day plan</span>
         <h2>Calendar &amp; TODO</h2>
         <p class="setup-subtitle">Daily routine from your study plan: 1 Phase-2 subjective exam, 1 Phase-2 objective exam and 1 Phase-1 objective exam. Test days are tagged on the calendar.</p>
       </div>
@@ -834,15 +833,6 @@ function calShellHTML() {
           <label class="cal-btn-primary" title="Use your own timetable (.xlsx or .csv) as the study plan">Upload Timetable<input type="file" accept=".xlsx,.csv" data-role="import" hidden></label>
           <button type="button" class="btn-soft btn-soft-danger" data-action="clear-plan" data-role="remove-timetable">Remove Timetable</button>
         </div>
-        <details class="cal-more-actions">
-          <summary>More options</summary>
-          <div class="cal-settings-actions">
-            <button type="button" class="btn-soft" data-action="load-official">Use built-in 415-day plan</button>
-            <button type="button" class="btn-soft" data-action="template">Download template (.csv)</button>
-            <button type="button" class="btn-soft" data-action="export-plan">Export plan (.csv)</button>
-            <button type="button" class="btn-soft" data-action="export-todos">Export my TODOs (.csv)</button>
-          </div>
-        </details>
         <p class="cal-settings-status" data-role="status" aria-live="polite"></p>
       </div>
     </details>
