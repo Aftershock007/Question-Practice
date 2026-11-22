@@ -26,21 +26,39 @@ const CAL_KEYS = {
   config: "rbi_plan_config",          // { startDate, source: "official" | "custom" | "none" }
   customPlan: "rbi_plan_custom",      // [{ day, p2_subject, p2_topic, p1_subject, p1_topic, ca }]
   todos: "rbi_todos",                 // your own TODOs
-  planState: "rbi_plan_todo_state",   // { done: { id: timestamp }, hidden: { id: 1 } }
+  planState: "rbi_plan_todo_state",   // { done: { id: timestamp }, hidden: { id: 1 }, links: { id: { kind, testId } } }
   migrated: "rbi_todo_migrated_v1",   // legacy "quests" schedule already converted
   keysV2: "rbi_todo_keys_v2",         // plan TODO ids converted to the daily-routine format
+  typesV3: "rbi_todo_types_v3",       // TODO types converted to the test / study types
   launch: "rbi_todo_launch"           // TODO that started the exam currently running
 };
 
+// TODO types. Test types tick themselves when you submit that kind of test
+// (mode: "mcq" = objective test, "write" = subjective test, "" = either);
+// Study and Other are ticked by hand.
 const TODO_TYPES = [
-  { value: "Descriptive writing", kind: "writing" },
-  { value: "MCQ practice", kind: "mcq" },
-  { value: "Mock test", kind: "mock" },
-  { value: "Study", kind: "study" },
-  { value: "Revision", kind: "revision" },
-  { value: "Current affairs", kind: "ca" },
-  { value: "Other", kind: "other" }
+  { value: "Objective Practice", kind: "obj", test: true, mode: "mcq" },
+  { value: "Subjective Practice", kind: "subj", test: true, mode: "write" },
+  { value: "Mix Test", kind: "mix", test: true, mode: "" },
+  { value: "Chapter Test", kind: "chapter", test: true, mode: "" },
+  { value: "Study", kind: "study", test: false, mode: "" },
+  { value: "Other", kind: "other", test: false, mode: "" }
 ];
+
+// Older TODO types -> current ones
+const CAL_LEGACY_TYPES = {
+  "Descriptive writing": "Subjective Practice", "MCQ practice": "Objective Practice", "Mock test": "Mix Test",
+  "Study": "Study", "Revision": "Study", "Current affairs": "Study", "Other": "Other"
+};
+
+function calTypeDef(type) {
+  return TODO_TYPES.find(t => t.value === type) || TODO_TYPES[TODO_TYPES.length - 1];
+}
+
+// Is this a test TODO (completed automatically, never ticked by hand)?
+function calIsTestType(type) {
+  return !!calTypeDef(type).test;
+}
 
 // The daily routine: id suffix, chip label, phase tag
 const CAL_ROUTINE = [
@@ -109,9 +127,7 @@ function calTypeIcon(type) {
 }
 
 function calPracticeForType(type) {
-  if (type === "Descriptive writing") return "write";
-  if (type === "MCQ practice" || type === "Mock test") return "mcq";
-  return "";
+  return calTypeDef(type).mode || "";
 }
 
 // ------------------------------------------------------------
@@ -134,14 +150,24 @@ function calEnsureLoaded() {
   if (!Array.isArray(cal.todos)) cal.todos = [];
   cal.todos = cal.todos.filter(t => t && t.id && calIsValidDate(t.date));
   const ps = loadJSON(CAL_KEYS.planState, {}) || {};
-  cal.planState = { done: ps.done || {}, hidden: ps.hidden || {} };
+  cal.planState = { done: ps.done || {}, hidden: ps.hidden || {}, links: ps.links || {} };
 
   if (!loadJSON(CAL_KEYS.migrated, false)) calMigrateLegacy(!savedConfig);
   if (!loadJSON(CAL_KEYS.keysV2, false)) calMigrateKeysV2();
+  if (!loadJSON(CAL_KEYS.typesV3, false)) calMigrateTypesV3();
 
   const today = calToday();
-  cal.view = { month: calFirstOfMonth(today), selected: today, lastType: "Descriptive writing" };
+  cal.view = { month: calFirstOfMonth(today), selected: today, lastType: "Study" };
   cal.loaded = true;
+}
+
+// Convert your own TODOs to the test / study types
+function calMigrateTypesV3() {
+  cal.todos.forEach(t => {
+    if (!TODO_TYPES.some(x => x.value === t.type)) t.type = CAL_LEGACY_TYPES[t.type] || "Other";
+  });
+  calSaveTodos();
+  saveJSON(CAL_KEYS.typesV3, true);
 }
 
 // Convert the old single "rbi_study_schedule" list (plan tasks + quests) into the new model
@@ -343,12 +369,14 @@ function calPlanTodos(date, row) {
     const routine = CAL_ROUTINE.find(r => r.key === key);
     list.push({
       id, source: "plan", key, date, title, type,
-      detail: detail || "", subject: subject || "", practice: practice || "",
+      detail: detail || "", subject: subject || "", practice: practice || "", mode: practice || "",
       test: test || "", testLabel: testLabel || "", tag: routine ? routine.tag : "",
-      done: !!cal.planState.done[id]
+      done: !!cal.planState.done[id],
+      link: cal.planState.links[id] || null
     });
   };
   const describe = (t) => (t.label ? `${t.focus} · ${t.label}` : t.focus);
+  const testType = (t) => (t.kind === "mix-test" ? "Mix Test" : "Chapter Test");
 
   // Phase-2: subjective + objective exam every day
   const p2IsTest = p2 && (p2.kind === "chapter-test" || p2.kind === "mix-test");
@@ -357,30 +385,30 @@ function calPlanTodos(date, row) {
   const p2SubIsTest = p2IsTest && p2.hasSubjective;
   add("p2sub",
     p2SubIsTest ? `Subjective test · ${p2Short}` : "Phase-2 subjective exam",
-    "Descriptive writing", p2Detail, p2Sub || "Phase-2", "write",
+    p2SubIsTest ? testType(p2) : "Subjective Practice", p2Detail, p2Sub || "Phase-2", "write",
     p2SubIsTest ? p2.kind : "", p2SubIsTest ? p2.label : "");
   add("p2obj",
     p2IsTest ? `Objective test · ${p2Short}` : "Phase-2 objective exam",
-    p2IsTest ? "Mock test" : "MCQ practice", p2Detail, p2Sub || "Phase-2", "mcq",
+    p2IsTest ? testType(p2) : "Objective Practice", p2Detail, p2Sub || "Phase-2", "mcq",
     p2IsTest ? p2.kind : "", p2IsTest ? p2.label : "");
 
   // Phase-1: objective exam every day (a CA objective test counts when there is no Phase-1 topic)
   const p1IsTest = p1 && (p1.kind === "chapter-test" || p1.kind === "mix-test");
   if (p1) {
     add("p1obj", p1IsTest ? `Objective test · ${calTestShortName(p1.kind, p1.label)}` : "Phase-1 objective exam",
-      p1IsTest ? "Mock test" : "MCQ practice", p1IsTest ? p1.focus : describe(p1), p1Sub || "Phase-1", "mcq",
+      p1IsTest ? testType(p1) : "Objective Practice", p1IsTest ? p1.focus : describe(p1), p1Sub || "Phase-1", "mcq",
       p1IsTest ? p1.kind : "", p1IsTest ? p1.label : "");
   } else if (ca && ca.kind === "ca-test") {
-    add("p1obj", "Current affairs objective test", "Mock test", ca.focus, "Current Affairs", "mcq", "ca-test", ca.label);
+    add("p1obj", "Current affairs objective test", "Objective Practice", ca.focus, "Current Affairs", "mcq", "ca-test", ca.label);
   } else {
-    add("p1obj", "Phase-1 objective exam", "MCQ practice", "No Phase-1 topic today: mixed revision MCQs", "Phase-1", "mcq");
+    add("p1obj", "Phase-1 objective exam", "Objective Practice", "No Phase-1 topic today: mixed revision MCQs", "Phase-1", "mcq");
   }
 
   // Current affairs (only when the plan has it)
   if (ca && ca.kind === "ca-read") {
-    add("ca", "Read current affairs", "Current affairs", ca.focus, "Current Affairs", "");
+    add("ca", "Read current affairs", "Study", ca.focus, "Current Affairs", "");
   } else if (ca && p1) {
-    add("ca", "Current affairs objective test", "Mock test", ca.focus, "Current Affairs", "mcq", "ca-test", ca.label);
+    add("ca", "Current affairs objective test", "Objective Practice", ca.focus, "Current Affairs", "mcq", "ca-test", ca.label);
   }
   return list;
 }
@@ -421,7 +449,8 @@ function calContext() {
   for (const t of cal.todos) {
     const item = {
       id: t.id, source: "manual", date: t.date, title: t.title, type: t.type || "Other",
-      detail: t.note || "", subject: "", practice: calPracticeForType(t.type), done: !!t.done,
+      detail: t.note || "", subject: "", practice: t.mode || calPracticeForType(t.type), mode: t.mode || calPracticeForType(t.type),
+      done: !!t.done, link: t.link || null, auto: !!t.auto,
       test: "", tag: "", createdAt: t.createdAt || 0
     };
     if (!manualByDate.has(t.date)) manualByDate.set(t.date, []);
@@ -537,7 +566,7 @@ function calSetTodoDone(id, checked) {
   }
 }
 
-function calAddTodo({ title, type, date, note }) {
+function calAddTodo({ title, type, date, note, mode, auto }) {
   const clean = sanitizeDashes(String(title || "")).trim();
   if (!clean) return null;
   const todo = {
@@ -549,6 +578,8 @@ function calAddTodo({ title, type, date, note }) {
     done: false,
     createdAt: Date.now()
   };
+  if (mode) todo.mode = mode;
+  if (auto) todo.auto = true;
   cal.todos.push(todo);
   calSaveTodos();
   return todo;
@@ -585,29 +616,149 @@ function calIsPhase2McqTest(test) {
   return qs.length > 0 && qs.every(q => /\b(ESI|Economic|Finance|Management|Phase-2)\b/i.test(String(q.subject || "")));
 }
 
-// Called by app.js when a test is submitted: kind = "write" (descriptive) or "mcq"
+// Called by app.js when a test is submitted: kind = "write" (descriptive) or "mcq".
+// The test is linked to one TODO of the same test type: the TODO you started it from,
+// else an open TODO of today, else a new TODO is recorded for today. Objective tests
+// complete the TODO at once; subjective tests complete it when every answer is graded.
 function autoCompleteTodoOnExam(kind, test) {
   calEnsureLoaded();
   const launch = loadJSON(CAL_KEYS.launch, null);
   localStorage.removeItem(CAL_KEYS.launch);
+  if (!test) return;
+  const type = test.testType || (kind === "write" ? "Subjective Practice" : "Objective Practice");
+  let todo = null;
   if (launch && launch.target === kind && Date.now() - (launch.ts || 0) < 24 * 3600 * 1000) {
-    calSetTodoDone(launch.id, true);
-    refreshCalendars();
-    return;
+    const t = calFindTodoById(launch.id);
+    if (t && !t.link && calIsTestType(t.type) && (!t.mode || t.mode === kind)) todo = t;
+  }
+  if (!todo) todo = calFindOpenTestTodo(calToday(), type, kind, test);
+  if (!todo) {
+    const n = (test.questions || []).length;
+    const created = calAddTodo({
+      title: `${type} · ${n} ${kind === "mcq" ? "MCQ" : "question"}${n === 1 ? "" : "s"}`,
+      type, date: calToday(), mode: kind, auto: true
+    });
+    todo = created ? { id: created.id, source: "manual" } : null;
+  }
+  if (todo) calAttachExam(todo, kind, test);
+  refreshCalendars();
+}
+
+// A TODO (plan or your own) by id, wherever it is in the calendar
+function calFindTodoById(id) {
+  if (!id) return null;
+  const manual = calFindManual(id);
+  if (manual) {
+    return { id: manual.id, source: "manual", type: manual.type, mode: manual.mode || calPracticeForType(manual.type), title: manual.title, link: manual.link || null, done: !!manual.done };
+  }
+  const m = /^d(\d+)-(\w+)$/.exec(id);
+  if (!m) return null;
+  const date = calAddDays(cal.config.startDate, Number(m[1]) - 1);
+  const row = calPlanIndex().byDate.get(date);
+  return calPlanTodos(date, row).find(t => t.id === id) || null;
+}
+
+// An open test TODO of the given day for this test (same type, matching objective / subjective)
+function calFindOpenTestTodo(date, type, kind, test) {
+  const ctx = calContext();
+  const open = calDayInfo(date, ctx).todos.filter(t => !t.done && !t.link && t.type === type && (!t.mode || t.mode === kind));
+  if (!open.length) return null;
+  if (kind === "mcq" && open.length > 1) {
+    // Objective Practice: the Phase-2 exam for ESI / F&M questions, the Phase-1 exam otherwise
+    const prefer = calIsPhase2McqTest(test) ? ["p2obj", "p1obj", "ca"] : ["p1obj", "ca", "p2obj"];
+    for (const key of prefer) {
+      const t = open.find(x => x.source === "plan" && x.key === key);
+      if (t) return t;
+    }
+  }
+  return open.find(t => t.source === "plan") || open[0];
+}
+
+// Link a submitted test to a TODO (and tick it when the test is finished and scored)
+function calAttachExam(todo, kind, test) {
+  const link = { kind, testId: test.id, at: Date.now() };
+  const finished = kind === "mcq" || calTestFullyScored(test);
+  const manual = calFindManual(todo.id);
+  if (manual) {
+    manual.link = link;
+    if (finished) { manual.done = true; manual.doneAt = Date.now(); }
+    calSaveTodos();
+  } else {
+    cal.planState.links[todo.id] = link;
+    if (finished) cal.planState.done[todo.id] = Date.now();
+    calSavePlanState();
+  }
+}
+
+// Every answer of a subjective test has a score (AI-graded or typed in History)
+function calTestFullyScored(test) {
+  const qs = (test && test.questions) || [];
+  const scores = (test && test.scores) || {};
+  return qs.length > 0 && qs.every(q => scores[q.id] !== null && scores[q.id] !== undefined && scores[q.id] !== "" && !isNaN(scores[q.id]));
+}
+
+// Called by ai_eval.js / History when a score is written: tick the TODO once every answer is graded
+function calOnTestScored(kind, testId) {
+  calEnsureLoaded();
+  if (calReconcileLinks(testId)) refreshCalendars();
+}
+
+// Tick subjective-test TODOs whose test is now fully graded. Returns true if something changed.
+function calReconcileLinks(onlyTestId) {
+  const history = loadJSON("rbi_history", []);
+  const byId = new Map((Array.isArray(history) ? history : []).map(t => [t.id, t]));
+  let changed = false;
+  const ready = (link) => link && link.kind === "write" && (!onlyTestId || link.testId === onlyTestId) && byId.has(link.testId) && calTestFullyScored(byId.get(link.testId));
+  Object.entries(cal.planState.links).forEach(([id, link]) => {
+    if (!cal.planState.done[id] && ready(link)) { cal.planState.done[id] = Date.now(); changed = true; }
+  });
+  cal.todos.forEach(t => {
+    if (!t.done && ready(t.link)) { t.done = true; t.doneAt = Date.now(); changed = true; }
+  });
+  if (changed) { calSavePlanState(); calSaveTodos(); }
+  return changed;
+}
+
+// The test a TODO is linked to, with its marks: { kind, test, scoreText, pending, missing }
+function calLinkedResult(link) {
+  if (!link) return null;
+  const list = loadJSON(link.kind === "mcq" ? "rbi_p1_history" : "rbi_history", []);
+  const test = (Array.isArray(list) ? list : []).find(t => t && t.id === link.testId) || null;
+  if (!test) return { kind: link.kind, test: null, scoreText: "test deleted from History", pending: false, missing: true };
+  if (link.kind === "mcq") {
+    return { kind: "mcq", test, scoreText: `${Number(test.score || 0).toFixed(2)} / ${Number(test.maxScore || 0).toFixed(2)} · ${test.accuracy || 0}% accuracy`, pending: false };
+  }
+  const r = calWriteScore(test);
+  return { kind: "write", test, scoreText: r.text, pending: !r.complete };
+}
+
+// Marks of a subjective test: "18.5 / 25 marks" or "waiting for AI grades (1 of 2 graded)"
+function calWriteScore(test) {
+  const qs = test.questions || [];
+  const scores = test.scores || {};
+  const graded = qs.filter(q => scores[q.id] !== null && scores[q.id] !== undefined && scores[q.id] !== "" && !isNaN(scores[q.id]));
+  const total = graded.reduce((a, q) => a + Number(scores[q.id]), 0);
+  const max = test.maxMarks || qs.reduce((a, q) => a + (Number(q.marks) || 0), 0);
+  const complete = qs.length > 0 && graded.length === qs.length;
+  const fmt = (n) => String(Math.round(n * 100) / 100);
+  if (complete) return { complete, text: `${fmt(total)} / ${fmt(max)} marks`, total, max };
+  return { complete, text: graded.length ? `waiting for grades (${graded.length} of ${qs.length} graded, ${fmt(total)} so far)` : "waiting for AI grades", total, max };
+}
+
+// Which test type to suggest when a test starts: the TODO it was started from, or today's open test TODO
+function calSuggestTestType(mode) {
+  calEnsureLoaded();
+  const launch = loadJSON(CAL_KEYS.launch, null);
+  if (launch && launch.target === mode && Date.now() - (launch.ts || 0) < 24 * 3600 * 1000) {
+    const t = calFindTodoById(launch.id);
+    if (t && calIsTestType(t.type)) return { type: t.type, title: t.title };
   }
   const ctx = calContext();
-  const info = calDayInfo(ctx.today, ctx);
-  const order = kind === "write"
-    ? ["p2sub"]
-    : (calIsPhase2McqTest(test) ? ["p2obj", "p1obj", "ca"] : ["p1obj", "ca", "p2obj"]);
-  let match = null;
-  for (const key of order) {
-    match = info.todos.find(t => t.source === "plan" && t.key === key && !t.done && (key !== "ca" || t.practice === "mcq"));
-    if (match) break;
-  }
-  if (!match) match = info.todos.find(t => t.source === "manual" && !t.done && t.practice === kind);
-  if (match) calSetTodoDone(match.id, true);
-  refreshCalendars();
+  const open = calDayInfo(ctx.today, ctx).todos.filter(t => !t.done && !t.link && calIsTestType(t.type) && (!t.mode || t.mode === mode));
+  const test = open.find(t => t.type === "Chapter Test" || t.type === "Mix Test");
+  if (test) return { type: test.type, title: test.title };
+  const practice = open.find(t => t.type === (mode === "mcq" ? "Objective Practice" : "Subjective Practice"));
+  return practice ? { type: practice.type, title: practice.title } : null;
 }
 
 // ------------------------------------------------------------
@@ -669,7 +820,7 @@ function calShellHTML() {
         <span class="cal-settings-sub" data-role="plan-summary"></span>
       </summary>
       <div class="cal-settings-body">
-        <p class="cal-settings-note">The built-in plan is your <strong>RBI_Study_Schedule.xlsx</strong> (415 days). Every plan day creates its 3 exam TODOs automatically. Your own TODOs are never touched by these buttons.</p>
+        <p class="cal-settings-note">Your timetable gives every day its 3 exam TODOs automatically (the built-in one is <strong>RBI_Study_Schedule.xlsx</strong>, 415 days). Uploading a timetable replaces the current one; removing it clears the plan TODOs. Your own TODOs and test history are never touched.</p>
         <div class="cal-settings-grid">
           <label>Plan start date (Day 1)
             <input type="date" data-role="start-date">
@@ -679,14 +830,19 @@ function calShellHTML() {
           </label>
           <button type="button" data-action="apply-config">Apply</button>
         </div>
-        <div class="cal-settings-actions">
-          <button type="button" class="btn-soft" data-action="load-official">Use built-in 415-day plan</button>
-          <label class="btn-soft">Upload timetable (.xlsx / .csv)<input type="file" accept=".xlsx,.csv" data-role="import" hidden></label>
-          <button type="button" class="btn-soft" data-action="template">Download template (.csv)</button>
-          <button type="button" class="btn-soft" data-action="export-plan">Export plan (.csv)</button>
-          <button type="button" class="btn-soft" data-action="export-todos">Export my TODOs (.csv)</button>
-          <button type="button" class="btn-soft btn-soft-danger" data-action="clear-plan">Remove plan</button>
+        <div class="cal-settings-actions cal-timetable-actions">
+          <label class="cal-btn-primary" title="Use your own timetable (.xlsx or .csv) as the study plan">Upload Timetable<input type="file" accept=".xlsx,.csv" data-role="import" hidden></label>
+          <button type="button" class="btn-soft btn-soft-danger" data-action="clear-plan" data-role="remove-timetable">Remove Timetable</button>
         </div>
+        <details class="cal-more-actions">
+          <summary>More options</summary>
+          <div class="cal-settings-actions">
+            <button type="button" class="btn-soft" data-action="load-official">Use built-in 415-day plan</button>
+            <button type="button" class="btn-soft" data-action="template">Download template (.csv)</button>
+            <button type="button" class="btn-soft" data-action="export-plan">Export plan (.csv)</button>
+            <button type="button" class="btn-soft" data-action="export-todos">Export my TODOs (.csv)</button>
+          </div>
+        </details>
         <p class="cal-settings-status" data-role="status" aria-live="polite"></p>
       </div>
     </details>
@@ -809,7 +965,7 @@ function calCellHTML(date, ctx, monthIndex) {
   const more = manualTodos.length > maxManual ? `<span class="cal-more">+${manualTodos.length - maxManual} more</span>` : "";
   const dots = info.todos.slice(0, 6).map(t => `<i class="${t.done ? "done" : ""}"></i>`).join("");
   const examHTML = info.exams.length > 0
-    ? `<span class="cal-exam">${info.exams.length} submitted</span>`
+    ? `<span class="cal-exam">${info.exams.length} test${info.exams.length === 1 ? "" : "s"} taken</span>`
     : "";
   const pct = info.total > 0 ? Math.round((info.done / info.total) * 100) : 0;
   const testsText = info.tests.length ? `, tests: ${info.tests.map(t => `${t.tag} ${t.label}`).join(", ")}` : "";
@@ -854,61 +1010,79 @@ function calRenderGrid(root, ctx) {
 
 function calExamCardHTML(item) {
   const exam = item.test;
+  const type = exam.testType || (item.kind === "mcq" ? "Objective test" : "Subjective test");
+  const time = new Date(item.kind === "mcq" ? (exam.completedAt || exam.date) : exam.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   if (item.kind === "mcq") {
     const score = Number(exam.score || 0).toFixed(2);
     const max = Number(exam.maxScore || (exam.questions || []).length || 0).toFixed(2);
     return `
-      <div class="dp-exam">
-        <div class="dp-exam-main">
-          <strong>Objective test · ${score} / ${max}</strong>
-          <span>${exam.accuracy || 0}% accuracy · ${exam.correctCount || 0} correct · ${exam.incorrectCount || 0} wrong · ${formatDuration(exam.timeSpent || 0)}</span>
-        </div>
-        <button type="button" class="btn-soft" data-action="review-exam" data-kind="mcq" data-id="${escapeHTML(exam.id)}">Review</button>
-      </div>`;
+      <button type="button" class="dp-exam" data-action="review-exam" data-kind="mcq" data-id="${escapeHTML(exam.id)}" title="Open the full result">
+        <span class="dp-exam-main">
+          <span class="dp-exam-type">${escapeHTML(type)} · objective · ${escapeHTML(time)}</span>
+          <strong>${score} / ${max}</strong>
+          <span>${exam.accuracy || 0}% accuracy · ${exam.correctCount || 0} correct · ${exam.incorrectCount || 0} wrong · ${exam.unattemptedCount || 0} left · ${formatDuration(exam.timeSpent || 0)}</span>
+        </span>
+        <span class="dp-exam-open" aria-hidden="true">Open result ›</span>
+      </button>`;
   }
-  const scores = Object.values(exam.scores || {}).filter(v => v !== null && v !== undefined && v !== "" && !isNaN(v));
-  const total = scores.reduce((a, b) => a + Number(b), 0);
-  const max = exam.maxMarks || (exam.questions || []).reduce((a, q) => a + (Number(q.marks) || 0), 0);
+  const r = calWriteScore(exam);
   const words = Object.values(exam.answers || {}).reduce((a, x) => a + (x.wordCount || 0), 0);
-  const scoreText = scores.length > 0 ? `${total} / ${max} marks` : "score not entered yet";
   return `
-    <div class="dp-exam write">
-      <div class="dp-exam-main">
-        <strong>Subjective test · ${escapeHTML(scoreText)}</strong>
+    <button type="button" class="dp-exam write" data-action="review-exam" data-kind="write" data-id="${escapeHTML(exam.id)}" title="Open the full result and AI assessment">
+      <span class="dp-exam-main">
+        <span class="dp-exam-type">${escapeHTML(type)} · subjective · ${escapeHTML(time)}</span>
+        <strong>${r.complete ? escapeHTML(r.text) : `<span class="dp-pending">${escapeHTML(r.text)}</span>`}</strong>
         <span>${(exam.questions || []).length} question(s) · ${words} words · ${formatDuration(exam.usedSeconds || 0)}</span>
-      </div>
-      <button type="button" class="btn-soft" data-action="review-exam" data-kind="write" data-id="${escapeHTML(exam.id)}">Review</button>
-    </div>`;
+      </span>
+      <span class="dp-exam-open" aria-hidden="true">Open result ›</span>
+    </button>`;
+}
+
+function calExamTime(item) {
+  const t = item.test || {};
+  return new Date(item.kind === "mcq" ? (t.completedAt || t.date) : t.date).getTime() || 0;
 }
 
 function calTodoItemHTML(t) {
+  const isTest = calIsTestType(t.type);
+  const res = t.link ? calLinkedResult(t.link) : null;
   let practiceBtn = "";
-  if (t.practice === "write") {
-    practiceBtn = `<button type="button" class="todo-go" data-action="practice" data-target="write" data-id="${escapeHTML(t.id)}" title="Open the descriptive (subjective) test setup">Start subjective</button>`;
-  } else if (t.practice === "mcq") {
-    practiceBtn = `<button type="button" class="todo-go" data-action="practice" data-target="mcq" data-id="${escapeHTML(t.id)}" title="Open the objective (MCQ) test setup">Start objective</button>`;
+  if (!t.done && !t.link && isTest) {
+    const target = t.mode || "";
+    if (target !== "write") practiceBtn += `<button type="button" class="todo-go" data-action="practice" data-target="mcq" data-id="${escapeHTML(t.id)}" title="Open the objective (MCQ) test setup">Start objective</button>`;
+    if (target !== "mcq") practiceBtn += `<button type="button" class="todo-go" data-action="practice" data-target="write" data-id="${escapeHTML(t.id)}" title="Open the descriptive (subjective) test setup">Start subjective</button>`;
   }
-  const meta = t.source === "plan"
-    ? [
-      t.tag ? `<span class="todo-tag tag-${t.tag.toLowerCase()}">${t.tag}</span>` : "",
-      t.test ? `<span class="todo-testflag kind-${t.test}">Test</span>` : "",
-      t.subject ? `<span class="todo-subject">${escapeHTML(t.subject)}</span>` : ""
-    ].join("")
-    : [
-      `<span class="todo-type">${calTypeIcon(t.type)} ${escapeHTML(t.type)}</span>`,
-      `<span class="todo-src mine">My TODO</span>`
-    ].join("");
-  return `
-    <li class="todo-item ${t.done ? "is-done" : ""} ${t.test ? `is-test test-${t.test}` : ""}" data-id="${escapeHTML(t.id)}">
-      <label class="todo-check" title="${t.done ? "Mark as not done" : "Mark as done"}">
+  const meta = [
+    t.tag ? `<span class="todo-tag tag-${t.tag.toLowerCase()}">${t.tag}</span>` : "",
+    `<span class="todo-type">${calTypeIcon(t.type)} ${escapeHTML(t.type)}</span>`,
+    t.subject ? `<span class="todo-subject">${escapeHTML(t.subject)}</span>` : "",
+    t.source === "manual" ? `<span class="todo-src mine">${t.auto ? "From your test" : "My TODO"}</span>` : ""
+  ].join("");
+  // Test TODOs have no checkbox: submitting the test ticks them
+  const check = isTest
+    ? `<span class="todo-auto ${t.done ? "done" : (t.link ? "pending" : "")}" title="${t.done ? "Done: completed by your test" : (t.link ? "Waiting for the AI grades of your test" : "Ticks itself when you submit this test")}" aria-label="${t.done ? "Done" : "Not done yet"}">${t.done ? '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ""}</span>`
+    : `<label class="todo-check" title="${t.done ? "Mark as not done" : "Mark as done"}">
         <input type="checkbox" class="todo-checkbox" data-id="${escapeHTML(t.id)}" ${t.done ? "checked" : ""} aria-label="${escapeHTML(t.title)}">
         <span class="todo-box" aria-hidden="true"></span>
-      </label>
+      </label>`;
+  let resultHTML = "";
+  if (res) {
+    resultHTML = res.missing
+      ? `<div class="todo-result muted">Linked test was deleted from History.</div>`
+      : `<button type="button" class="todo-result ${res.pending ? "pending" : ""}" data-action="review-exam" data-kind="${res.kind}" data-id="${escapeHTML(res.test.id)}"><span>${res.pending ? "Submitted" : "Score"}: <strong>${escapeHTML(res.scoreText)}</strong></span><span class="todo-result-open">Open result ›</span></button>`;
+  } else if (isTest && !t.done) {
+    const which = t.mode === "write" ? "subjective test" : t.mode === "mcq" ? "objective test" : "test";
+    resultHTML = `<div class="todo-hint">Ticks itself when you submit a ${which} marked “${escapeHTML(t.type)}”${t.mode === "mcq" ? "" : " (a subjective test counts once it is graded)"}.</div>`;
+  }
+  return `
+    <li class="todo-item ${t.done ? "is-done" : ""} ${isTest ? "is-test-type" : ""} ${t.test ? `is-test test-${t.test}` : ""}" data-id="${escapeHTML(t.id)}">
+      ${check}
       <div class="todo-body">
         <div class="todo-title">${escapeHTML(t.title)}</div>
         ${t.detail ? `<div class="todo-detail">${escapeHTML(t.detail)}</div>` : ""}
         <div class="todo-meta">${meta}</div>
-        ${practiceBtn && !t.done ? `<div class="todo-go-row">${practiceBtn}</div>` : ""}
+        ${resultHTML}
+        ${practiceBtn ? `<div class="todo-go-row">${practiceBtn}</div>` : ""}
       </div>
       <div class="todo-actions">
         <button type="button" class="todo-icon-btn" data-action="edit" data-id="${escapeHTML(t.id)}" title="Edit TODO" aria-label="Edit TODO"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M11.3 2.3a1.5 1.5 0 0 1 2.1 2.1L5.6 12.2 2.5 13l.8-3.1 8-7.6z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
@@ -962,11 +1136,11 @@ function calRenderDayPanel(root, ctx) {
   } else if (ctx.plan.totalDays > 0) {
     focusHTML = `<div class="dp-focus muted">This day is outside your study plan. Add your own TODOs below.</div>`;
   } else {
-    focusHTML = `<div class="dp-focus muted">No study plan loaded. Open “Study plan settings” below to load it.</div>`;
+    focusHTML = `<div class="dp-focus muted">No timetable loaded. Open “Study plan settings” below and press Upload Timetable.</div>`;
   }
 
   const pct = info.total ? Math.round((info.done / info.total) * 100) : 0;
-  const examsHTML = info.exams.map(calExamCardHTML).join("");
+  const examsHTML = info.exams.slice().sort((a, b) => calExamTime(a) - calExamTime(b)).map(calExamCardHTML).join("");
   const listHTML = info.todos.length > 0
     ? `<ul class="todo-list">${info.todos.map(calTodoItemHTML).join("")}</ul>`
     : `<div class="todo-empty">No TODOs for this day yet.<br>Add one below.</div>`;
@@ -984,6 +1158,7 @@ function calRenderDayPanel(root, ctx) {
     </div>
     ${badges.length ? `<div class="dp-badges">${badges.join("")}</div>` : ""}
     ${focusHTML}
+    ${examsHTML ? `<div class="dp-section-head"><h4>Tests you took</h4><span>${info.exams.length} · click one to open its result</span></div><div class="dp-exams">${examsHTML}</div>` : ""}
     <div class="dp-section-head">
       <h4>TODO</h4>
       <span>${info.done} of ${info.total} done</span>
@@ -991,7 +1166,6 @@ function calRenderDayPanel(root, ctx) {
     <div class="cal-progress"><span style="width:${pct}%"></span></div>
     ${listHTML}
     ${hiddenHTML}
-    ${examsHTML ? `<div class="dp-section-head"><h4>Tests submitted</h4><span>${info.exams.length}</span></div><div class="dp-exams">${examsHTML}</div>` : ""}
     <form class="todo-add" data-role="add-form" autocomplete="off">
       <label class="todo-add-label">Add your own TODO
         <input type="text" name="title" placeholder="e.g. Revise repo rate notes" maxlength="300" required>
@@ -1001,6 +1175,7 @@ function calRenderDayPanel(root, ctx) {
         <input type="date" name="date" value="${date}" aria-label="TODO date" required>
         <button type="submit">+ Add TODO</button>
       </div>
+      <p class="todo-add-note">Objective Practice, Subjective Practice, Mix Test and Chapter Test TODOs tick themselves when you submit that test. Study and Other you tick yourself.</p>
     </form>
   `;
 }
@@ -1008,11 +1183,13 @@ function calRenderDayPanel(root, ctx) {
 function calRenderSettings(root, ctx) {
   const startInput = root.querySelector('[data-role="start-date"]');
   if (startInput && document.activeElement !== startInput) startInput.value = cal.config.startDate;
+  const removeBtn = root.querySelector('[data-role="remove-timetable"]');
+  if (removeBtn) removeBtn.disabled = cal.config.source === "none" || ctx.plan.totalDays === 0;
   const summary = root.querySelector('[data-role="plan-summary"]');
   if (summary) {
     summary.textContent = (cal.config.source === "none" || ctx.plan.totalDays === 0)
-      ? "No plan loaded"
-      : `${cal.config.source === "custom" ? "Imported" : "Built-in"} ${ctx.plan.totalDays}-day plan · Day 1 = ${calParse(cal.config.startDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+      ? "No timetable loaded"
+      : `${cal.config.source === "custom" ? "Uploaded" : "Built-in"} ${ctx.plan.totalDays}-day timetable · Day 1 = ${calParse(cal.config.startDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
   }
 }
 
@@ -1026,6 +1203,7 @@ function renderCalendar() {
     cal.built = true;
     calWire(root);
   }
+  calReconcileLinks();
   const ctx = calContext();
   calRenderStats(root, ctx);
   calRenderUpcoming(root, ctx);
@@ -1117,6 +1295,9 @@ function calWire(root) {
 
   root.addEventListener("change", (e) => {
     if (e.target.classList.contains("todo-checkbox")) {
+      const t = calFindTodoById(e.target.dataset.id);
+      // Test TODOs are completed by the test itself, never by hand
+      if (t && calIsTestType(t.type)) { renderCalendar(); return; }
       calSetTodoDone(e.target.dataset.id, e.target.checked);
       renderCalendar();
     } else if (e.target.matches('[data-role="import"]')) {
@@ -1156,22 +1337,21 @@ function calGoPractice(target, todoId) {
   showScreen("setup");
 }
 
+// Open the full result page of a test taken (objective scorecard, or subjective result + AI assessment)
 function calReviewExam(kind, id) {
   if (kind === "mcq") {
     setPhase("phase1");
+    state.returnTo = "calendar";   // after setPhase, which shows the setup screen
     reviewP1HistoricalTest(id);
     return;
   }
+  const history = loadJSON("rbi_history", []);
+  const test = (Array.isArray(history) ? history : []).find(t => t && t.id === id);
+  if (!test) return;
   setPhase("phase2");
-  renderHistory();
-  showScreen("history");
-  const container = $(`review-container-${id}`);
-  if (container) {
-    container.style.display = "block";
-    const btn = document.querySelector(`.btn-toggle-answer-review[data-test-id="${CSS.escape(id)}"]`);
-    if (btn) btn.textContent = "Hide answers";
-    setTimeout(() => container.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
-  }
+  state.returnTo = "calendar";
+  renderResult(test);
+  showScreen("result");
 }
 
 // ------------------------------------------------------------
@@ -1231,12 +1411,16 @@ function calLoadOfficial(root) {
 }
 
 function calClearPlan(root) {
-  if (!confirm("Remove the study plan? The plan's exam TODOs disappear from the calendar; your own TODOs and test history stay. You can load the plan again any time.")) return;
+  if (cal.config.source === "none") {
+    calSetStatus(root, "No timetable is loaded.", true);
+    return;
+  }
+  if (!confirm("Remove the timetable? Its exam TODOs disappear from the calendar; your own TODOs and test history stay. You can upload a timetable again any time.")) return;
   cal.config.source = "none";
   calSaveConfig();
   calInvalidatePlan();
   renderCalendar();
-  calSetStatus(root, "Plan removed. Use “Use built-in 415-day plan” or upload a timetable to bring one back.");
+  calSetStatus(root, "Timetable removed. Use Upload Timetable (or More options > Use built-in 415-day plan) to load one again.");
 }
 
 function calCsvCell(v) {
@@ -1437,11 +1621,14 @@ function saveTodoModal(e) {
     }
   } else {
     const wasDone = !!cal.planState.done[ed.id];
+    const original = calFindTodoById(ed.id);
+    const link = cal.planState.links[ed.id] || null;
     cal.planState.hidden[ed.id] = 1;
     calSavePlanState();
-    const todo = calAddTodo({ title, type, date, note });
-    if (todo && wasDone) {
-      todo.done = true;
+    const todo = calAddTodo({ title, type, date, note, mode: original && original.mode });
+    if (todo && (wasDone || link)) {
+      todo.done = wasDone;
+      if (link) todo.link = link;
       calSaveTodos();
     }
   }

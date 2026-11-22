@@ -89,6 +89,9 @@ function getCombinedFilename(test) {
 // Show one screen, hide all others
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.hidden = true);
+  // "Back to calendar" only on a result opened from the calendar
+  if (name !== "result") state.returnTo = "";
+  document.querySelectorAll(".btn-back-calendar").forEach(b => { b.hidden = !(name === "result" && state.returnTo === "calendar"); });
   let targetId = "screen-" + name;
   if (name === "setup" || name === "exam" || name === "result" || name === "history") {
     targetId = state.phase === "phase1" ? `screen-${name}-p1` : `screen-${name}`;
@@ -571,7 +574,7 @@ function handleQuestionFormSubmit(event) {
 }
 
 // Validate setup inputs and begin the exam
-function handleStartTestClick() {
+async function handleStartTestClick() {
   const errorElem = $("setup-error");
   errorElem.textContent = "";
 
@@ -596,11 +599,13 @@ function handleStartTestClick() {
     }
   }
 
-  startTest();
+  const testType = await askTestType("write", { count: state.setup.questions.length });
+  if (!testType) return;
+  startTest(testType);
 }
 
 // Initialize a new test session and transition to the exam screen
-function startTest() {
+function startTest(testType) {
   const totalMinutes = state.setup.totalMinutes || 30;
   const questionsCopy = JSON.parse(JSON.stringify(state.setup.questions));
   const answers = {};
@@ -623,6 +628,7 @@ function startTest() {
   const test = {
     id: makeId("t"),
     date: new Date().toISOString(),
+    testType: testType || "Subjective Practice",
     totalMinutes: totalMinutes,
     usedSeconds: 0,
     autoSubmitted: false,
@@ -1477,7 +1483,8 @@ function handleScoreChange(testId, qid, newScoreVal) {
   });
   const badge = document.querySelector(`#history-card-${CSS.escape(testId)} .history-score-slot`);
   if (badge) badge.innerHTML = historyScoreBadgeHTML(test);
-
+  // All answers scored: the calendar ticks this test's TODO and shows its marks
+  if (typeof calOnTestScored === "function") calOnTestScored("write", testId);
 }
 
 // Load questions from an old test into the setup screen for re-practice
@@ -2274,6 +2281,7 @@ function parseQuestionsAndAnswers(rawText) {
   else if (/\bFinance\b/i.test(headerPreview)) docDefaultPaper = "Finance";
   else if (/\bManagement\b/i.test(headerPreview)) docDefaultPaper = "Management";
   else if (/\bEnglish(?:\s+Descriptive)?\b/i.test(headerPreview)) docDefaultPaper = "English Descriptive";
+  else if (/\b(?:national income|GDP|GVA|inflation|fiscal|monetary policy|economy|economic growth)\b/i.test(headerPreview)) docDefaultPaper = "ESI";
 
   for (let i = 0; i < Math.min(5, rawLines.length); i++) {
     const line = rawLines[i];
@@ -2293,6 +2301,8 @@ function parseQuestionsAndAnswers(rawText) {
   }
 
   const qNumRegex = /^(?:Question\s*(\d+)|Q\s*[\.\-]?\s*(\d+))\s*[\.\:\)\-]?/i;
+  // "Question (15 Marks, 600 Words): Explain ..." - marks / words in brackets, no number
+  const UNNUMBERED_Q_RE = /^Question\s*[\(\[]\s*(\d{1,2})\s*marks?\s*(?:[,;|\/\-]\s*(\d{2,4})\s*words?\s*)?[\)\]]\s*[:.\-]?\s*(.*)$/i;
   const rawQuestionStarts = [];
 
   for (let i = 0; i < rawLines.length; i++) {
@@ -2303,8 +2313,13 @@ function parseQuestionsAndAnswers(rawText) {
     if (m) {
       const qNum = parseInt(m[1] || m[2], 10);
       rawQuestionStarts.push({ lineIndex: i, qNum, line });
-    } else if (/^(?:Question|Q)\s*[:\.\-]/i.test(line)) {
-      rawQuestionStarts.push({ lineIndex: i, qNum: null, line });
+    } else if (/^(?:Question|Q)\s*[:\.\-]/i.test(line) || UNNUMBERED_Q_RE.test(line)) {
+      // "Question (15 Marks, 600 Words): ..." under a topic heading: the heading starts the question
+      let start = i;
+      let j = i - 1;
+      while (j >= 0 && !rawLines[j]) j--;
+      if (UNNUMBERED_Q_RE.test(line) && j >= 0 && rawLines[j].length <= 120 && !/[.?:;,]$/.test(rawLines[j]) && !/^(?:[•◦▪‣\-*]|\d+[.)])\s/.test(rawLines[j]) && !rawQuestionStarts.some(q => q.lineIndex === j)) start = j;
+      rawQuestionStarts.push({ lineIndex: start, qNum: null, line });
     }
   }
 
@@ -2380,6 +2395,20 @@ function parseQuestionsAndAnswers(rawText) {
     for (let i = 0; i < blockLines.length; i++) {
       const line = blockLines[i];
       const answerLine = origLines[blockIdx[i]]; // keeps nested-bullet indentation
+
+      // A topic heading right above "Question (15 Marks, 600 Words): ..."
+      if (i === 0 && qLines.length === 0 && !inAnswer && blockLines[1] && UNNUMBERED_Q_RE.test(blockLines[1]) && !UNNUMBERED_Q_RE.test(line)) {
+        topic = line;
+        continue;
+      }
+      // "Question (15 Marks, 600 Words): Explain ..."
+      const unq = !inAnswer && qLines.length === 0 ? line.match(UNNUMBERED_Q_RE) : null;
+      if (unq) {
+        marks = Number(unq[1]);
+        wordLimit = unq[2] ? Number(unq[2]) : (marks === 15 ? 600 : 400);
+        if (unq[3].trim()) qLines.push(unq[3].trim());
+        continue;
+      }
 
       // Check for inline metadata e.g. "QUESTION 1     15 MARKS     600 WORDS"
       if (/^Q(?:uestion)?\s*\.?\s*\d+\s*[:.\-]?\s*[\(\[]?\s*\d+\s*marks?\s*[\)\]]?\s*(?:[|,\-·•]?\s*[\(\[]?\s*\d+\s*words?\s*[\)\]]?)?\s*$/i.test(line)) {
@@ -2562,320 +2591,674 @@ async function handleDocImport(event) {
 // PHASE 1: OBJECTIVE / MCQ TEST FUNCTIONS
 // ==========================================
 
-// Parse plain text from DOCX or PDF into MCQ objects with options and answer keys
+// ---- MCQ document parser --------------------------------------------------
+// Every question keeps its own number (and set), and the answer key is matched
+// by that number - never by position - so one unreadable question can no longer
+// shift every later answer onto the wrong question.
+
+// "c", "(c)", "[C]", "a, e", "(a) and (d)", "ade" -> "c" / "ae" / "ad" / "ade" ("" if not an answer)
+function normalizeMCQAnswer(raw) {
+  const s = String(raw || "").trim().replace(/[.;]$/, "");
+  if (!s) return "";
+  const one = s.match(/^[\(\[]?([a-eA-E])[\)\]]?$/);
+  if (one) return one[1].toLowerCase();
+  const sep = /^[\(\[]?[a-eA-E][\)\]]?(?:\s*(?:,|&|\/|\+|\band\b|\s)\s*[\(\[]?[a-eA-E][\)\]]?)+$/i;
+  const packed = /^[a-eA-E]{2,5}$/;
+  if (!sep.test(s) && !packed.test(s)) return "";
+  const letters = s.toLowerCase().replace(/\band\b/g, " ").match(/[a-e]/g) || [];
+  if (packed.test(s) && new Set(letters).size !== letters.length) return "";   // "dead", "add" are words
+  return [...new Set(letters)].sort().join("");
+}
+
+// "ae" -> "A, E" (for display)
+function formatMCQAnswer(ans) {
+  return String(ans || "").toUpperCase().split("").join(", ");
+}
+
+// Does this MCQ expect more than one option?
+function isMultiAnswerMCQ(q) {
+  const text = String((q && q.text) || "");
+  return String((q && q.correctAnswer) || "").length > 1 ||
+    /\bMULTI(?:PLE)?[\s-]*(?:CORRECT|ANSWER|RESPONSE|SELECT)/i.test(text) ||
+    /\b(?:one or more|more than one|all (?:the )?(?:correct|applicable)) (?:options?|answers?|statements?)\b.{0,20}\b(?:may|can|could|are|is) be (?:correct|right|true)|select all that apply/i.test(text);
+}
+
+// Option labels in a line: (a) [a] a) a. - each style ("family") and case counted separately
+function mcqFindLabels(line, allowed) {
+  const defs = {
+    paren: /\(([a-eA-E])\)/g,
+    bracket: /\[([a-eA-E])\]/g,
+    close: /(^|\s)([a-eA-E])\)/g,
+    dot: /(^|\s)([a-eA-E])\.(?=\s)/g
+  };
+  const out = [];
+  for (const id of Object.keys(defs)) {
+    const re = new RegExp(defs[id].source, "g");
+    let m;
+    while ((m = re.exec(line)) !== null) {
+      const spaced = id === "close" || id === "dot";
+      const ch = spaced ? m[2] : m[1];
+      const fam = id + (ch === ch.toLowerCase() ? "-l" : "-u");
+      if (allowed && !allowed.has(fam)) continue;
+      const start = m.index + (spaced ? m[1].length : 0);
+      // "Column B", "Part A)", "List II (A)" are not options
+      // (capitalised words only: "[d] list [e] withdraw" are real options)
+      if (/\b(?:Column|Section|Part|Table|Schedule|Figure|Group|Row|List|Statement|Type|Set)\s*$/.test(line.slice(Math.max(0, start - 12), start))) continue;
+      out.push({ label: ch.toLowerCase(), start, end: m.index + m[0].length, fam });
+    }
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+
+// Which option styles does this document use? (so "A. Simon Kuznets" in a match-list
+// is not read as option A in a paper whose options are written "(a)")
+function mcqOptionFamilies(lines) {
+  const score = {};
+  for (const line of lines) {
+    const labels = mcqFindLabels(line, null);
+    if (!labels.length) continue;
+    if (labels[0].start === 0 && labels[0].label === "a") score[labels[0].fam] = (score[labels[0].fam] || 0) + 2;
+    // a chain a -> b -> c of one style on one line
+    for (const fam of new Set(labels.map(l => l.fam))) {
+      const seq = labels.filter(l => l.fam === fam).map(l => l.label).join("");
+      if (seq.includes("abc")) score[fam] = (score[fam] || 0) + 1;
+    }
+  }
+  const max = Math.max(0, ...Object.values(score));
+  if (max === 0) return null;                       // nothing found: allow every style
+  return new Set(Object.keys(score).filter(f => score[f] >= Math.max(2, max * 0.25)));
+}
+
+// Split a line into question text + options. expected = the next option letter of the question.
+function mcqSplitOptions(line, allowed, expected) {
+  const labels = mcqFindLabels(line, allowed);
+  if (!labels.length) return null;
+  const chainFrom = (i) => {
+    const chain = [labels[i]];
+    for (let j = i + 1; j < labels.length; j++) {
+      const prev = chain[chain.length - 1];
+      if (labels[j].fam === prev.fam && labels[j].start >= prev.end &&
+          labels[j].label.charCodeAt(0) === prev.label.charCodeAt(0) + 1) chain.push(labels[j]);
+    }
+    return chain;
+  };
+  const toOpts = (chain) => chain.map((l, k) => ({
+    label: l.label,
+    text: line.slice(l.end, k + 1 < chain.length ? chain[k + 1].start : line.length).trim()
+  }));
+
+  const first = labels[0];
+  if (first.start === 0) {
+    const ok = first.label === "a" || first.label === expected || (expected && first.label > expected);
+    if (!ok) return null;
+    return { stem: "", opts: toOpts(chainFrom(0)) };
+  }
+  // Options written after the question on the same line: "Who ...? (a) X (b) Y (c) Z (d) W"
+  if (expected === "a") {
+    for (let i = 0; i < labels.length; i++) {
+      if (labels[i].label !== "a") continue;
+      const chain = chainFrom(i);
+      if (chain.length >= 3) return { stem: line.slice(0, labels[i].start).trim(), opts: toOpts(chain) };
+    }
+  }
+  return null;
+}
+
+// Parse the answer-key part of an MCQ document into entries keyed by "set:number"
+function parseMCQAnswerKey(lines, multiSection) {
+  const entries = new Map();
+  const order = [];
+  let aSection = 0;
+  let setHeaders = 0;
+  let maxSeen = 0;
+  let cur = null;        // entry that receives the explanation lines that follow it
+  let header = null;     // column roles from a "Q | Answer | Level | Why" header row
+  let sawLevel = false;  // the key has a difficulty-level column
+  const NUM = /^(?:Q(?:uestion)?\s*\.?\s*(?:No\.?)?\s*)?(\d{1,4})\s*[.)]?$/i;
+  const LEVEL = /^(?:easy|moderate|medium|hard|difficult|tough|very\s+hard)$/i;
+  const HEAD = {
+    q: /^(?:q(?:uestion)?s?\.?\s*(?:no\.?|number|#)?|s\.?\s*no\.?|#|no\.?)$/i,
+    ans: /^(?:answers?|ans\.?|key|correct(?:\s*(?:answer|option))?|options?)$/i,
+    level: /^(?:level|difficulty)$/i,
+    expl: /^(?:why|reasons?|reasoning|explanation|explanations|solution|solutions|remarks?|notes?|rationale)$/i,
+    topic: /^(?:topic|concept|chapter)$/i
+  };
+  const SET_RE = /^(?:practice\s*set|set|section|part|exercise)\s*[\-:]?\s*(?:[A-Z]|\d{1,2}|[IVX]{1,4})\b/i;
+
+  const put = (num, ans, extra) => {
+    if (!ans || !num) return null;
+    // Without set headers, numbering that restarts at 1 means the next set (only when the
+    // questions themselves come in several sets - CH-1 lists one set twice: grid + table)
+    if (multiSection && !setHeaders && num === 1 && maxSeen > 1 && entries.has(aSection + ":1")) {
+      aSection++;
+      maxSeen = 0;
+    }
+    maxSeen = Math.max(maxSeen, num);
+    const key = aSection + ":" + num;
+    let e = entries.get(key);
+    if (!e) {
+      e = { section: aSection, number: num, answer: ans, explanation: [], level: "", topic: "", conflict: [] };
+      entries.set(key, e);
+      order.push(e);
+    } else if (e.answer !== ans && !e.conflict.includes(ans)) {
+      e.conflict.push(ans);
+    }
+    if (extra) {
+      if (extra.explanation && !e.explanation.length) e.explanation.push(extra.explanation);
+      if (extra.level) sawLevel = true;
+      if (extra.level && !e.level) e.level = extra.level;
+      if (extra.topic && !e.topic) e.topic = extra.topic;
+    }
+    return e;
+  };
+  // "1. c 2. a 3. b", "1-a, 2-c", a PDF-flattened grid "1 b 2 d 7 abd" (multi-answer keys are
+  // packed letters) or a flattened table that still starts with its header "Q.No. Answer 1 c 2 b"
+  const pairsIn = (p) => {
+    const line = p.replace(/^(?:Q(?:uestion)?s?\.?\s*(?:No\.?)?|S\.?\s*No\.?)\s*(?:Answers?|Ans\.?|Key)\s+(?=\d)/i, "");
+    const re = /(?:^|[\s,;])(?:Q\.?\s*)?(\d{1,4})\s*[.:\-)]?\s*[\(\[]?([a-e](?:,\s?[a-e]){1,4}|[a-eA-E]|[a-e]{2,5})[\)\]]?(?=$|[\s;]|,\s)/g;
+    const pairs = [...line.matchAll(re)].filter(m => normalizeMCQAnswer(m[2]));
+    return pairs.length > 1 && !line.replace(re, "").replace(/[\s,;]/g, "") ? pairs.map(m => [m[0], m[1], normalizeMCQAnswer(m[2])]) : null;
+  };
+  const cellPair = (c) => {
+    const m = c.match(/^(?:Q\.?\s*)?(\d{1,4})\s*[.):\-]?\s*(.+)$/i);
+    if (!m) return null;
+    const ans = normalizeMCQAnswer(m[2]);
+    return ans ? { num: parseInt(m[1], 10), ans } : null;
+  };
+  // "Q.1) [c] Impulsive", "1. (b) Because ...", "Q12 Answer: (a), (d)", "5 - c"
+  const singleLine = (p) => {
+    const m = p.match(/^(?:Q(?:uestion)?\s*[.\-]?\s*)?(\d{1,4})\s*[.:\-)\]]*\s*(?:(?:Ans(?:wer)?|Correct(?:\s*(?:answer|option))?|Key)\s*[:.\-]?\s*)?((?:[\(\[][a-eA-E][\)\]]|\b[a-eA-E]\b)(?:\s*(?:,|&|and|\/)\s*(?:[\(\[][a-eA-E][\)\]]|\b[a-eA-E]\b))*)(?:\s*[.:\-)]\s*|\s+|$)(.*)$/);
+    if (!m) return null;
+    const token = m[2];
+    const rest = (m[3] || "").trim();
+    // "2. A tax on ..." is a numbered explanation line, not "Q2 = (a)"
+    if (/^[A-E]$/.test(token) && /^[a-z]/.test(rest)) return null;
+    const ans = normalizeMCQAnswer(token);
+    return ans ? { num: parseInt(m[1], 10), ans, rest } : null;
+  };
+  const startsEntry = (p) => !!p && (p.includes("|") || pairsIn(p) || singleLine(p) || /^\d+\s*(?:to|-)\s*\d+\b/i.test(p));
+
+  for (let i = 0; i < lines.length; i++) {
+    const p = lines[i];
+
+    // A multi-answer cell wrapped by a PDF: "112 a, b," + "d, e"
+    if (/^(?:Q\.?\s*)?\d{1,4}\s+[\(\[]?[a-e][\)\]]?(?:\s*,\s*[\(\[]?[a-e][\)\]]?)*\s*,$/.test(p)) {
+      let joined = p;
+      while (i + 1 < lines.length && /^[\(\[]?[a-e][\)\]]?(?:\s*,\s*[\(\[]?[a-e][\)\]]?)*\s*,?$/.test(lines[i + 1].trim()) && /,$/.test(joined)) joined += " " + lines[++i].trim();
+      const one = singleLine(joined.replace(/,$/, ""));
+      if (one) { cur = put(one.num, one.ans); continue; }
+    }
+    // "Hard 2 holds if ..." - the level column, then the explanation, on one line
+    if (cur && sawLevel && !cur.level && !cur.explanation.length) {
+      const lm = p.match(/^(Easy|Moderate|Medium|Hard|Difficult|Tough)\s+(.+)$/);
+      if (lm) { cur.level = lm[1]; cur.explanation.push(lm[2]); continue; }
+    }
+
+    // A table flattened by a PDF repeats its header in pieces on every page: "Q", "Answe", "r", "Level Why"
+    if (!p.includes("|") && p.length <= 16 && /^(?:q|q\.?\s*no\.?|s\.?\s*no\.?|answe?|r|answers?|ans\.?|level(?:\s+why)?|why|level\s+(?:why|reason|explanation))$/i.test(p)) continue;
+    // A narrow table column splits the level word: "Moderat" + "e"
+    if (cur && !cur.level && !cur.explanation.length) {
+      const joined = (p + (lines[i + 1] || "")).trim();
+      if (LEVEL.test(p)) { cur.level = p; sawLevel = true; continue; }
+      if (p.length < 10 && LEVEL.test(joined)) { cur.level = joined; sawLevel = true; i++; continue; }
+    }
+    // A cell wrapped by a PDF: "154" then "ade", or "158" then "a, b," then "d, e"
+    if (/^\d{1,4}$/.test(p)) {
+      let k = 1;
+      let ans = "";
+      for (; k <= 3 && i + k < lines.length; k++) {
+        ans = normalizeMCQAnswer(lines.slice(i + 1, i + k + 1).join(" ").replace(/,\s*$/, ""));
+        if (ans && !/,\s*$/.test(lines[i + k])) break;
+        if (!/^[\(\[]?[a-eA-E][\)\]]?(?:\s*[,&\/]\s*[\(\[]?[a-eA-E][\)\]]?)*\s*,?$/.test(lines[i + k].trim())) { ans = ""; break; }
+      }
+      if (ans) {
+        cur = put(parseInt(p, 10), ans);
+        i += k;
+        continue;
+      }
+    }
+
+    // Set headers ("Practice Set B") start the answers of the next set
+    if (SET_RE.test(p) && p.length < 100 && !/[.?]$/.test(p)) {
+      if (setHeaders > 0 || entries.size > 0) aSection = multiSection ? aSection + (entries.size ? 1 : 0) : 0;
+      if (!multiSection) aSection = 0;
+      setHeaders++;
+      maxSeen = 0;
+      cur = null;
+      header = null;
+      continue;
+    }
+
+    if (p.includes("|")) {
+      const cells = p.split("|").map(c => c.trim());
+      // Header row naming the columns
+      const roles = cells.map(c => Object.keys(HEAD).find(k => HEAD[k].test(c)) || "");
+      if (roles.every(Boolean) && roles.includes("ans") && roles.includes("q")) {
+        header = { q: roles.indexOf("q"), ans: roles.indexOf("ans"), level: roles.indexOf("level"), topic: roles.indexOf("topic"), expl: roles.map((r, k) => (r === "expl" ? k : -1)).filter(k => k >= 0) };
+        cur = null;
+        continue;
+      }
+      // "Questions | 1 | 2 | 3 ..." header of a range table
+      if (HEAD.q.test(cells[0]) && cells.slice(1).every(c => /^\d+$/.test(c) || !c)) continue;
+      // "1 to 10 | a | e | b | ..."
+      const range = cells[0].match(/^(?:Q\.?\s*)?(\d+)\s*(?:to|-)\s*(?:Q\.?\s*)?(\d+)$/i);
+      if (range) {
+        const startQ = parseInt(range[1], 10);
+        cells.slice(1).forEach((c, k) => { const a = normalizeMCQAnswer(c); if (a) put(startQ + k, a); });
+        cur = null;
+        continue;
+      }
+      // Grid of "1 e | 2 c | 3 a ..." (empty trailing cells allowed)
+      const filled = cells.filter(Boolean);
+      if (filled.length >= 2 && filled.every(c => cellPair(c))) {
+        filled.forEach(c => { const cp = cellPair(c); put(cp.num, cp.ans); });
+        cur = null;
+        continue;
+      }
+      // Pairs in separate cells: "1 | c | 2 | a"
+      if (filled.length >= 2 && filled.length % 2 === 0 && filled.every((c, k) => (k % 2 === 0 ? NUM.test(c) : normalizeMCQAnswer(c)))) {
+        for (let k = 0; k < filled.length; k += 2) put(parseInt(filled[k].replace(/\D/g, ""), 10), normalizeMCQAnswer(filled[k + 1]));
+        cur = null;
+        continue;
+      }
+      // A row of a "Q | Answer | Level | Why" table
+      if (header && NUM.test(cells[header.q] || "") && normalizeMCQAnswer(cells[header.ans] || "")) {
+        const expl = header.expl.map(k => cells[k] || "").filter(Boolean).join(" | ");
+        cur = put(parseInt(cells[header.q].replace(/\D/g, ""), 10), normalizeMCQAnswer(cells[header.ans]), {
+          explanation: expl,
+          level: header.level >= 0 ? cells[header.level] : "",
+          topic: header.topic >= 0 ? cells[header.topic] : ""
+        });
+        continue;
+      }
+      // Same row without a header: "1 | e | Easy | Why ..."
+      if (NUM.test(cells[0]) && cells.length >= 2 && normalizeMCQAnswer(cells[1])) {
+        const rest = cells.slice(2);
+        const level = rest.find(c => LEVEL.test(c)) || "";
+        cur = put(parseInt(cells[0].replace(/\D/g, ""), 10), normalizeMCQAnswer(cells[1]), {
+          explanation: rest.filter(c => c && c !== level).join(" | "),
+          level
+        });
+        continue;
+      }
+      // Any other table row belongs to the current explanation ("Word | Meaning | Opposite")
+      if (cur) cur.explanation.push(p);
+      continue;
+    }
+
+    // A range table flattened by a PDF: "1 to 10 a e b d d b e c e c"
+    const flat = p.match(/^(\d+)\s*to\s*(\d+)\s+((?:[a-eA-E](?:\s+|$))+)$/i);
+    if (flat) {
+      const startQ = parseInt(flat[1], 10);
+      flat[3].trim().split(/\s+/).forEach((v, k) => put(startQ + k, v.toLowerCase()));
+      cur = null;
+      continue;
+    }
+    // "1 to 10" followed by one answer letter per line
+    const rangeOnly = p.match(/^(\d+)\s+to\s+(\d+)$/i);
+    if (rangeOnly) {
+      let n = parseInt(rangeOnly[1], 10);
+      const end = parseInt(rangeOnly[2], 10);
+      while (i + 1 < lines.length && n <= end && /^[a-eA-E]$/.test(lines[i + 1].trim())) {
+        put(n++, lines[++i].trim().toLowerCase());
+      }
+      cur = null;
+      continue;
+    }
+    // A line holding only answers: "1. c  2. a  3. b" / "1-a, 2-c" / a flattened grid "1 e 2 c"
+    const pairs = pairsIn(p);
+    if (pairs) {
+      pairs.forEach(m => put(parseInt(m[1], 10), m[2]));
+      cur = null;
+      continue;
+    }
+    // One answer per line, possibly followed by its explanation
+    const one = singleLine(p);
+    if (one) {
+      // "1 e Easy" / "1 e Easy Indian embassies ...": a flattened "Q | Answer | Level | Why" row
+      const lv = one.rest.match(/^(Easy|Moderate|Medium|Hard|Difficult|Tough)(?:\s+(?=[A-Z0-9(“"‘])|$)(.*)$/);
+      // "1 c Moderat" + "e": the level word split by a narrow PDF column
+      if (!lv && one.rest && one.rest.length < 10 && LEVEL.test(one.rest + (lines[i + 1] || "").trim())) {
+        cur = put(one.num, one.ans, { level: one.rest + lines[i + 1].trim() });
+        sawLevel = true;
+        i++;
+        continue;
+      }
+      cur = put(one.num, one.ans, lv ? { level: lv[1], explanation: lv[2] } : (one.rest ? { explanation: one.rest } : null));
+      continue;
+    }
+    // Headings between key formats ("Quick Check", "Answers with Reasons") are not explanations
+    if (p.length <= 80 && !/[.?:;,)]$/.test(p) && (i + 1 >= lines.length || startsEntry(lines[i + 1]))) {
+      cur = null;
+      continue;
+    }
+    if (cur) cur.explanation.push(p);
+  }
+  return { entries, order };
+}
+
+// Parse plain text from DOCX or PDF into MCQ objects with options and answer keys.
+// The returned array also carries .meta: { topics, missingNumbers, orphanKeys, sections }.
 function parseMCQDocument(rawText, defaultSubject = "General Awareness") {
   if (!rawText || !rawText.trim()) return [];
 
   const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const rawParagraphs = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-  // Section banners and page artefacts ("Practice Set B", "Page 3") are not question text.
-  // Running headers/footers never get here (DOCX keeps them apart; the PDF reader drops
-  // them by position), so repeated question stems such as "Find the odd one out." stay.
-  const paragraphs = rawParagraphs.filter(p => !isHeaderOrFooterLine(p));
+  const allLines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
 
-  // 1. Locate Answer Key section if present ("Answer Key", "Answers", "Answers & Explanations"...)
-  const ANSWER_SECTION_RE = /^(?:answer\s*keys?|answers|solutions|answers?\s*(?:&|and|with)\s*(?:explanations?|solutions?)|answer\s*keys?\s*(?:&|and|with)\s*(?:explanations?|solutions?))\s*:?$/i;
+  // 1. The answer key section ("Answer Key", "Answers", "Answers & Explanations"...)
+  const ANSWER_SECTION_RE = /^(?:answer\s*keys?|answers|solutions|answers?\s*(?:&|and|with)\s*(?:explanations?|solutions?|reasons?)|answer\s*keys?\s*(?:&|and|with)\s*(?:explanations?|solutions?|reasons?))\s*:?$/i;
   let ansKeyIdx = -1;
   let ansKeyRest = "";
-  for (let i = 0; i < paragraphs.length; i++) {
-    const p = paragraphs[i];
-    const inline = p.match(/^(?:answer\s*keys?|answers)\s*:\s*(.+)$/i);   // "Answers: 1-a, 2-c, ..."
-    if (ANSWER_SECTION_RE.test(p) || inline) {
+  for (let i = 0; i < allLines.length; i++) {
+    const inline = allLines[i].match(/^(?:answer\s*keys?|answers)\s*:\s*(.+)$/i);   // "Answers: 1-a, 2-c, ..."
+    if (ANSWER_SECTION_RE.test(allLines[i]) || inline) {
       ansKeyIdx = i;
       ansKeyRest = inline ? inline[1] : "";
       break;
     }
   }
+  const qLines = ansKeyIdx !== -1 ? allLines.slice(0, ansKeyIdx) : allLines;
+  const aLines = (ansKeyIdx !== -1 ? (ansKeyRest ? [ansKeyRest] : []).concat(allLines.slice(ansKeyIdx + 1)) : [])
+    // a bare number is a page number - unless an answer follows it ("158" / "a, b, d, e" from a wrapped table cell)
+    .filter((l, i, arr) => !isHeaderOrFooterLine(l) || /^(?:practice\s*set|set|section|part|exercise)\b/i.test(l) ||
+      (/^\d{1,4}$/.test(l) && /^[\(\[]?[a-eA-E][\)\]]?(?:[\s,&\/]+[\(\[]?[a-eA-E][\)\]]?)*,?$|^[a-e]{2,5}$/.test(arr[i + 1] || "")));
 
-  const qParagraphs = ansKeyIdx !== -1 ? paragraphs.slice(0, ansKeyIdx) : paragraphs;
-  const ansParagraphs = ansKeyIdx !== -1 ? (ansKeyRest ? [ansKeyRest] : []).concat(paragraphs.slice(ansKeyIdx + 1)) : [];
+  // 2. How questions are numbered: "Q1" / "Q.1)" / "Question 1:" or plain "1." / "1)"
+  // (a PDF can drop the tab after the number: "Q100India's GDP ...")
+  const Q_RE = /^Q(?:uestion)?\s*[.\-]?\s*(\d{1,4})(?:\s*[.):\-\]]+\s*|\s+|(?=[A-Z“"‘(\[]))(?=\S)/i;
+  const N_RE = /^(\d{1,4})\s*[.)](?:\s+|(?=[A-Z“"‘(\[]))/;
+  const qCount = qLines.filter(l => Q_RE.test(l)).length;
+  const nCount = qLines.filter(l => N_RE.test(l)).length;
+  const useQ = qCount >= 3 && qCount >= nCount * 0.3;
+  const allowed = mcqOptionFamilies(qLines);
 
-  // Parse Answer Key
-  const answersMap = {}; // 0-based question index -> { answer: 'a'|'b'|'c'|'d'|'e', explanation: string }
-  let currentOffset = 0;
-  let lastSeenQNum = 0;
-  let currentQIdx = -1;
-
-  for (let i = 0; i < ansParagraphs.length; i++) {
-    const p = ansParagraphs[i];
-
-    // Check for section/set header: e.g. "Practice Set B" or "Section B"
-    if (/^(?:Practice\s*Set(?:\s*[A-Z0-9]+)?|Section\s*[A-Z0-9]+|Set\s*[A-Z0-9]+)\b/i.test(p)) {
-      if (lastSeenQNum > 0) {
-        currentOffset += lastSeenQNum;
-        lastSeenQNum = 0;
-      }
-      continue;
-    }
-
-    // Answer-key table rows (DOCX tables arrive as "cell | cell | ..." lines)
-    if (p.includes("|")) {
-      const cells = p.split("|").map(c => c.trim());
-      // "1 to 10 | a | e | b | ..."
-      const range = cells[0].match(/^(?:Q\.?\s*)?(\d+)\s*(?:to|-)\s*(?:Q\.?\s*)?(\d+)$/i);
-      if (range) {
-        const startQ = parseInt(range[1], 10);
-        cells.slice(1).forEach((c, k) => {
-          const m = c.match(/^[\(\[]?([a-eA-E])[\)\]]?$/);
-          if (m) answersMap[startQ - 1 + k + currentOffset] = { answer: m[1].toLowerCase(), explanation: "" };
-        });
-        lastSeenQNum = Math.max(lastSeenQNum, parseInt(range[2], 10));
-        continue;
-      }
-      // Header row: "Questions | 1 | 2 | 3 ..." or "Q. No. | Answer"
-      if (/^(?:q(?:uestions?)?\.?\s*(?:no\.?)?|s\.?\s*no\.?|question\s*no\.?)$/i.test(cells[0]) && cells.slice(1).every(c => /^\d+$|^answers?$|^ans\.?$|^options?$/i.test(c))) continue;
-      // Pairs: "1 | c" or "1 | (c) | 2 | (a) | ..."
-      if (cells.length >= 2 && cells.length % 2 === 0 && cells.every((c, k) => (k % 2 === 0 ? /^(?:Q\.?\s*)?\d+[.)]?$/i.test(c) : /^[\(\[]?[a-eA-E][\)\]]?$/.test(c)))) {
-        for (let k = 0; k < cells.length; k += 2) {
-          const qNum = parseInt(cells[k].replace(/\D/g, ""), 10);
-          if (lastSeenQNum > 0 && qNum === 1 && k === 0 && answersMap[currentOffset]) currentOffset += lastSeenQNum;
-          answersMap[qNum - 1 + currentOffset] = { answer: cells[k + 1].replace(/[^a-eA-E]/g, "").toLowerCase(), explanation: [] };
-          currentQIdx = qNum - 1 + currentOffset;
-          lastSeenQNum = qNum;
-        }
-        continue;
-      }
-    }
-
-    // A table row flattened by a PDF: "1 to 10 a e b d d b e c e c"
-    const flatRange = p.match(/^(\d+)\s*to\s*(\d+)\s+((?:[a-eA-E](?:\s+|$))+)$/i);
-    if (flatRange) {
-      const startQ = parseInt(flatRange[1], 10);
-      flatRange[3].trim().split(/\s+/).forEach((v, k) => { answersMap[startQ - 1 + k + currentOffset] = { answer: v.toLowerCase(), explanation: "" }; });
-      lastSeenQNum = Math.max(lastSeenQNum, parseInt(flatRange[2], 10));
-      continue;
-    }
-
-    // Check for range match: e.g. "1 to 10"
-    const rangeMatch = p.match(/^(\d+)\s+to\s+(\d+)$/i);
-    if (rangeMatch) {
-      const startQ = parseInt(rangeMatch[1], 10);
-      const endQ = parseInt(rangeMatch[2], 10);
-      i++;
-      let currQNum = startQ;
-      while (i < ansParagraphs.length && currQNum <= endQ) {
-        const val = ansParagraphs[i].trim().toLowerCase();
-        if (/^[a-e]$/.test(val)) {
-          answersMap[currQNum - 1] = { answer: val, explanation: "" };
-          currQNum++;
-          i++;
-        } else {
-          break;
-        }
-      }
-      i--;
-      continue;
-    }
-
-    // A line holding only answers: "1. c  2. a  3. b" / "1-a, 2-c, 3-d"
-    const pairRe = /(?:^|[\s,;])(?:Q\.?\s*)?(\d+)\s*[\.:\-\)]?\s*[\(\[]?([a-eA-E])[\)\]]?(?=$|[\s,;])/g;
-    const pairs = [...p.matchAll(pairRe)];
-    if (pairs.length > 1 && !p.replace(pairRe, "").replace(/[\s,;]/g, "")) {
-      for (const sm of pairs) {
-        const qNum = parseInt(sm[1], 10);
-        if (lastSeenQNum > 0 && qNum === 1 && sm === pairs[0] && answersMap[currentOffset]) currentOffset += lastSeenQNum;
-        answersMap[(qNum - 1) + currentOffset] = { answer: sm[2].toLowerCase(), explanation: [] };
-        currentQIdx = (qNum - 1) + currentOffset;
-        lastSeenQNum = qNum;
-      }
-      continue;
-    }
-
-    // Check for question answer line: e.g. "Q.1) [c] Impulsive" or "1. (b) Some text" or "Q1. a"
-    const qAnsMatch = p.match(/^(?:(?:Q(?:uestion)?\s*[\.\-]?\s*)?(\d+)[\.:\-\)\s]+)\s*(?:[\(\[]?([a-eA-E])[\)\]]?)(?:\s+(.*))?$/i);
-    if (qAnsMatch) {
-      const qNum = parseInt(qAnsMatch[1], 10);
-      const ans = qAnsMatch[2].toLowerCase();
-      const inlineRest = (qAnsMatch[3] || "").trim();
-
-      // If qNum restarted from 1 and we previously had higher qNums, advance offset
-      if (lastSeenQNum > 0 && qNum <= lastSeenQNum && qNum === 1) {
-        currentOffset += lastSeenQNum;
-      }
-      lastSeenQNum = qNum;
-
-      currentQIdx = (qNum - 1) + currentOffset;
-      answersMap[currentQIdx] = {
-        answer: ans,
-        explanation: inlineRest ? [inlineRest] : []
-      };
-      continue;
-    }
-
-    // Check for multiple answers in one line: "1. a  2. b  3. c"
-    const multiMatches = [...p.matchAll(/(?:(?:^|\s+)(?:Q\.?\s*)?(\d+)[\.:\-\)\s]+(?:[\(\[]?([a-eA-E])[\)\]]?))/g)];
-    if (multiMatches.length > 1) {
-      for (const sm of multiMatches) {
-        const qNum = parseInt(sm[1], 10);
-        answersMap[(qNum - 1) + currentOffset] = { answer: sm[2].toLowerCase(), explanation: [] };
-        lastSeenQNum = qNum;
-      }
-      continue;
-    }
-
-    // Accumulate explanation lines (including table header rows) for the current answer block
-    if (currentQIdx !== -1 && answersMap[currentQIdx] && Array.isArray(answersMap[currentQIdx].explanation)) {
-      answersMap[currentQIdx].explanation.push(p);
-    }
-  }
-
-  // 2. Parse Questions & Options
-  const questions = [];
-  let currQ = [];
-  let currOpts = [];
-  let currFirstLine = "";   // the numbered line that started the current question
-  let context = null;       // shared passage: "Directions (Q.1 to Q.3): ..." -> { from, to, left, lines }
-  let collectingContext = false;
-  const optRegex = /(?:\[([a-eA-E])\]|\(([a-eA-E])\)|(?:\b|^)([a-eA-E])[\.\)])/g;
-  const NEW_Q_RE = /^(?:Q(?:uestion)?\s*[\.\-]?\s*\d+|\d+[\.\)])(?:\s*[\.\:\)\-]*\s*|\s+)/i;
   const DIRECTIONS_RE = /^Directions?\b[^:\n]{0,40}?(\d+)\s*(?:-|to)\s*(?:Q(?:uestions?)?\.?\s*)?(\d+)/i;
-  // Short heading-like line: no sentence punctuation at the end, not a question
-  const isTitleLike = (line) => line.length <= 80 && !/[.?:;,]$/.test(line) && !NEW_Q_RE.test(line);
-  const questionNumber = (line) => {
-    const m = String(line || "").match(/^(?:Q(?:uestion)?\s*[\.\-]?\s*)?(\d+)\s*[\.\):\-]/i);
-    return m ? parseInt(m[1], 10) : null;
+  const SECTION_RE = /^(?:part|section|set|practice\s*set|exercise|paper)\s*[\-:]?\s*(?:[A-Z]|\d{1,2}|[IVX]{1,4})\b/i;
+  const CHAPTER_RE = /^(?:chapter|ch|unit)\s*[\-:.]?\s*\d+\s*[\-:.]?\s*(.*)$/i;
+  const INLINE_ANS_RE = /^(?:(?:Correct\s+)?Answer|Ans|Correct\s*Option)\b\s*[:.\-]?\s*((?:[\(\[]?[a-eA-E][\)\]]?)(?:\s*(?:,|&|and|\/)\s*[\(\[]?[a-eA-E][\)\]]?)*)(?=$|[\s.,;:)])\s*[.,;:)-]?\s*(.*)$/i;
+  const EXPL_RE = /^(?:Explanation|Exp|Solution|Notes?)\b\s*(?:[:.\-]\s*|$)(.*)/i;
+  const titleLike = (l) => l.length <= 120 && !/[.?:;,]$/.test(l);
+  const isSectionLine = (l) => l.length < 100 && !/[.?]$/.test(l) && SECTION_RE.test(l);
+  const headingTopic = (l) => sanitizeDashes(l.replace(/^(?:topic\s*\d*\s*[:.\-]\s*|\d{1,2}(?:\.\d{1,2})*\s*[.)]?\s+)/i, "").trim());
+  const stripNumber = (l) => l
+    .replace(/^(?:\(\d+\)|\[\d+\]|(?:Question|Q)\s*[\.\-]?\s*\d+|\d+)\s*[\.\:\)\-\]]*\s*/i, "")
+    .replace(/^[\.\:\)\-\]\s]+/, "").trim();
+
+  const questions = [];
+  const topics = [];
+  let cur = null;
+  let pending = [];          // lines after a question's options: headings, or the text of an un-numbered question
+  let topic = "";
+  let chapter = "";
+  let section = 0;
+  let lastNum = 0;
+  let context = null;        // shared passage: "Directions (Q.1 to Q.3): ..." -> { from, to, left, lines }
+  let collectingContext = false;
+  let inExpl = false;
+
+  const setTopic = (t) => {
+    topic = t;
+    if (t && !topics.includes(t)) topics.push(t);
+  };
+  // Generic titles ("Questions", "Spotlight Question Bank ...") are not topics
+  const isGenericTitle = (l) => /^(?:questions?|mcqs?|objective questions|practice questions|questions?\s*(?:&|and)\s*answers)$/i.test(l) || /question\s*bank/i.test(l) || l === allLines[0];
+  const isHeading = (l) => titleLike(l) && !l.includes("|") && !/^[\(\[]?[a-eA-E][\)\].]\s/.test(l);
+  // Lines read after a question's options and before the next numbered question:
+  // headings set the topic, other text (a data table, "Use the table below for Q137
+  // and Q138") is a preface for the next question(s). Returns the preface lines.
+  const takePending = () => {
+    const preface = [];
+    for (const l of pending) {
+      if (isSectionLine(l)) { setTopic(""); preface.length = 0; continue; }
+      if (isHeading(l) && !preface.length) {
+        // before the first question only a numbered / "Topic:" heading names a topic (not the file's title lines)
+        if (!isGenericTitle(l) && (questions.length || cur || /^(?:topic\b|\d{1,2}(?:\.\d{1,2})*\s*[.)]?\s+\S)/i.test(l))) setTopic(headingTopic(l));
+        continue;
+      }
+      preface.push(l);
+    }
+    pending = [];
+    return preface;
+  };
+  // Pending lines inside an option list / explanation simply continue it
+  const continuePending = () => {
+    for (const l of pending) {
+      if (!cur || !cur.opts.length) continue;
+      if (inExpl) cur.explanation.push(l);
+      else cur.opts[cur.opts.length - 1].text += "\n" + l;
+    }
+    pending = [];
+  };
+  const RANGE_FOR_RE = /\b(?:for|in|answer)\s+(?:the\s+)?(?:following\s+)?(?:Q(?:uestions?|s)?\.?\s*(?:No\.?\s*)?)?(\d{1,4})\s*(?:-|to|and|&)\s*(?:Q\.?\s*)?(\d{1,4})\b/i;
+  const finalize = () => {
+    if (!cur) return;
+    const lines = cur.lines.slice();
+    if (cur.number !== null && lines.length) lines[0] = stripNumber(lines[0]);
+    let cleanText = (cur.preface || []).concat(lines).filter(l => l.trim().length > 0 && !isHeaderOrFooterLine(l)).join("\n").trim();
+    if (context) {
+      const n = cur.number;
+      const inRange = n !== null ? (n >= context.from && n <= context.to) : context.left > 0;
+      if (inRange) cleanText = context.lines.join("\n") + (cleanText ? "\n" + cleanText : "");
+      context.left--;
+      if ((n !== null && n >= context.to) || context.left <= 0) context = null;
+    }
+    questions.push({
+      id: makeId("mcq"),
+      subject: defaultSubject,
+      topic: cur.topic,
+      chapter,
+      number: cur.number,
+      section: cur.section,
+      text: cleanText || "Imported Question",
+      options: cur.opts.map(o => ({ label: o.label, text: o.text.trim() })),
+      correctAnswer: cur.inlineAnswer,
+      explanation: cur.explanation.join("\n").trim(),
+      marks: 1.0,
+      negativeMarks: 0.25,
+      _skipped: cur.skipped
+    });
+    cur = null;
+    inExpl = false;
+  };
+  const begin = (num, firstLine) => {
+    const preface = takePending();
+    finalize();
+    if (num !== null) {
+      if (num === 1 && lastNum > 1) section++;        // numbering restarts: the next set
+      lastNum = num;
+    }
+    cur = { number: num, section, topic, lines: firstLine ? [firstLine] : [], opts: [], explanation: [], inlineAnswer: "", skipped: [], preface: [] };
+    if (preface.length) {
+      // "Use the table below for Q137 and Q138": the preface belongs to every question of the range
+      const r = preface.map(l => l.match(RANGE_FOR_RE)).find(Boolean);
+      const from = r ? parseInt(r[1], 10) : NaN;
+      const to = r ? parseInt(r[2], 10) : NaN;
+      if (r && num !== null && from === num && to > from && to - from < 15) {
+        context = { from, to, left: to - from + 1, lines: preface };
+      } else {
+        cur.preface = preface;
+      }
+    }
+  };
+  const target = () => (cur && cur.opts.length ? cur : null);
+  const isQuestionStart = (l) => {
+    const m = l.match(useQ ? Q_RE : N_RE);
+    if (!m) return null;
+    const num = parseInt(m[1], 10);
+    if (!cur) return num;
+    if (cur.opts.length >= 2) {
+      if (useQ) return num;
+      // plain numbering: the next number, a small gap, or a restart at 1
+      return (num > (cur.number || 0) && num <= (cur.number || 0) + 5) || num === 1 ? num : null;
+    }
+    // no options yet: only the very next number, and not inside a "1. ... 2. ..." statement list
+    if (num !== (cur.number || 0) + 1) return null;
+    if (!useQ && cur.lines.some((x, k) => k > 0 && /^1\s*[.)]\s/.test(x))) return null;
+    if (!useQ && /:$/.test(cur.lines[cur.lines.length - 1] || "")) return null;
+    return num;
   };
 
-  function finalizeCurrentQuestion() {
-    if (currQ.length > 0 || currOpts.length > 0) {
-      let cleanText = cleanMCQPrompt(currQ);
-      // A shared passage / directions block belongs to every question of its range
-      if (context) {
-        const n = questionNumber(currFirstLine);
-        const inRange = n !== null ? (n >= context.from && n <= context.to) : context.left > 0;
-        if (inRange) cleanText = context.lines.join("\n") + (cleanText ? "\n" + cleanText : "");
-        context.left--;
-        if ((n !== null && n >= context.to) || context.left <= 0) context = null;
-      }
-      questions.push({
-        id: makeId("mcq"),
-        subject: defaultSubject,
-        text: cleanText || "Imported Question",
-        options: [...currOpts],
-        correctAnswer: "",
-        explanation: "",
-        marks: 1.0,
-        negativeMarks: 0.25
-      });
-      currQ = [];
-      currOpts = [];
-      currFirstLine = "";
+  for (let idx = 0; idx < qLines.length; idx++) {
+    let p = qLines[idx];
+
+    // A PDF can glue the number to a figure: "Q1432022-23 was chosen ..." is Q143 + "2022-23 ..."
+    if (useQ && cur && cur.number !== null && cur.opts.length >= 2 && !Q_RE.test(p)) {
+      const glued = p.match(/^Q(?:uestion)?\s*[.\-]?\s*(\d{2,8})(.*)$/i);
+      const next = String(cur.number + 1);
+      if (glued && glued[1].length > next.length && glued[1].startsWith(next)) p = "Q" + next + " " + glued[1].slice(next.length) + glued[2];
     }
-  }
 
-  for (let idxP = 0; idxP < qParagraphs.length; idxP++) {
-    const p = qParagraphs[idxP];
-
-    if (idxP < 3 && (p.toLowerCase().includes("question bank") || p.toLowerCase() === "questions")) {
+    // Running banners / page artefacts are never content (set & part banners start a new topic)
+    if (isHeaderOrFooterLine(p)) {
+      if (!cur || cur.opts.length) {
+        if (isSectionLine(p)) { takePending(); setTopic(""); }
+        const ch = p.match(CHAPTER_RE);
+        if (ch && !chapter) chapter = sanitizeDashes(ch[1] || p);
+      }
       continue;
     }
 
     // "Directions (Q.1 to Q.3): Read the passage..." starts a shared passage
     const dir = p.match(DIRECTIONS_RE);
     if (dir) {
-      if (currOpts.length > 0) finalizeCurrentQuestion();
-      currQ = currQ.filter(l => !isTitleLike(l));
-      const from = parseInt(dir[1], 10);
-      const to = parseInt(dir[2], 10);
-      context = { from, to, left: Math.max(1, to - from + 1), lines: [p] };
+      takePending();
+      finalize();
+      context = { from: parseInt(dir[1], 10), to: parseInt(dir[2], 10), left: 0, lines: [p] };
+      context.left = Math.max(1, context.to - context.from + 1);
       collectingContext = true;
       continue;
     }
     if (collectingContext) {
-      const startsQ = NEW_Q_RE.test(p);
-      const hasOpt = /\[[a-eA-E]\]|\([a-eA-E]\)/.test(p) || /^[a-eA-E][\.\)]\s/.test(p);
-      if (!startsQ && !hasOpt) {
+      const startsQ = (useQ ? Q_RE : N_RE).test(p);
+      const opt = mcqSplitOptions(p, allowed, "a");
+      if (!startsQ && !opt) {
         context.lines.push(p);
         continue;
       }
       collectingContext = false;
       // Un-numbered question: its stem was read as the last line of the passage
-      if (!startsQ && currQ.length === 0 && context.lines.length > 1) currQ.push(context.lines.pop());
+      if (!startsQ && context.lines.length > 1 && !(opt && opt.stem)) {
+        begin(null, context.lines.pop());
+      }
     }
 
-    // "Answer: (c)" / "Ans. b" - not "Answer each question..."
-    const inlineAnsMatch = p.match(/^(?:(?:Correct\s+)?Answer|Ans|Correct\s*Option)\b\s*[:\.\-]?\s*[\(\[]?([a-eA-E])[\)\]]?(?=$|[\s.,;:)])/i);
-    if (inlineAnsMatch) {
-      if (currOpts.length > 0) finalizeCurrentQuestion();   // the question right above this line
-      if (questions.length > 0) {
-        questions[questions.length - 1].correctAnswer = inlineAnsMatch[1].toLowerCase();
+    // "Answer: (c)" / "Ans. b" under a question - not "Answer each question..."
+    const ia = p.match(INLINE_ANS_RE);
+    const iaAns = ia ? normalizeMCQAnswer(ia[1]) : "";
+    if (iaAns && (target() || (!cur && questions.length))) {
+      continuePending();
+      const t = target();
+      if (t) {
+        t.inlineAnswer = iaAns;
+        if (ia[2]) t.explanation.push(ia[2]);
+      } else {
+        questions[questions.length - 1].correctAnswer = iaAns;
       }
+      inExpl = true;
+      continue;
+    }
+    // "Explanation: ..." / "Solution: ..." under a question
+    const ex = p.match(EXPL_RE);
+    if (ex && (target() || (!cur && questions.length))) {
+      continuePending();
+      const t = target();
+      if (t) t.explanation.push(ex[1] || "");
+      else questions[questions.length - 1].explanation = ex[1] || "";
+      inExpl = !!t;
       continue;
     }
 
-    // "Explanation: ..." / "Exp. ..." / "Note: ..." - not "Experts at..." / "Notes on ..."
-    const explMatch = p.match(/^(?:Explanation|Exp|Solution|Notes?)\b\s*(?:[:\.\-]\s*|$)(.*)/i);
-    if (explMatch) {
-      if (currOpts.length > 0) finalizeCurrentQuestion();
-      if (questions.length > 0) {
-        questions[questions.length - 1].explanation = explMatch[1] || "";
-      }
+    // A new numbered question
+    const num = isQuestionStart(p);
+    if (num !== null) {
+      begin(num, p);
       continue;
     }
 
-    // Detect if this line starts a new question
-    const isNewQ = NEW_Q_RE.test(p);
-    if (isNewQ && currOpts.length > 0) {
-      finalizeCurrentQuestion();
+    // Options (one per line, or several on one line)
+    const expected = cur ? String.fromCharCode(97 + (cur.opts.length ? cur.opts[cur.opts.length - 1].label.charCodeAt(0) - 96 : 0)) : "a";
+    const split = mcqSplitOptions(p, allowed, cur && cur.opts.length ? expected : "a");
+    if (split && split.opts.length) {
+      const restart = split.opts[0].label === "a";
+      if (!cur || (restart && cur.opts.length)) {
+        // An un-numbered question: the lines read since the last option are its text
+        const stem = pending.filter(l => !isSectionLine(l));
+        const firstEver = !cur && questions.length === 0;
+        pending = [];
+        if (cur) finalize();
+        cur = { number: null, section, topic, lines: firstEver ? stem.filter(l => !titleLike(l) || stem.length === 1) : stem, opts: [], explanation: [], inlineAnswer: "", skipped: [], preface: [] };
+        if (firstEver && cur.lines.length === 0 && stem.length) cur.lines = stem.slice(-1);
+      } else {
+        continuePending();
+      }
+      if (split.stem) cur.lines.push(split.stem);
+      for (const o of split.opts) {
+        if (cur.opts.some(x => x.label === o.label)) continue;
+        const last = cur.opts.length ? cur.opts[cur.opts.length - 1].label : "`";
+        for (let c = last.charCodeAt(0) + 1; c < o.label.charCodeAt(0); c++) cur.skipped.push(String.fromCharCode(c));
+        cur.opts.push(o);
+      }
+      inExpl = false;
+      continue;
     }
-    // Title lines before the very first question ("Reasoning - Puzzle Practice") are not question text
-    if (isNewQ && questions.length === 0 && !currFirstLine && currQ.length) currQ = currQ.filter(l => !isTitleLike(l));
-    if (isNewQ && currOpts.length === 0) currFirstLine = p;
 
-    // Find options
-    const matches = [];
-    let m;
-    const re = new RegExp(optRegex);
-    while ((m = re.exec(p)) !== null) {
-      // Guard against Column A, Column B, Section B, Part B, Table B, etc. (whole words only:
-      // "charitable [d]" or "unstable [b]" are real options)
-      const prefix = p.slice(Math.max(0, m.index - 12), m.index).toLowerCase();
-      if (/\b(?:column|section|part|table|schedule|figure|group|row)\s+$/i.test(prefix)) {
-        continue;
-      }
-      const label = (m[1] || m[2] || m[3]).toLowerCase();
-      matches.push({ label, start: m.index, end: m.index + m[0].length });
-    }
-
-    if (matches.length > 0 && (currOpts.length > 0 || matches[0].label === "a")) {
-      const beforeFirst = p.slice(0, matches[0].start).trim();
-      if (beforeFirst) {
-        currQ.push(beforeFirst);
-      }
-
-      for (let iM = 0; iM < matches.length; iM++) {
-        const curM = matches[iM];
-        const nextM = matches[iM + 1];
-        const optVal = p.slice(curM.end, nextM ? nextM.start : p.length).trim();
-
-        if (currOpts.some(o => o.label === curM.label)) {
-          finalizeCurrentQuestion();
-        }
-
-        currOpts.push({ label: curM.label, text: optVal });
-      }
+    // Anything else: question text, explanation text, a heading, or text after the options
+    if (cur && cur.opts.length === 0) {
+      cur.lines.push(p);
+    } else if (cur && inExpl && !titleLike(p)) {
+      cur.explanation.push(p);
     } else {
-      if (currOpts.length >= 4) {
-        finalizeCurrentQuestion();
-      }
-      currQ.push(p);
+      pending.push(p);
     }
   }
+  takePending();
+  finalize();
 
-  finalizeCurrentQuestion();
-
-  // Assign answers and explanations from answersMap to questions
-  for (let qIdx = 0; qIdx < questions.length; qIdx++) {
-    if (answersMap[qIdx]) {
-      questions[qIdx].correctAnswer = answersMap[qIdx].answer;
-      if (Array.isArray(answersMap[qIdx].explanation)) {
-        questions[qIdx].explanation = answersMap[qIdx].explanation.join("\n").trim();
-      } else if (typeof answersMap[qIdx].explanation === "string") {
-        questions[qIdx].explanation = answersMap[qIdx].explanation;
+  // 3. The answer key, matched by set + question number
+  const numbered = questions.filter(q => q.number !== null);
+  if (numbered.length === 0) questions.forEach((q, i) => { q.number = i + 1; });
+  const sections = new Set(questions.map(q => q.section)).size;
+  const key = parseMCQAnswerKey(aLines, sections > 1);
+  const used = new Set();
+  questions.forEach(q => {
+    q.parseIssues = [];
+    const k = (sections > 1 ? q.section : 0) + ":" + q.number;
+    const e = key.entries.get(k);
+    if (e) {
+      used.add(k);
+      if (q.correctAnswer && q.correctAnswer !== e.answer) {
+        q.parseIssues.push({ code: "key-conflict", msg: `The document gives two answers for this question (${formatMCQAnswer(q.correctAnswer)} under the question, ${formatMCQAnswer(e.answer)} in the answer key).` });
       }
+      if (e.conflict.length) {
+        q.parseIssues.push({ code: "key-conflict", msg: `The answer key lists this question more than once with different answers (${[e.answer].concat(e.conflict).map(formatMCQAnswer).join(" / ")}).` });
+      }
+      if (!q.correctAnswer) q.correctAnswer = e.answer;
+      const expl = e.explanation.join("\n").trim();
+      if (expl && !q.explanation) q.explanation = expl;
+      if (e.level) q.level = e.level;
+      if (e.topic && !q.topic) q.topic = sanitizeDashes(e.topic);
     }
-  }
+    if (q._skipped && q._skipped.length) {
+      q.parseIssues.push({ code: "options-skipped", msg: `Option ${q._skipped.map(s => "(" + s + ")").join(", ")} could not be found.` });
+    }
+    delete q._skipped;
+  });
 
+  // Questions the numbering says should exist but were not found, and keys without a question
+  const missingNumbers = [];
+  for (let s = 0; s < sections; s++) {
+    const nums = questions.filter(q => q.section === s && q.number !== null).map(q => q.number);
+    if (!nums.length) continue;
+    const have = new Set(nums);
+    for (let n = 1; n <= Math.max(...nums); n++) if (!have.has(n)) missingNumbers.push({ section: s, number: n });
+  }
+  const orphanKeys = key.order.filter(e => !used.has(e.section + ":" + e.number) && (sections > 1 || e.section === 0))
+    .map(e => ({ section: e.section, number: e.number, answer: e.answer }));
+
+  Object.defineProperty(questions, "meta", {
+    value: { topics, missingNumbers, orphanKeys, sections, chapter, keyEntries: key.entries.size },
+    enumerable: false
+  });
   return questions;
 }
 
@@ -2886,6 +3269,7 @@ async function handleP1DocImport(event) {
 
   const statusElem = $("setup-p1-doc-status");
   if (statusElem) {
+    statusElem.classList.remove("is-error");
     statusElem.textContent = "Reading " + file.name + "...";
   }
 
@@ -2912,8 +3296,9 @@ async function handleP1DocImport(event) {
       throw new Error("No readable text found in the document.");
     }
 
-    // Only real MCQs (with options) are imported
-    const parsedQuestions = parseMCQDocument(rawText, inferMCQSubject(rawText)).filter(q => (q.options || []).length >= 2);
+    const parsedAll = parseMCQDocument(rawText, inferMCQSubject(rawText));
+    const meta = parsedAll.meta || {};
+    const parsedQuestions = parsedAll.filter(q => (q.options || []).length >= 2);
     if (parsedQuestions.length < 3) {
       const descriptive = parseQuestionsAndAnswers(rawText).filter(q => (q.modelAnswer || "").length > 0);
       if (descriptive.length >= 1 && parsedQuestions.length === 0 || descriptive.filter(q => q.modelAnswer.length > 200).length >= 2) {
@@ -2925,9 +3310,16 @@ async function handleP1DocImport(event) {
     if (!parsedQuestions || parsedQuestions.length === 0) {
       throw new Error("Could not detect any MCQs with options in the file.");
     }
-    addImportedMCQs(parsedQuestions, file.name);
+    // Numbered questions whose options could not be read are kept, so they show up
+    // under "Needs attention" instead of silently disappearing
+    const broken = parsedAll.filter(q => (q.options || []).length < 2 && q.number !== null && parsedQuestions.length >= 3);
+    const keep = parsedAll.filter(q => parsedQuestions.includes(q) || broken.includes(q));
+    const docTitle = rawText.split("\n").map(l => l.trim()).find(Boolean) || "";
+    keep.forEach(q => { if (!q.chapter) q.chapter = sanitizeDashes(docTitle).slice(0, 120); });
+    addImportedMCQs(keep, file.name, meta);
   } catch (err) {
     if (statusElem) {
+      statusElem.classList.add("is-error");
       statusElem.textContent = "Error: " + err.message;
     }
     alert("File read error: " + err.message);
@@ -2950,34 +3342,57 @@ function inferMCQSubject(rawText) {
   return "General Awareness";
 }
 
-// Add imported MCQs to today's objective test
-function addImportedMCQs(parsedQuestions, fileName) {
-  const withAns = parsedQuestions.filter(q => q.correctAnswer).length;
-  const subject = parsedQuestions[0] ? parsedQuestions[0].subject : "";
-
-  state.p1_setup.questions = state.p1_setup.questions.concat(
-    parsedQuestions.filter(q => !state.p1_setup.questions.some(sq => sq.text === q.text))
-  );
+// Add imported MCQs to today's objective test, run the local checks and start the AI check
+function addImportedMCQs(parsedQuestions, fileName, meta) {
+  meta = meta || {};
+  mcqPrepareImported(parsedQuestions);
+  const fresh = parsedQuestions.filter(q => !state.p1_setup.questions.some(sq => sq.text === q.text && JSON.stringify(sq.options) === JSON.stringify(q.options)));
+  fresh.forEach(q => { q.sourceFile = fileName; });
+  state.p1_setup.questions = state.p1_setup.questions.concat(fresh);
+  // Topics found in the file (used by the AI check to label "mixed" questions)
+  const topics = new Set(state.p1_setup.topics || []);
+  (meta.topics || []).forEach(t => t && topics.add(t));
+  state.p1_setup.topics = [...topics];
+  // What could not be matched: question numbers missing in the file, answer keys without a question
+  const sets = meta.sections || 1;
+  const label = (x) => (sets > 1 ? `Set ${x.section + 1} Q${x.number}` : `Q${x.number}`);
+  const notes = (state.p1_setup.importNotes || []).filter(n => n.file !== fileName);
+  if ((meta.missingNumbers || []).length || (meta.orphanKeys || []).length) {
+    notes.push({
+      file: fileName,
+      missing: (meta.missingNumbers || []).map(label),
+      orphan: (meta.orphanKeys || []).map(label)
+    });
+  }
+  state.p1_setup.importNotes = notes;
   saveP1Setup();
   if (state.phase !== "phase1") setPhase("phase1");
+  state.p1_setup_page = 1;
   renderP1SetupList();
   showScreen("setup");
+
+  const withAns = fresh.filter(q => q.correctAnswer).length;
+  const subject = fresh[0] ? fresh[0].subject : (parsedQuestions[0] ? parsedQuestions[0].subject : "");
   const statusElem = $("setup-p1-doc-status");
   if (statusElem) {
     statusElem.classList.remove("is-error");
-    statusElem.textContent = `Imported ${parsedQuestions.length} MCQs (${subject}) from ${fileName}: ${withAns} with answer key.`;
-    setTimeout(() => { statusElem.textContent = ""; }, 6000);
+    const skipped = parsedQuestions.length - fresh.length;
+    statusElem.textContent = `Imported ${fresh.length} MCQs (${subject}) from ${fileName}: ${withAns} with an answer key${skipped ? `, ${skipped} already in this test` : ""}.`;
+    setTimeout(() => { statusElem.textContent = ""; }, 8000);
   }
+  // Check the answer keys with AI straight away
+  if (fresh.length && window.AIEval && AIEval.isReady()) mcqVerifyQuestions();
 }
 
-// Render the Phase-1 setup questions list
+// Render the Phase-1 setup: check summary, "Needs attention" and the questions that are ready
 function renderP1SetupList() {
   const list = $("setup-p1-question-list");
   const countElem = $("setup-p1-count");
   if (!list) return;
 
   const questions = state.p1_setup.questions || [];
-  if (countElem) countElem.textContent = questions.length;
+  const ready = questions.filter(q => mcqStatus(q) !== "issue");
+  if (countElem) countElem.textContent = ready.length;
 
   // Show the saved test settings (they used to reset to 120 / 1.00 / 0.25 on every load)
   const minEl = $("setup-p1-minutes");
@@ -2990,51 +3405,53 @@ function renderP1SetupList() {
   const p1Batch = $("setup-p1-batch-actions");
   if (p1Batch) p1Batch.style.display = questions.length > 0 ? "flex" : "none";
 
-  if (questions.length === 0) {
-    list.innerHTML = `<li class="empty-list-placeholder">No MCQs added yet. Upload a document (DOCX/PDF) or add MCQs manually to begin.</li>`;
-    renderPaginationControls({
-      containerId: "setup-p1-pagination",
-      currentPage: 1,
-      totalPages: 0,
-      totalItems: 0,
-      onPageChange: () => {}
-    });
+  renderP1CheckPanel();
+  updateP1StartButton();
+
+  if (ready.length === 0) {
+    list.innerHTML = `<li class="empty-list-placeholder">${questions.length ? "No question is ready yet. Fix the questions under Needs attention, or upload another file." : "No MCQs added yet. Upload a document (DOCX/PDF) or add MCQs manually to begin."}</li>`;
+    renderPaginationControls({ containerId: "setup-p1-pagination", currentPage: 1, totalPages: 0, totalItems: 0, onPageChange: () => {} });
     updateP1SetupBatchDeleteState();
     return;
   }
 
   const PAGE_SIZE = 50;
-  const totalItems = questions.length;
+  const totalItems = ready.length;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
   if (state.p1_setup_page > totalPages) state.p1_setup_page = totalPages;
   if (state.p1_setup_page < 1) state.p1_setup_page = 1;
 
   const startIndex = (state.p1_setup_page - 1) * PAGE_SIZE;
-  const pageQuestions = questions.slice(startIndex, startIndex + PAGE_SIZE);
+  const pageQuestions = ready.slice(startIndex, startIndex + PAGE_SIZE);
+  const statusPill = {
+    ok: q => (q.check && q.check.ai && q.check.ai.status === "ok") ? `<span class="p1-chk p1-chk-ok">AI checked</span>` : (q.check && q.check.user === "ok" ? `<span class="p1-chk p1-chk-ok">Checked by you</span>` : ""),
+    pending: () => `<span class="p1-chk p1-chk-pending">Checking…</span>`,
+    unchecked: () => `<span class="p1-chk">Not AI-checked</span>`
+  };
 
   list.innerHTML = pageQuestions.map((q, localIdx) => {
-    const globalIdx = startIndex + localIdx;
-    const optsPreview = (q.options || []).map(o => {
-      const isKey = q.correctAnswer && q.correctAnswer.toLowerCase() === o.label.toLowerCase();
-      return `<span class="opt-pill ${isKey ? 'is-correct' : ''}"><strong>[${escapeHTML(String(o.label).toUpperCase())}]</strong> ${escapeHTML(o.text || "")}</span>`;
-    }).join("");
-
+    const pos = startIndex + localIdx;
+    const st = mcqStatus(q);
+    // No answer key here: the key stays hidden until the result screen
+    const optsPreview = (q.options || []).map(o =>
+      `<span class="opt-pill"><strong>[${escapeHTML(String(o.label).toUpperCase())}]</strong> ${escapeHTML(o.text || "")}</span>`).join("");
     return `
       <li>
-        <input type="checkbox" class="p1-q-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select MCQ ${globalIdx + 1}" style="margin-top:4px;">
+        <input type="checkbox" class="p1-q-select-check" data-id="${escapeHTML(q.id)}" aria-label="Select MCQ ${pos + 1}" style="margin-top:4px;">
         <div style="flex:1; min-width:0;">
           <div class="p1-q-meta-badges">
             <span class="badge-subject">${escapeHTML(q.subject || "General Awareness")}</span>
-            ${q.topic ? `<span style="font-size:11px; color:var(--muted);">${escapeHTML(q.topic)}</span>` : ""}
-            ${q.correctAnswer ? `<span class="badge-ans">Key: [${escapeHTML(String(q.correctAnswer).toUpperCase())}]</span>` : ""}
-            <span class="q-num">Q${globalIdx + 1}</span>
+            ${mcqTopicOf(q) !== (q.subject || "General") ? `<span class="p1-q-topic">${escapeHTML(mcqTopicOf(q))}</span>` : ""}
+            ${isMultiAnswerMCQ(q) ? `<span class="p1-chk">More than one answer</span>` : ""}
+            ${(statusPill[st] || statusPill.ok)(q)}
+            <span class="q-num">Q${pos + 1}${q.number != null && q.number !== pos + 1 ? ` · file Q${q.number}` : ""}</span>
           </div>
           <div class="p1-question-full-text">${escapeHTML(q.text || "")}</div>
           <div class="p1-opts-preview">${optsPreview}</div>
         </div>
         <div class="q-actions">
-          <button type="button" class="q-act btn-p1-move-up" data-index="${globalIdx}" title="Move up" aria-label="Move up" ${globalIdx === 0 ? "disabled" : ""}>▲</button>
-          <button type="button" class="q-act btn-p1-move-down" data-index="${globalIdx}" title="Move down" aria-label="Move down" ${globalIdx === questions.length - 1 ? "disabled" : ""}>▼</button>
+          <button type="button" class="q-act btn-p1-move-up" data-id="${escapeHTML(q.id)}" title="Move up" aria-label="Move up" ${pos === 0 ? "disabled" : ""}>▲</button>
+          <button type="button" class="q-act btn-p1-move-down" data-id="${escapeHTML(q.id)}" title="Move down" aria-label="Move down" ${pos === ready.length - 1 ? "disabled" : ""}>▼</button>
           <button type="button" class="q-act q-act-danger btn-p1-delete-q" data-id="${escapeHTML(q.id)}" title="Remove from this test" aria-label="Remove from this test">Remove</button>
         </div>
       </li>
@@ -3054,6 +3471,179 @@ function renderP1SetupList() {
   });
 
   updateP1SetupBatchDeleteState();
+}
+
+// Answer-key summary, AI check status and the "Needs attention" list
+function renderP1CheckPanel() {
+  const box = $("setup-p1-check");
+  if (!box) return;
+  const questions = state.p1_setup.questions || [];
+  const notes = state.p1_setup.importNotes || [];
+  if (!questions.length && !notes.length) {
+    box.innerHTML = "";
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const label = q => (q.number != null ? `Q${q.number}` : `#${questions.indexOf(q) + 1}`);
+  const noKey = questions.filter(q => !q.correctAnswer);
+  const issues = questions.filter(q => mcqStatus(q) === "issue");
+  const pending = questions.filter(q => mcqStatus(q) === "pending");
+  const unchecked = questions.filter(q => mcqStatus(q) === "unchecked");
+  const ready = window.AIEval && AIEval.isReady();
+
+  let ai;
+  if (mcqVerify.running) {
+    const pct = mcqVerify.total ? Math.round(mcqVerify.done / mcqVerify.total * 100) : 0;
+    ai = `<div class="p1-check-row"><span class="ai-spinner"></span><div class="p1-check-grow"><strong>Checking every question and answer key with AI…</strong>
+        <span class="ai-muted">${mcqVerify.done} of ${mcqVerify.total} checked. The exam can start when the check is finished.</span>
+        <div class="ai-progress-track"><div class="ai-progress-fill" style="width:${Math.max(4, pct)}%"></div></div></div>
+        <button type="button" class="btn-soft" data-p1-check="stop">Stop</button></div>`;
+  } else if (!ready) {
+    ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>AI check is off.</strong> <span class="ai-muted">Add an API key so every question and answer key is verified by AI before the exam.</span></div>
+        <button type="button" class="btn-soft" data-ai-action="open-settings">Add API key</button></div>`;
+  } else if (unchecked.length) {
+    ai = `<div class="p1-check-row"><div class="p1-check-grow"><strong>${unchecked.length} question${unchecked.length === 1 ? " is" : "s are"} not checked by AI yet.</strong> <span class="ai-muted">The AI solves each question and confirms the answer key.</span></div>
+        <button type="button" class="ai-btn-primary" data-p1-check="run">Check with AI</button></div>`;
+  } else {
+    const passed = questions.length - issues.length;
+    ai = `<div class="p1-check-row"><div class="p1-check-grow"><span><strong>AI check finished:</strong> ${passed} question${passed === 1 ? "" : "s"} passed${issues.length ? ` · <span class="p1-warn">${issues.length} need${issues.length === 1 ? "s" : ""} attention</span>` : ""}.</span></div></div>`;
+  }
+  if (mcqVerify.error && !mcqVerify.running) ai += `<p class="ai-warning">${escapeHTML(mcqVerify.error)}</p>`;
+
+  const keyLine = noKey.length
+    ? `<span class="p1-warn">Answer key missing for ${noKey.length}: ${noKey.slice(0, 30).map(label).join(", ")}${noKey.length > 30 ? "…" : ""}</span>`
+    : `<span class="p1-good">Every question has an answer key.</span>`;
+
+  const noteHTML = notes.map(n => [
+    n.missing.length ? `<li><strong>Not found in ${escapeHTML(n.file)}:</strong> ${n.missing.slice(0, 40).join(", ")}${n.missing.length > 40 ? "…" : ""} <span class="ai-muted">(the numbering skips these, so the questions could not be read)</span></li>` : "",
+    n.orphan.length ? `<li><strong>Answer key without a question in ${escapeHTML(n.file)}:</strong> ${n.orphan.slice(0, 40).join(", ")}${n.orphan.length > 40 ? "…" : ""}</li>` : ""
+  ].join("")).join("");
+
+  const cards = issues.map(q => {
+    const reasons = mcqIssueReasons(q);
+    const ai = q.check && q.check.ai;
+    const suggest = ai && ai.aiAnswer && ai.aiAnswer !== q.correctAnswer && (q.options || []).length ? ai.aiAnswer : "";
+    return `
+      <li class="p1-issue" data-id="${escapeHTML(q.id)}">
+        <div class="p1-issue-head"><strong>${label(q)}</strong>${q.sourceFile ? `<span class="ai-muted">${escapeHTML(q.sourceFile)}</span>` : ""}</div>
+        <ul class="p1-issue-reasons">${reasons.map(r => `<li>${escapeHTML(r)}</li>`).join("")}</ul>
+        <div class="p1-question-full-text">${escapeHTML(q.text || "")}</div>
+        <div class="p1-opts-preview">${(q.options || []).map(o => `<span class="opt-pill"><strong>[${escapeHTML(String(o.label).toUpperCase())}]</strong> ${escapeHTML(o.text || "")}</span>`).join("") || `<span class="ai-muted">No options were read.</span>`}</div>
+        <details class="p1-issue-key"><summary>Show the answer key${ai && (ai.note || ai.aiAnswer) ? " and the AI's note" : ""}</summary>
+          <p>Answer key in the file: <strong>${q.correctAnswer ? formatMCQAnswer(q.correctAnswer) : "missing"}</strong>${ai && ai.aiAnswer ? ` · AI's answer: <strong>${formatMCQAnswer(ai.aiAnswer)}</strong>` : ""}</p>
+          ${ai && ai.note ? `<p>${escapeHTML(ai.note)}</p>` : ""}
+          ${q.explanation ? `<p class="ai-muted">${escapeHTML(q.explanation.slice(0, 600))}</p>` : ""}
+        </details>
+        <div class="p1-issue-actions">
+          <button type="button" class="btn-soft" data-p1-fix="edit" data-id="${escapeHTML(q.id)}">Edit question</button>
+          ${suggest ? `<button type="button" class="btn-soft" data-p1-fix="use-ai" data-id="${escapeHTML(q.id)}">Use the AI's answer (${formatMCQAnswer(suggest)})</button>` : ""}
+          ${q.correctAnswer && (q.options || []).length >= 2 ? `<button type="button" class="btn-soft" data-p1-fix="keep" data-id="${escapeHTML(q.id)}" title="You checked it yourself: add it to the exam as it is">It is correct, keep it</button>` : ""}
+          ${ready && (q.options || []).length >= 2 && !mcqVerify.running ? `<button type="button" class="btn-soft" data-p1-fix="recheck" data-id="${escapeHTML(q.id)}">Check again with AI</button>` : ""}
+          <button type="button" class="btn-soft btn-soft-danger" data-p1-fix="remove" data-id="${escapeHTML(q.id)}">Remove</button>
+        </div>
+      </li>`;
+  }).join("");
+
+  box.innerHTML = `
+    <div class="p1-check-card">
+      <div class="p1-check-summary">
+        <span><strong>${questions.length}</strong> imported</span>
+        <span><strong>${questions.length - issues.length - pending.length}</strong> ready for the exam</span>
+        ${pending.length ? `<span><strong>${pending.length}</strong> being checked</span>` : ""}
+        ${issues.length ? `<span class="p1-warn"><strong>${issues.length}</strong> need attention</span>` : ""}
+      </div>
+      <p class="p1-check-keys">${keyLine}</p>
+      ${ai}
+    </div>
+    ${issues.length || noteHTML ? `
+    <section class="p1-attention" aria-label="Questions that need attention">
+      <div class="p1-attention-head">
+        <h3>Needs attention <span class="count-badge">${issues.length}</span></h3>
+        <p>These are kept out of the exam: their text, options or answer key could not be read correctly. Fix, keep or remove each one.</p>
+        ${notes.length ? `<button type="button" class="btn-soft" data-p1-check="clear-notes">Dismiss file notes</button>` : ""}
+      </div>
+      ${noteHTML ? `<ul class="p1-notes">${noteHTML}</ul>` : ""}
+      ${cards ? `<ol class="p1-issue-list">${cards}</ol>` : ""}
+    </section>` : ""}
+  `;
+}
+
+// Start button: disabled while the AI is checking; shows how many questions go into the exam
+function updateP1StartButton() {
+  const btn = $("btn-start-p1-test");
+  if (!btn) return;
+  const questions = state.p1_setup.questions || [];
+  const n = questions.filter(q => ["ok", "unchecked"].includes(mcqStatus(q))).length;
+  btn.disabled = mcqVerify.running || questions.some(q => mcqStatus(q) === "pending");
+  btn.textContent = mcqVerify.running ? "Checking questions with AI…" : (n ? `Start Objective Test (${n} question${n === 1 ? "" : "s"})` : "Start Objective Test");
+}
+
+// Called by ai_eval.js after AI Settings are saved
+function onAISettingsSaved() {
+  const setup = $("screen-setup-p1");
+  if (setup && !setup.hidden) renderP1SetupList();
+  if (state.p1_lastResultTest && typeof p1RenderAnalysis === "function") p1RenderAnalysis(state.p1_lastResultTest);
+}
+
+// Buttons of the check panel and of "Needs attention"
+function handleP1CheckClick(e) {
+  const run = e.target.closest("[data-p1-check]");
+  if (run) {
+    const a = run.dataset.p1Check;
+    if (a === "run") mcqVerifyQuestions();
+    else if (a === "stop") mcqStopVerify();
+    else if (a === "clear-notes") { state.p1_setup.importNotes = []; saveP1Setup(); renderP1SetupList(); }
+    return;
+  }
+  const fix = e.target.closest("[data-p1-fix]");
+  if (!fix) return;
+  const q = (state.p1_setup.questions || []).find(x => x.id === fix.dataset.id);
+  if (!q) return;
+  const a = fix.dataset.p1Fix;
+  if (a === "remove") {
+    state.p1_setup.questions = state.p1_setup.questions.filter(x => x.id !== q.id);
+  } else if (a === "keep") {
+    q.check = Object.assign(q.check || {}, { user: "ok" });
+  } else if (a === "use-ai") {
+    q.correctAnswer = q.check.ai.aiAnswer;
+    q.check.local = (q.check.local || []).filter(i => !["no-key", "key-conflict", "key-not-in-options"].includes(i.code));
+    q.check.user = "ok";
+  } else if (a === "recheck") {
+    saveP1Setup();
+    mcqVerifyQuestions([q]);
+    return;
+  } else if (a === "edit") {
+    startP1EditQuestion(q);
+    return;
+  }
+  saveP1Setup();
+  renderP1SetupList();
+}
+
+// Load a question into the manual form for correction
+function startP1EditQuestion(q) {
+  state.p1_editingId = q.id;
+  const set = (id, v) => { const el = $(id); if (el) el.value = v == null ? "" : v; };
+  const subj = $("p1-q-subject");
+  if (subj && ![...subj.options].some(o => o.value === q.subject)) subj.insertAdjacentHTML("beforeend", `<option value="${escapeHTML(q.subject)}">${escapeHTML(q.subject)}</option>`);
+  set("p1-q-subject", q.subject || "General Awareness");
+  set("p1-q-topic", q.topic || q.aiTopic || "");
+  set("p1-q-text", q.text || "");
+  ["a", "b", "c", "d", "e"].forEach(l => {
+    const o = (q.options || []).find(x => x.label === l);
+    set("p1-q-opt-" + l, o ? o.text : "");
+  });
+  const correct = $("p1-q-correct");
+  const key = String(q.correctAnswer || "a");
+  if (correct && key.length > 1 && ![...correct.options].some(o => o.value === key)) correct.insertAdjacentHTML("beforeend", `<option value="${escapeHTML(key)}">${escapeHTML(formatMCQAnswer(key))}</option>`);
+  set("p1-q-correct", key);
+  set("p1-q-explanation", q.explanation || "");
+  const acc = $("p1-manual-accordion");
+  if (acc) acc.open = true;
+  const addBtn = $("btn-add-p1-question");
+  if (addBtn) addBtn.textContent = "Save corrected question";
+  $("p1-question-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // Update the batch delete button count and visibility in Phase-1 Setup
@@ -3102,12 +3692,15 @@ function handleP1DeleteSelectedSetup() {
 function handleP1DeleteAllSetup() {
   if (state.p1_setup.questions.length === 0) return;
   if (!confirm("Are you sure you want to remove all questions from this test?")) return;
+  if (typeof mcqStopVerify === "function") mcqStopVerify();
   state.p1_setup.questions = [];
+  state.p1_setup.importNotes = [];
+  state.p1_setup.topics = [];
   saveP1Setup();
   renderP1SetupList();
 }
 
-// Add a manual MCQ to Phase-1 Setup
+// Add a manual MCQ to Phase-1 Setup (or save a corrected one from "Needs attention")
 function handleP1QuestionFormSubmit(e) {
   e.preventDefault();
   const subject = $("p1-q-subject").value || "General Awareness";
@@ -3118,9 +3711,8 @@ function handleP1QuestionFormSubmit(e) {
   const optC = ($("p1-q-opt-c").value || "").trim();
   const optD = ($("p1-q-opt-d").value || "").trim();
   const optE = ($("p1-q-opt-e").value || "").trim();
-  const correct = ($("p1-q-correct").value || "a").toLowerCase();
+  const correct = normalizeMCQAnswer($("p1-q-correct").value || "a") || "a";
   const explanation = ($("p1-q-explanation").value || "").trim();
-
 
   if (!text) {
     alert("Please enter the question statement.");
@@ -3130,8 +3722,8 @@ function handleP1QuestionFormSubmit(e) {
     alert("Please provide at least options A, B, C, and D.");
     return;
   }
-  if (correct === "e" && !optE) {
-    alert("The correct answer is [E], but option E is empty. Fill option E or choose another answer.");
+  if (correct.includes("e") && !optE) {
+    alert("The correct answer includes [E], but option E is empty. Fill option E or choose another answer.");
     return;
   }
 
@@ -3145,23 +3737,28 @@ function handleP1QuestionFormSubmit(e) {
 
   const pos = readNumberInput("setup-p1-positive", 1.0, 0);
   const neg = readNumberInput("setup-p1-negative", 0.25, 0);
+  const editing = state.p1_editingId ? state.p1_setup.questions.find(q => q.id === state.p1_editingId) : null;
 
-  const newMCQ = {
-    id: makeId("mcq"),
-    subject,
-    topic,
-    text,
-    options,
-    correctAnswer: correct,
-    explanation,
-    marks: pos,
-    negativeMarks: neg
-  };
-
-  state.p1_setup.questions.push(newMCQ);
+  if (editing) {
+    // You corrected it yourself, so it counts as checked
+    Object.assign(editing, { subject, topic, text, options, correctAnswer: correct, explanation });
+    editing.check = { local: [], ai: null, user: "ok" };
+  } else {
+    state.p1_setup.questions.push({
+      id: makeId("mcq"),
+      subject,
+      topic,
+      text,
+      options,
+      correctAnswer: correct,
+      explanation,
+      marks: pos,
+      negativeMarks: neg,
+      check: { local: [], ai: null, user: "ok" }
+    });
+  }
+  state.p1_editingId = null;
   saveP1Setup();
-
-
 
   $("p1-question-form").reset();
   renderP1SetupList();
@@ -3169,19 +3766,21 @@ function handleP1QuestionFormSubmit(e) {
   if (p1Err) p1Err.textContent = "";
   const addBtn = $("btn-add-p1-question");
   if (addBtn) {
-    addBtn.textContent = "Added";
+    addBtn.textContent = editing ? "Saved" : "Added";
     setTimeout(() => { addBtn.textContent = "Add MCQ to Test"; }, 1500);
   }
-  $("p1-q-text")?.focus();
+  if (!editing) $("p1-q-text")?.focus();
 }
 
-// Start the Phase-1 objective exam
-function startP1Exam() {
+// Start the Phase-1 objective exam (only questions that passed the checks go in)
+async function startP1Exam() {
   const errElem = $("setup-p1-error");
   if (errElem) errElem.textContent = "";
+  const say = (t) => { if (errElem) errElem.textContent = t; };
 
-  if (!state.p1_setup.questions || state.p1_setup.questions.length === 0) {
-    if (errElem) errElem.textContent = "Please add at least one MCQ before starting the test.";
+  const all = state.p1_setup.questions || [];
+  if (all.length === 0) {
+    say("Please add at least one MCQ before starting the test.");
     return;
   }
 
@@ -3189,32 +3788,54 @@ function startP1Exam() {
   const pos = readNumberInput("setup-p1-positive", 1.0, 0);
   const neg = readNumberInput("setup-p1-negative", 0.25, 0);
   if (!minutes || minutes < 1) {
-    if (errElem) errElem.textContent = "Total time must be at least 1 minute.";
+    say("Total time must be at least 1 minute.");
     return;
   }
   if (pos <= 0) {
-    if (errElem) errElem.textContent = "Marks for a correct answer must be more than 0.";
+    say("Marks for a correct answer must be more than 0.");
     return;
   }
-  const noKey = state.p1_setup.questions.filter(q => !q.correctAnswer).length;
-  if (noKey > 0 && !confirm(`${noKey} MCQ(s) have no answer key, so they cannot be scored. Start anyway?`)) {
+
+  if (mcqVerify.running || all.some(q => mcqStatus(q) === "pending")) {
+    say("The AI is still checking the questions. The exam can start when the check is finished.");
     return;
   }
+  const ok = all.filter(q => mcqStatus(q) === "ok");
+  const unchecked = all.filter(q => mcqStatus(q) === "unchecked");
+  const issues = all.filter(q => mcqStatus(q) === "issue");
+  let use = ok;
+  if (unchecked.length) {
+    if (window.AIEval && AIEval.isReady()) {
+      say(`${unchecked.length} question(s) have not been checked by AI yet. Press "Check with AI" above first.`);
+      return;
+    }
+    if (!confirm(`AI check is off, so ${unchecked.length} question(s) were only checked for a missing answer key and missing options - not whether the key is right.\n\nStart the exam with them anyway?`)) return;
+    use = all.filter(q => ["ok", "unchecked"].includes(mcqStatus(q)));
+  }
+  if (!use.length) {
+    say("No question is ready for the exam. Fix or keep the questions under Needs attention first.");
+    return;
+  }
+
+  const testType = await askTestType("mcq", { count: use.length, left: issues.length });
+  if (!testType) return;
 
   state.p1_setup.totalMinutes = minutes;
   state.p1_setup.positiveMarks = pos;
   state.p1_setup.negativeMarks = neg;
   saveP1Setup();
 
-  const questions = state.p1_setup.questions.map(q => ({
-    ...q,
-    marks: pos,
-    negativeMarks: neg
-  }));
+  const questions = use.map(q => {
+    const copy = { ...q, marks: pos, negativeMarks: neg };
+    if (!copy.topic && q.aiTopic) copy.topic = q.aiTopic;
+    delete copy.check;
+    return copy;
+  });
 
   const test = {
     id: makeId("test_p1"),
     date: Date.now(),
+    testType,
     totalMinutes: minutes,
     positiveMarks: pos,
     negativeMarks: neg,
@@ -3240,6 +3861,64 @@ function startP1Exam() {
   renderP1Palette();
   updateP1ExamSummary();
   showScreen("exam");
+}
+
+// Test types you pick when a test starts (they decide which TODO the test completes)
+const TEST_TYPE_CHOICES = {
+  mcq: [
+    { value: "Objective Practice", hint: "Your daily objective (MCQ) exam" },
+    { value: "Chapter Test", hint: "The test at the end of a chapter" },
+    { value: "Mix Test", hint: "A test that mixes several chapters" }
+  ],
+  write: [
+    { value: "Subjective Practice", hint: "Your daily descriptive (subjective) exam" },
+    { value: "Chapter Test", hint: "The test at the end of a chapter" },
+    { value: "Mix Test", hint: "A test that mixes several chapters" }
+  ]
+};
+
+// Ask which kind of test this is. Resolves to the type, or null if cancelled.
+function askTestType(mode, info) {
+  return new Promise(resolve => {
+    const modal = $("test-type-modal");
+    const form = $("test-type-form");
+    if (!modal || !form) { resolve(mode === "mcq" ? "Objective Practice" : "Subjective Practice"); return; }
+    const suggestion = typeof calSuggestTestType === "function" ? calSuggestTestType(mode) : null;
+    const choices = TEST_TYPE_CHOICES[mode] || TEST_TYPE_CHOICES.mcq;
+    const preset = suggestion && choices.some(c => c.value === suggestion.type) ? suggestion.type : choices[0].value;
+    const sub = $("test-type-sub");
+    if (sub) {
+      const parts = [];
+      if (info && info.count) parts.push(`${info.count} question${info.count === 1 ? "" : "s"}`);
+      if (info && info.left) parts.push(`${info.left} left out (Needs attention)`);
+      if (suggestion && suggestion.title) parts.push(`Will complete: ${suggestion.title}`);
+      sub.textContent = parts.join(" · ");
+    }
+    $("test-type-options").innerHTML = choices.map(c => `
+      <label class="tt-option">
+        <input type="radio" name="testType" value="${escapeHTML(c.value)}" ${c.value === preset ? "checked" : ""}>
+        <span class="tt-card"><strong>${escapeHTML(c.value)}</strong><span>${escapeHTML(c.hint)}</span></span>
+      </label>`).join("");
+    const done = (val) => {
+      modal.hidden = true;
+      form.onsubmit = null;
+      form.onclick = null;
+      modal.onclick = null;
+      document.removeEventListener("keydown", onKey);
+      resolve(val);
+    };
+    const onKey = (e) => { if (e.key === "Escape") done(null); };
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const picked = form.querySelector('input[name="testType"]:checked');
+      done(picked ? picked.value : null);
+    };
+    form.onclick = (e) => { if (e.target.closest('[data-action="cancel"]')) done(null); };
+    modal.onclick = (e) => { if (e.target === modal) done(null); };
+    document.addEventListener("keydown", onKey);
+    modal.hidden = false;
+    setTimeout(() => { const r = form.querySelector('input[name="testType"]:checked'); if (r) r.focus(); }, 0);
+  });
 }
 
 // Start countdown timer for Phase-1
@@ -3323,18 +4002,21 @@ function showP1Question(index) {
   const qText = $("p1-exam-question-text");
   if (qText) qText.textContent = q.text;
 
-  const currentAnswer = state.p1_test.answers[index];
+  const currentAnswer = String(state.p1_test.answers[index] || "").toLowerCase();
+  const multi = isMultiAnswerMCQ(q);
   const optsContainer = $("p1-exam-options-list");
   if (optsContainer) {
-    optsContainer.innerHTML = (q.options || []).map(opt => {
-      const isSelected = (currentAnswer && currentAnswer.toLowerCase() === opt.label.toLowerCase());
-      return `
-        <div class="mcq-option-item ${isSelected ? 'selected' : ''}" data-label="${escapeHTML(opt.label)}" role="button" tabindex="0" aria-pressed="${isSelected}">
+    optsContainer.classList.toggle("is-multi", multi);
+    optsContainer.innerHTML = (multi ? `<p class="mcq-multi-hint">More than one option can be correct: select every correct option.</p>` : "") +
+      (q.options || []).map(opt => {
+        const isSelected = currentAnswer.includes(String(opt.label).toLowerCase());
+        return `
+        <div class="mcq-option-item ${isSelected ? 'selected' : ''}" data-label="${escapeHTML(opt.label)}" role="${multi ? "checkbox" : "button"}" tabindex="0" ${multi ? `aria-checked="${isSelected}"` : `aria-pressed="${isSelected}"`}>
           <span class="opt-badge">${escapeHTML(String(opt.label).toUpperCase())}</span>
           <span class="opt-text">${escapeHTML(opt.text)}</span>
         </div>
       `;
-    }).join("");
+      }).join("");
   }
 
   const prevBtn = $("p1-btn-prev");
@@ -3353,18 +4035,26 @@ function showP1Question(index) {
 function selectP1Option(optLabel) {
   if (!state.p1_test) return;
   const idx = state.p1_currentIndex;
-  state.p1_test.answers[idx] = optLabel.toLowerCase();
-
-  if (state.p1_test.statuses[idx] === "review") {
-    state.p1_test.statuses[idx] = "answered-review";
+  const q = state.p1_test.questions[idx];
+  const label = optLabel.toLowerCase();
+  if (isMultiAnswerMCQ(q)) {
+    // Multi-answer question: each click toggles one option
+    const set = new Set(String(state.p1_test.answers[idx] || "").split("").filter(Boolean));
+    if (set.has(label)) set.delete(label); else set.add(label);
+    state.p1_test.answers[idx] = set.size ? [...set].sort().join("") : null;
   } else {
-    state.p1_test.statuses[idx] = "answered";
+    state.p1_test.answers[idx] = label;
   }
+  const answer = state.p1_test.answers[idx] || "";
+
+  const isReview = state.p1_test.statuses[idx] === "review" || state.p1_test.statuses[idx] === "answered-review";
+  if (!answer) state.p1_test.statuses[idx] = isReview ? "review" : "not-answered";
+  else state.p1_test.statuses[idx] = isReview ? "answered-review" : "answered";
 
   document.querySelectorAll("#p1-exam-options-list .mcq-option-item").forEach(item => {
-    const isSel = item.dataset.label.toLowerCase() === optLabel.toLowerCase();
+    const isSel = answer.includes(item.dataset.label.toLowerCase());
     item.classList.toggle("selected", isSel);
-    item.setAttribute("aria-pressed", String(isSel));
+    item.setAttribute(item.getAttribute("role") === "checkbox" ? "aria-checked" : "aria-pressed", String(isSel));
   });
 
   renderP1Palette();
@@ -3531,11 +4221,9 @@ function finishP1Test(auto = false) {
   for (let i = 0; i < test.questions.length; i++) {
     const q = test.questions[i];
     const ans = test.answers[i];
-    const correctAns = (q.correctAnswer || "").toLowerCase().trim();
-
     if (!ans) {
       unattemptedCount++;
-    } else if (ans.toLowerCase().trim() === correctAns) {
+    } else if (mcqIsCorrect(ans, q.correctAnswer)) {
       correctCount++;
       score += pos;
     } else {
@@ -3588,6 +4276,8 @@ function finishP1Test(auto = false) {
 
   renderP1Result(test);
   showScreen("result");
+  // Explain the weak topics with AI straight away (only when an API key is set up)
+  if (typeof p1AutoAnalysis === "function") p1AutoAnalysis(test);
 }
 
 // Render Phase-1 Result Scorecard and review
@@ -3613,7 +4303,9 @@ function renderP1Result(test) {
     b.classList.toggle("active", b.dataset.filter === "all");
   });
 
+  if ($("p1-result-type")) $("p1-result-type").textContent = test.testType ? test.testType + " · " : "";
   renderP1ResultReviewList();
+  if (typeof p1RenderAnalysis === "function") p1RenderAnalysis(test);
 }
 
 // Render list of question review cards with filters
@@ -3627,12 +4319,12 @@ function renderP1ResultReviewList() {
 
   for (let i = 0; i < test.questions.length; i++) {
     const q = test.questions[i];
-    const userAns = test.answers[i] ? test.answers[i].toLowerCase().trim() : null;
-    const correctAns = q.correctAnswer ? q.correctAnswer.toLowerCase().trim() : "";
+    const userAns = test.answers[i] ? String(test.answers[i]).toLowerCase().trim() : null;
+    const correctAns = q.correctAnswer ? String(q.correctAnswer).toLowerCase().trim() : "";
 
     const isUnattempted = !userAns;
-    const isCorrect = userAns && correctAns && (userAns === correctAns);
-    const isIncorrect = userAns && (!correctAns || userAns !== correctAns);
+    const isCorrect = mcqIsCorrect(userAns, correctAns);
+    const isIncorrect = !!userAns && !isCorrect;
 
     if (filter === "correct" && !isCorrect) continue;
     if (filter === "incorrect" && !isIncorrect) continue;
@@ -3640,28 +4332,27 @@ function renderP1ResultReviewList() {
 
     const cardStatusClass = isCorrect ? "correct" : isIncorrect ? "incorrect" : "unattempted";
     const statusBadge = isCorrect
-      ? `<span style="background:#dcfce7; color:#166534; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">Correct (+${(test.positiveMarks || 1).toFixed(2)})</span>`
+      ? `<span class="rev-badge rev-badge-ok">Correct (+${(test.positiveMarks || 1).toFixed(2)})</span>`
       : isIncorrect
-      ? `<span style="background:#fee2e2; color:#991b1b; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">Incorrect (-${(test.negativeMarks || 0.25).toFixed(2)})</span>`
-      : `<span style="background:#f1f5f9; color:#475569; padding:3px 8px; border-radius:4px; font-weight:700; font-size:12px;">Unattempted (0.00)</span>`;
+      ? `<span class="rev-badge rev-badge-bad">Incorrect (-${(test.negativeMarks || 0.25).toFixed(2)})</span>`
+      : `<span class="rev-badge">Unattempted (0.00)</span>`;
 
     const optionsHtml = (q.options || []).map(opt => {
       const optLabel = opt.label.toLowerCase().trim();
-      const isChosen = (userAns === optLabel);
-      const isActualCorrect = (correctAns === optLabel);
+      const isChosen = !!userAns && userAns.includes(optLabel);
+      const isActualCorrect = correctAns.includes(optLabel);
 
       let optClass = "rev-opt";
       let badge = "";
-
       if (isChosen && isActualCorrect) {
         optClass += " is-correct-opt";
-        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#15803d;">Your answer · correct</span>`;
+        badge = `<span class="rev-opt-tag ok">Your answer · correct</span>`;
       } else if (isChosen && !isActualCorrect) {
         optClass += " chosen-wrong";
-        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#b91c1c;">Your answer · incorrect</span>`;
+        badge = `<span class="rev-opt-tag bad">Your answer · incorrect</span>`;
       } else if (!isChosen && isActualCorrect) {
         optClass += " is-correct-opt";
-        badge = `<span style="margin-left:auto; font-size:11px; font-weight:700; color:#15803d;">Correct answer</span>`;
+        badge = `<span class="rev-opt-tag ok">Correct answer</span>`;
       }
 
       return `
@@ -3672,19 +4363,23 @@ function renderP1ResultReviewList() {
         </div>
       `;
     }).join("");
+    const why = (isIncorrect || isUnattempted) && typeof p1WhyNote === "function" ? p1WhyNote(test.id, i) : "";
+    const topic = typeof mcqTopicOf === "function" ? mcqTopicOf(q) : (q.topic || "");
 
     cardsHtml.push(`
-      <div class="mcq-review-card ${cardStatusClass}">
+      <div class="mcq-review-card ${cardStatusClass}" data-q-index="${i}">
         <div class="review-card-header">
           <div>
             <strong>Question ${i + 1}</strong>
-            <span style="margin-left:8px; font-size:12px; color:var(--muted);">[${escapeHTML(q.subject || "General Awareness")}]</span>
+            <span class="rev-meta">${escapeHTML(q.subject || "General Awareness")}${topic && topic !== q.subject ? " · " + escapeHTML(topic) : ""}${q.level ? " · " + escapeHTML(q.level) : ""}</span>
           </div>
           <div>${statusBadge}</div>
         </div>
         <div class="review-card-prompt">${escapeHTML(q.text)}</div>
         <div class="review-options-list">${optionsHtml}</div>
+        ${correctAns.length > 1 ? `<div class="rev-explanation"><strong>Correct options:</strong> ${escapeHTML(formatMCQAnswer(correctAns))}${userAns ? ` · <strong>You chose:</strong> ${escapeHTML(formatMCQAnswer(userAns))}` : ""}</div>` : ""}
         ${q.explanation ? `<div class="rev-explanation"><strong>Explanation:</strong> ${escapeHTML(q.explanation)}</div>` : ""}
+        ${why ? `<div class="rev-explanation rev-ai-why"><strong>Why (AI):</strong> ${escapeHTML(why)}</div>` : ""}
       </div>
     `);
   }
@@ -3696,39 +4391,64 @@ function renderP1ResultReviewList() {
   }
 }
 
-// Download text file with Phase-1 exam scorecard and questions review
+// Download text file with Phase-1 exam scorecard, topic-wise analysis and questions review
 function downloadP1Result(test) {
   if (!test) return;
 
   const lines = [
     "============================================================",
-    "          RBI GRADE B - PHASE 1 OBJECTIVE TEST REPORT        ",
+    "          RBI GRADE B - OBJECTIVE TEST REPORT                ",
     "============================================================",
     `Date: ${new Date(test.date || test.completedAt).toLocaleString()}`,
+    test.testType ? `Test type: ${test.testType}` : "",
     `Total Time Spent: ${formatDuration(test.timeSpent || 0)}`,
     `Total Questions: ${test.questions.length}`,
     `Net Score: ${test.score.toFixed(2)} / ${test.maxScore.toFixed(2)}`,
     `Accuracy: ${test.accuracy}%`,
     `Correct: ${test.correctCount} | Incorrect: ${test.incorrectCount} | Unattempted: ${test.unattemptedCount}`,
-    "============================================================\n",
-    "--- DETAILED QUESTIONS REVIEW ---\n"
-  ];
+    "============================================================\n"
+  ].filter(l => l !== "");
+
+  if (typeof p1TopicStats === "function") {
+    lines.push("--- TOPIC-WISE ANALYSIS (weakest first) ---\n");
+    p1TopicStats(test).forEach(t => lines.push(`${t.topic}: ${t.correct} correct, ${t.wrong} wrong, ${t.skipped} left of ${t.total} · accuracy ${t.attempted ? t.accuracy + "%" : "-"} · net ${t.net.toFixed(2)}/${t.max.toFixed(2)} · ${t.level}`));
+    const a = p1LoadAnalyses()[test.id];
+    if (a) {
+      lines.push("", "--- AI EXPLANATION OF WEAK TOPICS ---", "");
+      if (a.overall) lines.push(a.overall, "");
+      a.topics.forEach(t => {
+        lines.push(`## ${t.topic}`);
+        if (t.diagnosis) lines.push("What your mistakes show: " + t.diagnosis);
+        if (t.explanation) lines.push("", t.explanation);
+        if (t.keyPoints.length) lines.push("", "Remember:", ...t.keyPoints.map(x => " - " + x));
+        if (t.traps.length) lines.push("", "Traps:", ...t.traps.map(x => " - " + x));
+        if (t.practice) lines.push("", "Practise next: " + t.practice);
+        lines.push("");
+      });
+      if (a.next.length) lines.push("Next steps:", ...a.next.map((x, i) => ` ${i + 1}. ${x}`), "");
+    }
+    lines.push("");
+  }
+  lines.push("--- DETAILED QUESTIONS REVIEW ---\n");
 
   test.questions.forEach((q, idx) => {
-    const userAns = test.answers[idx] ? test.answers[idx].toUpperCase() : "NONE";
-    const correctAns = q.correctAnswer ? q.correctAnswer.toUpperCase() : "N/A";
-    const status = !test.answers[idx] ? "UNATTEMPTED" : userAns === correctAns ? "CORRECT" : "INCORRECT";
+    const userAns = test.answers[idx] ? formatMCQAnswer(test.answers[idx]) : "NONE";
+    const correctAns = q.correctAnswer ? formatMCQAnswer(q.correctAnswer) : "N/A";
+    const status = !test.answers[idx] ? "UNATTEMPTED" : mcqIsCorrect(test.answers[idx], q.correctAnswer) ? "CORRECT" : "INCORRECT";
 
     lines.push(`Q${idx + 1}: ${q.text}`);
     (q.options || []).forEach(o => {
       lines.push(`   [${o.label.toUpperCase()}] ${o.text}`);
     });
+    lines.push(`   Topic:            ${mcqTopicOf(q)}`);
     lines.push(`   Candidate Answer: ${userAns}`);
     lines.push(`   Correct Answer:   ${correctAns}`);
     lines.push(`   Status:           ${status}`);
     if (q.explanation) {
       lines.push(`   Explanation:      ${q.explanation}`);
     }
+    const why = p1WhyNote(test.id, idx);
+    if (why && status !== "CORRECT") lines.push(`   Why (AI):         ${why}`);
     lines.push("");
   });
 
@@ -3774,7 +4494,7 @@ function renderP1History() {
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
           <div>
             <strong>${dateStr}</strong>
-            <span style="margin-left:8px; font-size:12px; color:var(--muted);">(${t.questions.length} Questions)</span>
+            <span style="margin-left:8px; font-size:12px; color:var(--muted);">${t.testType ? escapeHTML(t.testType) + " · " : ""}${t.questions.length} Questions</span>
           </div>
           <div>
             <span style="font-size:16px; font-weight:700; color:#003366;">${t.score.toFixed(2)} / ${t.maxScore.toFixed(2)}</span>
@@ -4549,6 +5269,9 @@ document.addEventListener("DOMContentLoaded", () => {
     phaseBtnP2.addEventListener("click", () => setPhase("phase2"));
   }
 
+  // "Back to calendar" on a result opened from the calendar
+  document.querySelectorAll(".btn-back-calendar").forEach(b => b.addEventListener("click", () => showScreen("calendar")));
+
   // Phase-1 Setup Events
   const p1Form = $("p1-question-form");
   if (p1Form) {
@@ -4611,31 +5334,38 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const upBtn = e.target.closest(".btn-p1-move-up");
-      if (upBtn) {
-        const idx = Number(upBtn.dataset.index);
-        if (idx > 0) {
-          const temp = state.p1_setup.questions[idx];
-          state.p1_setup.questions[idx] = state.p1_setup.questions[idx - 1];
-          state.p1_setup.questions[idx - 1] = temp;
+      // Move within the list of ready questions (questions under "Needs attention" stay where they are)
+      const moveBtn = e.target.closest(".btn-p1-move-up, .btn-p1-move-down");
+      if (moveBtn) {
+        const qs = state.p1_setup.questions;
+        const ready = qs.filter(q => mcqStatus(q) !== "issue");
+        const r = ready.findIndex(q => q.id === moveBtn.dataset.id);
+        const other = ready[r + (moveBtn.classList.contains("btn-p1-move-up") ? -1 : 1)];
+        if (r >= 0 && other) {
+          const a = qs.indexOf(ready[r]);
+          const b = qs.indexOf(other);
+          [qs[a], qs[b]] = [qs[b], qs[a]];
           saveP1Setup();
           renderP1SetupList();
         }
         return;
       }
+    });
+  }
 
-      const downBtn = e.target.closest(".btn-p1-move-down");
-      if (downBtn) {
-        const idx = Number(downBtn.dataset.index);
-        if (idx < state.p1_setup.questions.length - 1) {
-          const temp = state.p1_setup.questions[idx];
-          state.p1_setup.questions[idx] = state.p1_setup.questions[idx + 1];
-          state.p1_setup.questions[idx + 1] = temp;
-          saveP1Setup();
-          renderP1SetupList();
-        }
-        return;
-      }
+  const setupP1Check = $("setup-p1-check");
+  if (setupP1Check) setupP1Check.addEventListener("click", handleP1CheckClick);
+
+  const p1FormReset = $("p1-question-form");
+  if (p1FormReset) {
+    p1FormReset.addEventListener("reset", () => {
+      // Cancelling a correction: the next submit adds a new MCQ again
+      setTimeout(() => {
+        if (!state.p1_editingId) return;
+        state.p1_editingId = null;
+        const addBtn = $("btn-add-p1-question");
+        if (addBtn) addBtn.textContent = "Add MCQ to Test";
+      }, 0);
     });
   }
 

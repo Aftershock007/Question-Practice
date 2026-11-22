@@ -1,0 +1,117 @@
+{
+ "kind": "mcq",
+ "questions": [
+  {
+   "number": 1,
+   "stem": "Which of the following is NOT a function of a commercial bank?",
+   "options": [
+    "Accepting deposits",
+    "Granting loans",
+    "Issuing currency notes",
+    "Agency services",
+    "Remittance of funds"
+   ],
+   "answer": "c",
+   "explanation": "Only the Reserve Bank of India issues currency notes (one-rupee notes and coins are issued by the Government).\nCommercial banks accept deposits, lend and provide agency and remittance services.",
+   "shared": ""
+  },
+  {
+   "number": 2,
+   "stem": "Statutory Liquidity Ratio (SLR) is maintained by banks in the form of:",
+   "options": [
+    "cash balances with the RBI only",
+    "liquid assets such as cash, gold and approved securities",
+    "fixed deposits with other banks",
+    "loans to the priority sector",
+    "foreign currency deposits"
+   ],
+   "answer": "b",
+   "explanation": "SLR assets are cash, gold and unencumbered approved securities, mainly government securities.",
+   "shared": ""
+  },
+  {
+   "number": 3,
+   "stem": "A loan account becomes a Non-Performing Asset when interest or principal remains overdue for more than:",
+   "options": [
+    "30 days",
+    "60 days",
+    "90 days",
+    "120 days",
+    "180 days"
+   ],
+   "answer": "c",
+   "explanation": "Under the RBI's prudential norms an asset becomes non-performing after 90 days of overdue payment.",
+   "shared": ""
+  },
+  {
+   "number": 4,
+   "stem": "Which of the following is a payments bank NOT allowed to do?",
+   "options": [
+    "Accept demand deposits",
+    "Issue debit cards",
+    "Lend to its customers",
+    "Offer internet banking",
+    "Distribute mutual fund products"
+   ],
+   "answer": "c",
+   "explanation": "Payments banks cannot undertake lending activities.",
+   "shared": ""
+  },
+  {
+   "number": 5,
+   "stem": "What amount must the bank keep as its CRR balance with the RBI?",
+   "options": [
+    "Rs 40 crore",
+    "Rs 400 crore",
+    "Rs 1,800 crore",
+    "Rs 4,000 crore",
+    "Rs 180 crore"
+   ],
+   "answer": "b",
+   "explanation": "CRR = 4% of Rs 10,000 crore = Rs 400 crore.",
+   "shared": "Directions"
+  },
+  {
+   "number": 6,
+   "stem": "What is the bank's minimum SLR holding?",
+   "options": [
+    "Rs 180 crore",
+    "Rs 1,800 crore",
+    "Rs 400 crore",
+    "Rs 2,200 crore",
+    "Rs 18,000 crore"
+   ],
+   "answer": "b",
+   "explanation": "SLR = 18% of Rs 10,000 crore = Rs 1,800 crore.",
+   "shared": "Directions"
+  },
+  {
+   "number": 7,
+   "stem": "Together, CRR and SLR pre-empt what share of the bank's NDTL?",
+   "options": [
+    "14%",
+    "18%",
+    "22%",
+    "26%",
+    "4%"
+   ],
+   "answer": "c",
+   "explanation": "4% + 18% = 22% of NDTL.",
+   "shared": "Directions"
+  },
+  {
+   "number": 8,
+   "stem": "The priority sector lending target for domestic scheduled commercial banks is what percentage of ANBC or CEOBE, whichever is higher?",
+   "options": [
+    "18%",
+    "32%",
+    "40%",
+    "75%",
+    "10%"
+   ],
+   "answer": "c",
+   "explanation": "Domestic scheduled commercial banks must lend 40% of ANBC or CEOBE, whichever is higher, to the priority sector.",
+   "shared": ""
+  }
+ ]
+}

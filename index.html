@@ -117,9 +117,12 @@
         </form>
       </details>
 
+      <!-- Answer-key check: summary, AI check status and "Needs attention" (built by app.js / objective_ai.js) -->
+      <div id="setup-p1-check" class="p1-check" hidden></div>
+
       <div class="setup-list-header">
         <div class="setup-list-title">
-          <h3>Questions in this test</h3>
+          <h3>Ready for the exam</h3>
           <span class="count-badge" id="setup-p1-count">0</span>
         </div>
         <div id="setup-p1-batch-actions" class="batch-actions-group">
@@ -283,8 +286,9 @@
 
     <!-- Screen: Phase-1 Result (Objective Scorecard & Review) -->
     <section id="screen-result-p1" class="screen" hidden>
+      <button type="button" class="btn-soft btn-back-calendar" hidden>‹ Back to calendar</button>
       <div class="result-scorecard">
-        <span class="eyebrow">Objective · MCQ</span>
+        <span class="eyebrow"><span id="p1-result-type"></span>Objective · MCQ</span>
         <h2>Result &amp; analysis</h2>
         <div class="score-main-grid">
           <div class="score-big-box">
@@ -300,6 +304,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Topic-wise analysis + AI explanation of weak topics (objective_ai.js) -->
+      <section id="p1-analysis" class="p1-analysis" aria-label="Topic-wise analysis"></section>
 
       <div class="result-filter-toolbar">
         <h3>Question-by-Question Review</h3>
@@ -595,6 +602,7 @@
 
     <!-- Screen: Result -->
     <section id="screen-result" class="screen" hidden>
+      <button type="button" class="btn-soft btn-back-calendar" hidden>‹ Back to calendar</button>
       <span class="eyebrow">Phase 2 · Descriptive</span>
       <h2>Your results</h2>
       <p id="result-summary"></p>
@@ -648,6 +656,22 @@
           <div class="todo-modal-actions">
             <button type="button" class="secondary" data-action="cancel">Cancel</button>
             <button type="submit">Save TODO</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Which kind of test is this? (asked when a test starts; decides which TODO it completes) -->
+    <div id="test-type-modal" class="modal" hidden>
+      <div class="modal-content test-type-card" role="dialog" aria-modal="true" aria-labelledby="test-type-title">
+        <h3 id="test-type-title">What kind of test is this?</h3>
+        <p id="test-type-sub" class="test-type-sub"></p>
+        <form id="test-type-form">
+          <div id="test-type-options" class="tt-options" role="radiogroup" aria-labelledby="test-type-title"></div>
+          <p class="test-type-note">Your calendar TODO of this type is ticked when you submit the test (subjective tests once they are graded), with your marks.</p>
+          <div class="todo-modal-actions">
+            <button type="button" class="secondary" data-action="cancel">Cancel</button>
+            <button type="submit">Start test</button>
           </div>
         </form>
       </div>
@@ -714,6 +738,7 @@
   <script src="app.js"></script>
   <script src="ai_config.js"></script>
   <script src="ai_eval.js"></script>
+  <script src="objective_ai.js"></script>
   <script src="calendar.js"></script>
 </body>
 </html>

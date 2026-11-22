@@ -1,0 +1,19 @@
+{
+ "kind": "desc",
+ "questions": [
+  {
+   "topic": "Inflation Targeting",
+   "marks": 10,
+   "wordLimit": 400,
+   "question": "Critically examine the flexible inflation targeting framework adopted by India in 2016. Has it delivered price stability?",
+   "answerStart": "India adopted flexible inflation targeting (FIT) in 2016 by "
+  },
+  {
+   "topic": "Fiscal Deficit",
+   "marks": 15,
+   "wordLimit": 600,
+   "question": "What is fiscal deficit? Discuss its implications for the Indian economy and suggest measures for fiscal consolidation.",
+   "answerStart": "Fiscal deficit is the excess of total expenditure over total"
+  }
+ ]
+}

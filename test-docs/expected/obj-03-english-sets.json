@@ -1,0 +1,135 @@
+{
+ "kind": "mcq",
+ "questions": [
+  {
+   "number": 1,
+   "section": 0,
+   "stem": "Choose the word most similar in meaning to ABUNDANT.",
+   "options": [
+    "Scarce",
+    "Plentiful",
+    "Rare",
+    "Meagre",
+    "Sparse"
+   ],
+   "answer": "b"
+  },
+  {
+   "number": 2,
+   "section": 0,
+   "stem": "Choose the word most opposite in meaning to TRANSPARENT.",
+   "options": [
+    "Clear",
+    "Lucid",
+    "Evident",
+    "Opaque",
+    "Visible"
+   ],
+   "answer": "d"
+  },
+  {
+   "number": 3,
+   "section": 0,
+   "stem": "Fill in the blank: The committee ______ its report to the Governor yesterday.",
+   "options": [
+    "submitted",
+    "submits",
+    "has submit",
+    "submitting",
+    "will submit"
+   ],
+   "answer": "a"
+  },
+  {
+   "number": 4,
+   "section": 0,
+   "stem": "Choose the correctly spelt word.",
+   "options": [
+    "Accomodate",
+    "Acommodate",
+    "Accommodate",
+    "Acomodate",
+    "Accommodatte"
+   ],
+   "answer": "c"
+  },
+  {
+   "number": 5,
+   "section": 0,
+   "stem": "Choose the word most similar in meaning to PRUDENT.",
+   "options": [
+    "Reckless",
+    "Hasty",
+    "Careless",
+    "Rash",
+    "Judicious"
+   ],
+   "answer": "e"
+  },
+  {
+   "number": 1,
+   "section": 1,
+   "stem": "Find the part of the sentence that contains an error.",
+   "options": [
+    "Neither of the two banks",
+    "have reported",
+    "a loss in",
+    "the last quarter.",
+    "No error"
+   ],
+   "answer": "b"
+  },
+  {
+   "number": 2,
+   "section": 1,
+   "stem": "Find the part of the sentence that contains an error.",
+   "options": [
+    "The RBI, along with",
+    "the government,",
+    "are working",
+    "to control inflation.",
+    "No error"
+   ],
+   "answer": "c"
+  },
+  {
+   "number": 3,
+   "section": 1,
+   "stem": "Find the part of the sentence that contains an error.",
+   "options": [
+    "He is one of those officers",
+    "who has always",
+    "supported the",
+    "new policy.",
+    "No error"
+   ],
+   "answer": "b"
+  },
+  {
+   "number": 4,
+   "section": 1,
+   "stem": "Find the part of the sentence that contains an error.",
+   "options": [
+    "The data collected",
+    "by the survey team",
+    "were analysed",
+    "carefully.",
+    "No error"
+   ],
+   "answer": "e"
+  },
+  {
+   "number": 5,
+   "section": 1,
+   "stem": "Find the part of the sentence that contains an error.",
+   "options": [
+    "Each of the candidates",
+    "were given",
+    "a separate",
+    "answer sheet.",
+    "No error"
+   ],
+   "answer": "b"
+  }
+ ]
+}

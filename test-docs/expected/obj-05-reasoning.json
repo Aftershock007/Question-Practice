@@ -1,0 +1,101 @@
+{
+ "kind": "mcq",
+ "questions": [
+  {
+   "number": 1,
+   "stem": "Find the odd one out.",
+   "options": [
+    "27",
+    "64",
+    "125",
+    "144",
+    "216"
+   ],
+   "answer": "d"
+  },
+  {
+   "number": 2,
+   "stem": "Statements: All banks are institutions. Some institutions are regulators.",
+   "options": [
+    "Only conclusion I follows",
+    "Only conclusion II follows",
+    "Either I or II follows",
+    "Neither I nor II follows",
+    "Both I and II follow"
+   ],
+   "answer": "d"
+  },
+  {
+   "number": 3,
+   "stem": "In a certain code LOAN is written as MPBO. How is DEBT written in that code?",
+   "options": [
+    "EFCU",
+    "EFDU",
+    "DFCU",
+    "EGCU",
+    "FECU"
+   ],
+   "answer": "a"
+  },
+  {
+   "number": 4,
+   "stem": "Pointing to a man, Riya says, \"He is the son of my mother's only brother.\" How is the man related to Riya?",
+   "options": [
+    "Brother",
+    "Nephew",
+    "Cousin",
+    "Uncle",
+    "Son"
+   ],
+   "answer": "c"
+  },
+  {
+   "number": 5,
+   "stem": "What comes next in the series: 3, 6, 11, 18, 27, ?",
+   "options": [
+    "36",
+    "38",
+    "40",
+    "37",
+    "39"
+   ],
+   "answer": "b"
+  },
+  {
+   "number": 6,
+   "stem": "In a row of 40 students, Arun is 12th from the left end. What is his position from the right end?",
+   "options": [
+    "28th",
+    "29th",
+    "30th",
+    "27th",
+    "31st"
+   ],
+   "answer": "b"
+  },
+  {
+   "number": 7,
+   "stem": "Which number comes next: 2, 6, 12, 20, 30, ?",
+   "options": [
+    "40",
+    "42",
+    "44",
+    "36",
+    "48"
+   ],
+   "answer": "b"
+  },
+  {
+   "number": 8,
+   "stem": "A is taller than B. C is shorter than B. D is taller than A. Who is the shortest?",
+   "options": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "Cannot be determined"
+   ],
+   "answer": "c"
+  }
+ ]
+}

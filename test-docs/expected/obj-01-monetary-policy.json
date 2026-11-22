@@ -1,0 +1,173 @@
+{
+ "kind": "mcq",
+ "questions": [
+  {
+   "number": 1,
+   "stem": "Under the amended RBI Act, 1934, the inflation target for India is set by:",
+   "options": [
+    "the Reserve Bank of India",
+    "the Central Government in consultation with the RBI",
+    "the Monetary Policy Committee",
+    "the Finance Commission",
+    "NITI Aayog"
+   ],
+   "answer": "b",
+   "explanation": "Section 45ZA of the RBI Act lets the Central Government, in consultation with the RBI, set the inflation target once every five years.",
+   "topic": "Monetary Policy Framework"
+  },
+  {
+   "number": 2,
+   "stem": "Consider the following statements about the Monetary Policy Committee (MPC):",
+   "options": [
+    "1 only",
+    "1 and 2 only",
+    "2 and 3 only",
+    "1, 2 and 3",
+    "None of the above"
+   ],
+   "answer": "d",
+   "explanation": "The MPC has six members: three from the RBI and three external members appointed by the Central Government. The Governor has a casting vote.",
+   "topic": "Monetary Policy Framework"
+  },
+  {
+   "number": 3,
+   "stem": "The tolerance band around India's 4% CPI inflation target is:",
+   "options": [
+    "plus or minus 1 percentage point",
+    "plus or minus 2 percentage points",
+    "plus or minus 3 percentage points",
+    "plus or minus 1.5 percentage points",
+    "there is no tolerance band"
+   ],
+   "answer": "b",
+   "explanation": "The target is 4% CPI inflation with an upper limit of 6% and a lower limit of 2%.",
+   "topic": "Monetary Policy Framework"
+  },
+  {
+   "number": 4,
+   "stem": "ASSERTION Assertion (A): A rise in the repo rate tends to reduce aggregate demand.",
+   "options": [
+    "Both A and R are true and R is the correct explanation of A",
+    "Both A and R are true but R is not the correct explanation of A",
+    "A is true but R is false",
+    "A is false but R is true",
+    "Both A and R are false"
+   ],
+   "answer": "a",
+   "explanation": "Costlier credit reduces consumption and investment spending, which is exactly why demand falls.",
+   "topic": "Monetary Policy Framework"
+  },
+  {
+   "number": 5,
+   "stem": "Which of the following is a quantitative (general) instrument of monetary policy?",
+   "options": [
+    "Moral suasion",
+    "Margin requirements",
+    "Cash Reserve Ratio",
+    "Selective credit control",
+    "Direct action"
+   ],
+   "answer": "c",
+   "explanation": "CRR affects the overall volume of credit. The other options are qualitative or selective tools.",
+   "topic": "Instruments of Monetary Policy"
+  },
+  {
+   "number": 6,
+   "stem": "Match List I with List II:",
+   "options": [
+    "A-2 B-1 C-3 D-4",
+    "A-1 B-2 C-3 D-4",
+    "A-2 B-3 C-1 D-4",
+    "A-4 B-1 C-3 D-2",
+    "A-3 B-1 C-2 D-4"
+   ],
+   "answer": "a",
+   "explanation": "Repo lends against securities, SDF absorbs without collateral, MSF is the emergency window and the Bank Rate is aligned with MSF.",
+   "topic": "Instruments of Monetary Policy"
+  },
+  {
+   "number": 7,
+   "stem": "MULTI-CORRECT Which of the following absorb liquidity from the banking system?",
+   "options": [
+    "An increase in the Cash Reserve Ratio",
+    "An open market sale of government securities by the RBI",
+    "A purchase of foreign currency by the RBI",
+    "A variable rate reverse repo auction",
+    "A long-term repo operation"
+   ],
+   "answer": "abd",
+   "explanation": "Raising CRR, selling securities and reverse repo auctions drain liquidity. Buying foreign currency and LTROs inject it.",
+   "topic": "Instruments of Monetary Policy"
+  },
+  {
+   "number": 8,
+   "stem": "DATA By how many basis points did the repo rate fall from Year 1 to Year 3?",
+   "options": [
+    "50",
+    "100",
+    "150",
+    "75",
+    "125"
+   ],
+   "answer": "b",
+   "explanation": "6.50% to 5.50% is a fall of 1 percentage point, which is 100 basis points.",
+   "topic": "Policy Rates and Real Interest Rates"
+  },
+  {
+   "number": 9,
+   "stem": "DATA In which year was the real repo rate (repo rate minus CPI inflation) the highest?",
+   "options": [
+    "Year 1",
+    "Year 2",
+    "Year 3",
+    "It was equal in all three years",
+    "It cannot be determined"
+   ],
+   "answer": "c",
+   "explanation": "Real rates: Year 1 1.1%, Year 2 1.4%, Year 3 1.7%.",
+   "topic": "Policy Rates and Real Interest Rates"
+  },
+  {
+   "number": 10,
+   "stem": "Which index does the RBI use as the nominal anchor for inflation targeting?",
+   "options": [
+    "Wholesale Price Index",
+    "CPI for Industrial Workers",
+    "CPI (Combined)",
+    "GDP deflator",
+    "CPI for Agricultural Labourers"
+   ],
+   "answer": "c",
+   "explanation": "The target is defined on headline CPI (Combined) inflation published by the NSO.",
+   "topic": "Inflation"
+  },
+  {
+   "number": 11,
+   "stem": "Cost-push inflation is most likely to be caused by:",
+   "options": [
+    "an increase in money supply",
+    "a sharp rise in crude oil prices",
+    "higher government spending",
+    "a rise in exports",
+    "a cut in income tax"
+   ],
+   "answer": "b",
+   "explanation": "A supply-side cost shock raises production costs. The other options raise demand.",
+   "topic": "Inflation"
+  },
+  {
+   "number": 12,
+   "stem": "NUMERICAL If the nominal interest rate is 7% and expected inflation is 4.5%, the approximate real interest rate is:",
+   "options": [
+    "11.5%",
+    "2.5%",
+    "1.5%",
+    "3.5%",
+    "4.5%"
+   ],
+   "answer": "b",
+   "explanation": "Real rate = nominal rate - expected inflation = 7 - 4.5 = 2.5% (Fisher approximation).",
+   "topic": "Inflation"
+  }
+ ]
+}

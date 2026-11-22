@@ -66,3 +66,9 @@ RBI_Question_Bank*.json
 !Spotlight-Questions-1-6-Nov-2026.docx
 !demo_questions.docx
 !demo_questions.pdf
+!test-docs/*.docx
+!test-docs/*.pdf
+
+# Claude Code local files (shared config in .claude/settings.json and .mcp.json IS committed)
+.claude/settings.local.json
+.playwright-mcp/

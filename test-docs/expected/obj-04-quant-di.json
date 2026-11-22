@@ -1,0 +1,137 @@
+{
+ "kind": "mcq",
+ "questions": [
+  {
+   "number": 1,
+   "stem": "What is the credit-deposit ratio of Bank R?",
+   "options": [
+    "75%",
+    "80%",
+    "85%",
+    "90%",
+    "70%"
+   ],
+   "answer": "c",
+   "true_answer": "c",
+   "defect": ""
+  },
+  {
+   "number": 2,
+   "stem": "What are the total advances of the four banks (Rs crore)?",
+   "options": [
+    "3,830",
+    "3,930",
+    "4,030",
+    "3,980",
+    "3,880"
+   ],
+   "answer": "b",
+   "true_answer": "b",
+   "defect": ""
+  },
+  {
+   "number": 3,
+   "stem": "Which bank has the lowest credit-deposit ratio?",
+   "options": [
+    "Bank P",
+    "Bank Q",
+    "Bank R",
+    "Bank S",
+    "Banks P and Q equally"
+   ],
+   "answer": "d",
+   "true_answer": "d",
+   "defect": ""
+  },
+  {
+   "number": 4,
+   "stem": "By what percentage do the deposits of Bank S exceed those of Bank Q?",
+   "options": [
+    "25%",
+    "30%",
+    "33.33%",
+    "50%",
+    "20%"
+   ],
+   "answer": "c",
+   "true_answer": "c",
+   "defect": ""
+  },
+  {
+   "number": 5,
+   "stem": "What is the compound interest on Rs 12,000 at 10% per annum for 2 years, compounded annually?",
+   "options": [
+    "Rs 2,400",
+    "Rs 2,520",
+    "Rs 2,420",
+    "Rs 2,500",
+    "Rs 2,640"
+   ],
+   "answer": "b",
+   "true_answer": "b",
+   "defect": ""
+  },
+  {
+   "number": 6,
+   "stem": "What is 15% of 240?",
+   "options": [
+    "24",
+    "30",
+    "32",
+    "36",
+    "40"
+   ],
+   "answer": "b",
+   "true_answer": "d",
+   "defect": "wrong-key"
+  },
+  {
+   "number": 8,
+   "stem": "A train 150 m long passes a pole in 10 seconds. What is its speed in km/h?",
+   "options": [
+    "45",
+    "50",
+    "54",
+    "60",
+    "72"
+   ],
+   "answer": "c",
+   "true_answer": "c",
+   "defect": ""
+  },
+  {
+   "number": 9,
+   "stem": "The average of 5 numbers is 18. When one number is excluded, the average of the rest is 16. What is the excluded number?",
+   "options": [
+    "20",
+    "22",
+    "24",
+    "26",
+    "28"
+   ],
+   "answer": "",
+   "true_answer": "d",
+   "defect": "no-key"
+  },
+  {
+   "number": 10,
+   "stem": "If A : B = 3 : 5 and B : C = 2 : 3, then A : B : C is:",
+   "options": [
+    "3 : 5 : 6",
+    "6 : 10 : 15",
+    "6 : 10 : 9",
+    "3 : 10 : 15",
+    "2 : 5 : 3"
+   ],
+   "answer": "b",
+   "true_answer": "b",
+   "defect": ""
+  }
+ ],
+ "missingNumbers": [
+  7
+ ],
+ "orphanKeys": [
+  11
+ ]
+}

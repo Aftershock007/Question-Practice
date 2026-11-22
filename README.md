@@ -10,28 +10,37 @@ A personal, offline typing test and descriptive answer practice website designed
 - **Phase-1 Objective Practice (Real TCS iON Simulation):**
   - Real exam interface with countdown timer, candidate profile bar, and question options `[A]` through `[E]`.
   - Authentic 5-color TCS iON Question Palette: Answered (Green), Not Answered (Red), Not Visited (Grey), Marked for Review (Purple), and Answered & Marked for Review.
-  - Automatic answer key matching, immediate net scoring (+1.00 correct, -0.25 negative marking), scorecard, and question-by-question review with filters.
+  - **Questions with more than one correct option** (MULTI-CORRECT) are answered by ticking every correct option and score only when the set is exactly right.
+  - Immediate net scoring (+1.00 correct, -0.25 negative marking), scorecard, and question-by-question review with filters.
+  - **Topic-wise analysis** after every test: correct / wrong / left, accuracy and net marks per topic, weakest first. With an AI key, the AI also explains every weak topic (what your mistakes show, the concepts, exam facts to remember, traps) and why each wrong answer was wrong.
+- **Answer-key check before the exam (objective):**
+  - The answer key is never shown on the setup screen. Instead you see how many questions have a key and which ones do not.
+  - Every imported question is checked: text and options read completely, answer key found, no duplicate numbers. With an AI key, the AI also solves each question and confirms the key (about 1 minute per 20 questions, 4 minutes for 192).
+  - Questions that fail go to a separate **Needs attention** section with the reason, and are kept out of the exam: edit them, use the AI's answer, keep them after checking yourself, or remove them. Question numbers missing from the file and answer keys without a question are listed there too.
+  - The exam can start only when the check has finished, and it contains only the questions that passed.
 - **Phase-2 Descriptive Typing Practice:**
   - Four dedicated papers: **ESI (Economic & Social Issues)**, **Finance**, **Management**, and **English Descriptive**.
   - Exam conditions simulation: spell-check/autocorrect disabled, live word counts (`Words typed: X / Y`), Tab indentation support, and optional paste prevention.
-  - **Built-in AI evaluation:** the moment you submit, every answer is graded by AI with the RBI rubric in `prompt.js` (see [AI evaluation](#ai-evaluation) below).
+  - **Built-in AI evaluation:** the moment you submit, every answer is graded by AI with the RBI rubric in `prompt.js` (see [AI evaluation](#ai-evaluation) below), including a line-by-line **writing analysis** (grammar, spelling, factual errors, RBI writing style) and **topic-wise performance**.
   - The full evaluation prompt can still be copied or downloaded for grading in any chatbot (Gemini, Claude, ChatGPT).
 - **Calendar & TODO (your daily routine):**
-  - One calendar for the whole plan. The built-in plan is `RBI_Study_Schedule.xlsx` (415 days); you can also upload your own timetable.
-  - Every plan day gets 3 exam TODOs: **Phase-2 subjective exam**, **Phase-2 objective exam** and **Phase-1 objective exam**, plus a current-affairs TODO on days the plan has one.
+  - One calendar for the whole plan. The built-in plan is `RBI_Study_Schedule.xlsx` (415 days); **Upload Timetable** / **Remove Timetable** in the study plan settings replace or clear it.
+  - TODO types: **Objective Practice, Subjective Practice, Mix Test, Chapter Test, Study, Other**.
+  - **Test TODOs complete themselves.** When a test starts you choose its type (Objective Practice, Subjective Practice, Chapter Test or Mix Test). Submitting it ticks the matching TODO of the day and shows your marks on it; a subjective test ticks its TODO once every answer is graded. A test without a matching TODO is recorded as a TODO of its own. Test TODOs cannot be ticked by hand; **Study** and **Other** you tick yourself.
+  - Every plan day gets 3 exam TODOs: **Phase-2 subjective exam**, **Phase-2 objective exam** and **Phase-1 objective exam** (Chapter Test / Mix Test on test days), plus a current-affairs TODO on days the plan has one.
   - **Test days are always visible:** chapter tests, mix tests and current-affairs objective tests are tagged on the calendar (P2 / P1 / CA), and the next ones are listed under **Upcoming tests**.
-  - Click a day to see its plan focus and TODOs. Tick TODOs, add your own TODO for any date, edit / move a TODO, or hide a plan TODO (restorable).
-  - **▶ Start subjective / ▶ Start objective** on a TODO opens the right test; submitting that test ticks the TODO automatically.
-  - Streak, today's 3 exams, month progress and plan progress at the top. A day is complete when all of its TODOs are ticked.
-  - Plan settings: Day 1 date, "days already finished", built-in plan, upload timetable (.xlsx / .csv), template, export plan / your TODOs, remove plan.
+  - Click a day to see **the tests you took and your marks**; click a test to open its full result page (objective scorecard, or the subjective result with the AI assessment).
+  - Streak, today's 3 exams, month progress and plan progress at the top. A day is complete when all of its TODOs are done.
 - **DOCX & PDF File Import:** Upload Word (.docx) or PDF (.pdf) files and the questions, options, answer keys, explanations and model answers are extracted exactly as written:
   - DOCX: Word's automatic numbering and bullets are rebuilt (1., a), •), tables become `cell | cell` rows, tabs and line breaks are kept, page headers/footers and tracked deletions are never imported.
   - PDF: read with Mozilla pdf.js (bundled in `vendor/pdfjs`, works offline and from `file://`). Wrapped lines are joined back into paragraphs and running headers, footers and page numbers are removed by their position on the page. Tables in PDFs keep all their words, but not always their column layout.
-  - Shared passages ("Directions (Q.1 to Q.3) ...") are attached to every question they belong to; answer keys can be a table, a "1. c 2. a" line, or "Answer: (c)" under each question.
+  - Answers are matched to questions **by question number** (and set, when numbering restarts), never by position. Answer keys can be a grid ("1 e | 2 c"), a "Q | Answer | Why" table, a "1 to 10 | a | b" table, a "1. c 2. a" line, or "Answer: (c)" under each question; multi-answer keys ("a, e") are supported.
+  - Topic headings ("6. Uses, Determinants and Limits of Measurement") become each question's topic. Shared passages and data tables ("Directions (Q.1 to Q.3) ...", "Use the table below for Q137 and Q138") are attached to every question they belong to.
   - An MCQ file dropped on the Subjective screen (or the other way round) is detected and sent to the right place.
 - **Included Example Practice Documents:**
   - `Spotlight-Questions-1-6-Nov-2026.docx`: 200 General Awareness Phase-1 MCQs with options and full answer key table.
   - `CH-1-National_Income-Answer-Writing.docx`: ESI Chapter 1 National Income descriptive practice questions with model answers.
+  - `test-docs/`: 8 import test files (5 objective, 3 subjective) as DOCX and PDF, each in a different layout, with their expected results in `test-docs/expected/`. `obj-04-quant-di` contains deliberate defects (a wrong key, a missing key, a skipped question number, a key without a question) to show the Needs attention section. Rebuild them with `python3 test-docs/make_test_docs.py`.
 - **History Tracking:** Comprehensive logs of test scores, accuracy %, time spent, and performance trends for both phases.
 
 ---
@@ -52,6 +61,8 @@ After a subjective test, each answer is sent with the evaluation prompt from `pr
 - **Score and grade** out of the question's marks, plus the **likely real RBI score**. The grader is deliberately about 2-3 marks stricter per answer than the real panel.
 - **In plain words**: a short summary of what the mark means and the most important fix.
 - **What worked / where you lost marks / what to fix next.**
+- **Writing analysis**: every grammar and punctuation error with the rule and the correction, every misspelt word, every wrong or outdated fact with the correct one, a verdict on whether the style is up to RBI standard (score out of 10, with the problems listed), structure, vocabulary (weak words and better ones), sentence construction, presentation, and a step-by-step plan for the next exam.
+- **Topic and concept gaps** for each answer, a **topic-wise performance** table for the test, and one across all your subjective tests.
 - Expandable details: marks per criterion with the reason for each, red-pen penalties, which parts of the question you covered or missed, line-by-line mistakes with corrections, missing reports/committees/data, **your own sentences rewritten**, and an **exam-format model answer**.
 - A **test summary**: total score, biggest mark leaks across the test, a fatigue check and your next drills. Download it all as a `.md` report.
 
@@ -98,7 +109,7 @@ If a request fails, the answer card says why in plain words (invalid key, quota 
 
 ## Data Storage & Privacy
 
-- **Local Storage:** All active tests, timetable plans, attempt histories, AI settings and AI reports are stored strictly inside your browser's `localStorage`.
+- **Local Storage:** All active tests, timetable plans, attempt histories, AI settings, AI reports and objective topic analyses are stored strictly inside your browser's `localStorage`.
 - **AI reports:** Detailed AI reports are kept within a fixed storage budget (roughly the last month of tests) so they can never crowd out your test history. When the budget is full, the oldest *detailed* reports are removed first; their scores stay in History. Use **Download report (.md)** for reports you want to keep forever.
 - **Clearing Browser Data:** Clearing your browser cache and cookies will erase locally saved test histories, AI settings and reports.
 
@@ -108,4 +119,4 @@ If a request fails, the answer card says why in plain words (invalid key, quota 
 
 Your tests, answers and history stay on your device. There is no backend and no telemetry.
 
-The one exception is AI evaluation, and only when you have added an API key. Then, for each answer being graded, the question, your answer and its reference answer are sent **directly from your browser to the AI provider you chose** (for example Google Gemini) under that provider's API terms. Nothing passes through any other server. Without a key, nothing is sent anywhere. Your API key is stored only in your browser.
+The one exception is AI evaluation, and only when you have added an API key. Then, for each answer being graded, the question, your answer and its reference answer are sent (and, for objective tests, the imported questions with their answer keys for the check, and your wrong answers for the topic analysis) **directly from your browser to the AI provider you chose** (for example Google Gemini) under that provider's API terms. Nothing passes through any other server. Without a key, nothing is sent anywhere. Your API key is stored only in your browser.

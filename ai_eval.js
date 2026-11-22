@@ -396,13 +396,52 @@ Keys, in this exact order (section numbers refer to the format above):
   format, with \\n for line breaks, ending with [EXACT WORD COUNT: N words].
                                                                         [Section 7]
 - "action_plan": exactly 3 revision directives for tomorrow's drill.   [Section 8]
+- "topic": the syllabus topic this question tests, 2-6 words (for example
+  "Inflation targeting" or "Leadership styles"). Use the TOPIC given above
+  when it is not "Not specified".
+- "concept_gaps": up to 5 concepts of that topic the candidate got wrong,
+  confused or left out, each one short line ([] if none).
+- "writing_audit": a line-by-line language and style audit of the candidate's
+  script, so they can improve their next exam. Check EVERY sentence. Object with:
+  - "grammar_errors": every grammar, tense, agreement, article, preposition,
+    punctuation or sentence-construction error (up to 20), each {"quote": the
+    candidate's exact words, "type": "grammar" | "tense" | "agreement" |
+    "article" | "preposition" | "punctuation" | "sentence structure",
+    "explanation": the rule that is broken, in one plain sentence,
+    "correction": the corrected wording}.
+  - "spelling_errors": every misspelt word (up to 25), each {"wrong": as typed,
+    "correct": correct spelling, "context": the 3-8 words around it}.
+  - "factual_errors": every wrong, outdated or unsupported fact, figure, date,
+    name, committee or report (up to 10), each {"quote": exact words, "problem":
+    what is wrong, "correct_fact": the correct fact, tagged [VERIFY LATEST
+    FIGURE] if it may have changed}.
+  - "style": {"verdict": "RBI-ready" | "Nearly there" | "Not yet", "score": a
+    number 0-10 for how close the writing style is to a top RBI Grade B
+    Phase-2 script, "assessment": 3-5 sentences on tone, register, objectivity,
+    analytical depth and policy orientation compared with what RBI examiners
+    expect, "issues": every style problem seen (conversational tone, first
+    person, rhetorical questions, vague claims, opinion without evidence,
+    repetition...) each one line}.
+  - "structure": {"assessment": 2-4 sentences on introduction, body, conclusion,
+    headings, paragraphing and logical flow, "issues": specific problems}.
+  - "vocabulary": {"assessment": 1-3 sentences on word choice, technical terms
+    and register, "weak_words": up to 10 {"used": the weak or informal word or
+    phrase, "better": the exam-grade replacement}}.
+  - "sentence_craft": {"assessment": 1-3 sentences on sentence length, clarity,
+    run-ons, fragments, passive voice and connectors, "examples": up to 5 exact
+    sentences that should be split or tightened}.
+  - "presentation": 1-3 sentences on paragraphing, bullets, use of the word
+    limit and how easy the script is for an examiner to mark.
+  - "improvement_plan": 5-8 detailed, specific steps for the next exam, most
+    important first, each naming exactly what to practise and how.
 
 Rules: all marks are JSON numbers (not strings) in 0.25 steps. Strings are plain
 text (no markdown tables, no ** markers). Quote the candidate exactly in "quote"
 and "before". Skip Section 9 (SCORE_LOG): the app logs the score itself. If the
 script is blank, off-topic or under 60 words, still return every key, with
 final_score 0, "rewrites" as [] if there is nothing to rewrite, and a full model
-answer.
+answer. Never invent errors: an empty list is the right answer when the script
+has no error of that kind, but do not skip real ones.
 ################################################################################`;
 
   // JSON Schema handed to Gemini (generationConfig.responseJsonSchema) so the
@@ -434,7 +473,20 @@ answer.
     strengths: SL,
     rewrites: { type: "array", items: objSchema({ before: S, after: S, why: S }) },
     model_answer: S,
-    action_plan: SL
+    action_plan: SL,
+    topic: S,
+    concept_gaps: SL,
+    writing_audit: objSchema({
+      grammar_errors: { type: "array", items: objSchema({ quote: S, type: S, explanation: S, correction: S }) },
+      spelling_errors: { type: "array", items: objSchema({ wrong: S, correct: S, context: S }) },
+      factual_errors: { type: "array", items: objSchema({ quote: S, problem: S, correct_fact: S }) },
+      style: objSchema({ verdict: S, score: N, assessment: S, issues: SL }),
+      structure: objSchema({ assessment: S, issues: SL }),
+      vocabulary: objSchema({ assessment: S, weak_words: { type: "array", items: objSchema({ used: S, better: S }) } }),
+      sentence_craft: objSchema({ assessment: S, examples: SL }),
+      presentation: S,
+      improvement_plan: SL
+    })
   });
 
   function buildPrompt(test, q, idx) {
@@ -680,7 +732,7 @@ answer.
   async function geminiGenerate(pc, req, opts) {
     const url = GEMINI_API + "/models/" + encodeURIComponent(pc.model) + ":generateContent";
     // Try structured JSON first; if this model/API version rejects a field, step down.
-    const variants = req.json ? ["schema", "mime", "plain"] : ["plain"];
+    const variants = req.json ? (req.schema === null ? ["mime", "plain"] : ["schema", "mime", "plain"]) : ["plain"];
     let lastErr = null;
     for (const v of variants) {
       const body = {};
@@ -690,8 +742,9 @@ answer.
       } else {
         body.contents = [{ role: "user", parts: [{ text: req.prompt }] }];
         if (req.system) body.systemInstruction = { parts: [{ text: req.system }] };
-        body.generationConfig = v === "schema"
-          ? { responseMimeType: "application/json", responseJsonSchema: REPORT_SCHEMA }
+        const schema = req.schema === undefined ? REPORT_SCHEMA : req.schema;
+        body.generationConfig = v === "schema" && schema
+          ? { responseMimeType: "application/json", responseJsonSchema: schema }
           : { responseMimeType: "application/json" };
       }
       // No temperature / maxOutputTokens: Gemini 3.x docs say keep sampling defaults,
@@ -767,7 +820,7 @@ answer.
   }
 
   async function anthropicGenerate(pc, req, opts) {
-    const body = { model: pc.model, max_tokens: req.json ? 8192 : 64, messages: [{ role: "user", content: req.prompt }] };
+    const body = { model: pc.model, max_tokens: req.json ? (req.maxTokens || 16000) : 64, messages: [{ role: "user", content: req.prompt }] };
     if (req.system) body.system = req.system;
     const headers = {
       "Content-Type": "application/json",
@@ -966,8 +1019,44 @@ answer.
       strengths: strList(o.strengths, 5, 400),
       rewrites: objList(o.rewrites, 5).map(x => ({ before: str(x.before, 1200), after: str(x.after, 1600), why: str(x.why, 500) })).filter(x => x.before && x.after),
       modelAnswer: str(o.model_answer, 14000).replace(/\\n/g, "\n"),
-      actions: strList(o.action_plan, 5, 500)
+      actions: strList(o.action_plan, 5, 500),
+      topic: sanitizeTopic(o.topic) || sanitizeTopic(q && q.topic),
+      conceptGaps: strList(o.concept_gaps, 6, 400).filter(c => !/^none\.?$/i.test(c)),
+      writing: normalizeWriting(o.writing_audit)
     };
+  }
+
+  function sanitizeTopic(v) {
+    const t = str(v, 120).replace(/^topic\s*[:\-]\s*/i, "").trim();
+    return /^(?:not specified|none|n\/a|unknown)$/i.test(t) ? "" : t;
+  }
+
+  // The language / style audit of the script ({} when the model did not send one)
+  function normalizeWriting(w) {
+    if (!w || typeof w !== "object" || Array.isArray(w)) return null;
+    const obj = v => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+    const style = obj(w.style);
+    const structure = obj(w.structure);
+    const vocab = obj(w.vocabulary);
+    const craft = obj(w.sentence_craft);
+    let verdict = str(style.verdict, 40);
+    if (/ready|yes|meets|good/i.test(verdict) && !/not|near/i.test(verdict)) verdict = "RBI-ready";
+    else if (/near|close|almost|partly|partial/i.test(verdict)) verdict = "Nearly there";
+    else if (verdict) verdict = "Not yet";
+    const score = num(style.score);
+    const out = {
+      grammar: objList(w.grammar_errors, 25).map(x => ({ quote: str(x.quote, 500), type: str(x.type, 40).toLowerCase(), explanation: str(x.explanation || x.error || x.problem, 500), correction: str(x.correction || x.fix, 600) })).filter(x => x.quote || x.correction),
+      spelling: objList(w.spelling_errors, 30).map(x => ({ wrong: str(x.wrong || x.word, 80), correct: str(x.correct || x.correction, 80), context: str(x.context, 200) })).filter(x => x.wrong && x.correct && x.wrong.toLowerCase() !== x.correct.toLowerCase()),
+      facts: objList(w.factual_errors, 12).map(x => ({ quote: str(x.quote, 500), problem: str(x.problem || x.issue, 600), fact: str(x.correct_fact || x.correction, 600) })).filter(x => x.quote || x.problem),
+      style: { verdict, score: score === null ? null : clamp(round1(score), 0, 10), assessment: str(style.assessment, 1500), issues: strList(style.issues, 10, 300) },
+      structure: { assessment: str(structure.assessment, 1200), issues: strList(structure.issues, 8, 300) },
+      vocabulary: { assessment: str(vocab.assessment, 800), weak: objList(vocab.weak_words, 12).map(x => ({ used: str(x.used, 120), better: str(x.better, 160) })).filter(x => x.used && x.better) },
+      craft: { assessment: str(craft.assessment, 800), examples: strList(craft.examples, 6, 600) },
+      presentation: str(w.presentation, 800),
+      plan: strList(w.improvement_plan, 10, 500)
+    };
+    const any = out.grammar.length || out.spelling.length || out.facts.length || out.style.assessment || out.structure.assessment || out.plan.length;
+    return any ? out : null;
   }
 
   function notAttemptedReport(test, q) {
@@ -1062,6 +1151,35 @@ answer.
       throw lastErr;
     }
     throw new AIError("format", "No assessment.", { raw: lastRaw });
+  }
+
+  // Generic JSON task for other parts of the app (MCQ answer-key check, objective
+  // topic analysis): same provider, retries and error messages as grading.
+  // req: { system, prompt, schema (Gemini JSON schema or null), signal, onStatus, timeoutMs, validate(obj) }
+  async function runJSON(req) {
+    const pc = activeProvider();
+    if (!pc.ready) throw new AIError("not_configured", "No API key set up.");
+    const onStatus = req.onStatus || function () {};
+    const netOpts = { timeoutMs: req.timeoutMs || GENERATE_TIMEOUT_MS, signal: req.signal };
+    const call = { system: req.system, prompt: req.prompt, json: true, schema: req.schema === undefined ? null : req.schema };
+    let lastErr = null;
+    let lastRaw = "";
+    for (let round = 1; round <= 2; round++) {
+      let res;
+      try {
+        res = await withRetries(() => generate(pc, call, netOpts), { signal: req.signal, onStatus });
+      } catch (err) {
+        if (round === 1 && (err.kind === "bad_response" || err.kind === "truncated")) { lastErr = err; onStatus("The reply was incomplete - asking again…"); continue; }
+        throw err;
+      }
+      lastRaw = res.text;
+      const obj = extractJSON(res.text);
+      if (obj && (!req.validate || req.validate(obj))) return { data: obj, provider: pc.def.label, model: pc.model, modelUsed: res.modelUsed || "" };
+      lastErr = new AIError(res.finish === "length" ? "truncated" : "format", "The reply was not in the expected format.");
+      if (round === 1) onStatus("The reply was not complete - asking again…");
+    }
+    lastErr.raw = lastRaw;
+    throw lastErr;
   }
 
   // --------------------------------------------------------------------------
@@ -1171,6 +1289,10 @@ answer.
     if (typeof state !== "undefined" && state.lastResultTest && state.lastResultTest.id === testId) {
       state.lastResultTest.scores = state.lastResultTest.scores || {};
       state.lastResultTest.scores[qid] = score;
+    }
+    // Every answer graded: the calendar ticks the TODO of this test and shows its marks
+    if (t && typeof calOnTestScored === "function") {
+      try { calOnTestScored("write", testId); } catch (e) { console.warn("Calendar update failed:", e); }
     }
     return !!t;
   }
@@ -1460,6 +1582,50 @@ answer.
     return note;
   }
 
+  // Group graded answers by topic: [{ topic, count, score, max, pct, verdict, gaps }] weakest first
+  function topicStats(rows) {
+    const by = new Map();
+    rows.forEach(r => {
+      const key = String(r.topic || "Other").trim();
+      const k = key.toLowerCase();
+      const t = by.get(k) || { topic: key, count: 0, score: 0, max: 0, gaps: [] };
+      t.count++;
+      t.score += Number(r.score) || 0;
+      t.max += Number(r.max) || 0;
+      (r.gaps || []).forEach(g => { if (t.gaps.length < 6 && !t.gaps.includes(g)) t.gaps.push(g); });
+      by.set(k, t);
+    });
+    return Array.from(by.values()).map(t => {
+      const pct = t.max ? round1(t.score / t.max * 100) : 0;
+      return Object.assign(t, { score: round2(t.score), pct, verdict: pct >= 42 ? "Strong" : pct >= 32 ? "Fair" : "Weak" });
+    }).sort((a, b) => a.pct - b.pct);
+  }
+
+  // Every graded answer of every subjective test in History
+  function allGradedRows() {
+    const out = [];
+    const all = loadReports();
+    const history = historyList();
+    (Array.isArray(history) ? history : []).forEach(t => {
+      const byQ = all[t && t.id];
+      if (!byQ) return;
+      (t.questions || []).forEach(q => {
+        const r = byQ[q.id];
+        if (r && !r.notAttempted) out.push({ topic: r.topic || q.topic || q.paper || "Other", score: r.score, max: r.max, gaps: r.conceptGaps || [] });
+      });
+    });
+    return out;
+  }
+
+  function topicTableHTML(rows) {
+    const cls = { Strong: "good", Fair: "ok", Weak: "weak" };
+    return '<div class="table-scroll"><table class="ai-table ai-topic-table"><thead><tr><th>Topic</th><th>Answers</th><th>Marks</th><th>Score</th><th>Concepts to revise</th></tr></thead><tbody>' +
+      rows.map(t => "<tr><td><strong>" + esc(t.topic) + '</strong> <span class="ai-cov ai-cov-' + cls[t.verdict] + '">' + t.verdict + "</span></td>" +
+        '<td class="ai-num">' + t.count + '</td><td class="ai-num">' + fmt(t.score) + " / " + fmt(t.max) + '</td><td class="ai-num">' + fmt(t.pct) + "%</td>" +
+        "<td>" + (t.gaps.length ? t.gaps.map(g => esc(g)).join("; ") : '<span class="ai-muted">-</span>') + "</td></tr>").join("") +
+      "</tbody></table></div>";
+  }
+
   function panelHTML(test) {
     const pc = activeProvider();
     const st = testState(test);
@@ -1539,6 +1705,11 @@ answer.
       reports.forEach(r => { if (r.actions && r.actions[0] && !drills.includes(r.actions[0])) drills.push(r.actions[0]); });
       const fatigue = fatigueNote(st.rows);
 
+      const topicRows = topicStats(st.rows.filter(r => r.report && !r.report.notAttempted).map(r => ({ topic: r.report.topic || r.q.topic || r.q.paper || "Other", score: r.report.score, max: r.report.max, gaps: r.report.conceptGaps || [] })));
+      const wTotals = reports.reduce((a, r) => { const c = writingCounts(r.writing); a.grammar += c.grammar; a.spelling += c.spelling; a.facts += c.facts; if (r.writing && r.writing.style.verdict) a.verdicts.push(r.writing.style.verdict); return a; }, { grammar: 0, spelling: 0, facts: 0, verdicts: [] });
+      const plans = [];
+      reports.forEach(r => { (r.writing ? r.writing.plan : []).slice(0, 2).forEach(x => { if (plans.length < 5 && !plans.includes(x)) plans.push(x); }); });
+      const allTopics = topicStats(allGradedRows());
       html += '<div class="ai-overall">' +
         '<div class="ai-overall-score">' + ringHTML(total, max, g.cls, true) +
           '<div class="ai-overall-text">' +
@@ -1553,7 +1724,16 @@ answer.
           '<div class="ai-insight"><h5>Biggest mark leaks</h5>' + leaksHTML + "</div>" +
           (fatigue ? '<div class="ai-insight"><h5>Pacing &amp; fatigue</h5><p>' + esc(fatigue) + "</p></div>" : "") +
           (drills.length ? '<div class="ai-insight"><h5>Next drills</h5><ol>' + drills.slice(0, 4).map(d => "<li>" + inline(d) + "</li>").join("") + "</ol></div>" : "") +
-        "</div>";
+        "</div>" +
+        (topicRows.length ? '<div class="ai-topic-block"><h4>Topic-wise performance in this test</h4>' + topicTableHTML(topicRows) + "</div>" : "") +
+        (reports.some(r => r.writing) ? '<div class="ai-topic-block"><h4>Your writing across this test</h4>' +
+          '<div class="ai-wchips"><span class="ai-wchip' + (wTotals.grammar ? " has" : "") + '"><strong>' + wTotals.grammar + "</strong> grammar / punctuation</span>" +
+          '<span class="ai-wchip' + (wTotals.spelling ? " has" : "") + '"><strong>' + wTotals.spelling + "</strong> spelling</span>" +
+          '<span class="ai-wchip' + (wTotals.facts ? " has" : "") + '"><strong>' + wTotals.facts + "</strong> factual</span>" +
+          (wTotals.verdicts.length ? '<span class="ai-muted">Style: ' + esc(wTotals.verdicts.join(", ")) + "</span>" : "") + "</div>" +
+          (plans.length ? "<h6>Most important fixes for your next exam</h6><ol>" + plans.map(x => "<li>" + inline(x) + "</li>").join("") + "</ol>" : "") +
+          '<p class="ai-muted">Open each answer below for the full line-by-line list.</p></div>' : "") +
+        (allTopics.length > 1 && allTopics.some(t => t.count > 1) ? '<details class="ai-sec"><summary><span>Topic-wise performance across all your subjective tests</span><span class="ai-sec-meta">' + allTopics.length + " topics</span></summary><div class=\"ai-sec-body\">" + topicTableHTML(allTopics) + "</div></details>" : "");
     }
 
     if (storageProblem) html += '<p class="ai-warning">' + esc(storageProblem) + "</p>";
@@ -1676,6 +1856,47 @@ answer.
       (w.why ? '<p class="ai-why">' + inline(w.why) + "</p>" : "") + "</div>").join("");
   }
 
+  const VERDICT_CLS = { "RBI-ready": "good", "Nearly there": "ok", "Not yet": "weak" };
+
+  // Counts for the chips at the top of the writing analysis
+  function writingCounts(w) {
+    return w ? { grammar: w.grammar.length, spelling: w.spelling.length, facts: w.facts.length } : { grammar: 0, spelling: 0, facts: 0 };
+  }
+
+  function writingHTML(w) {
+    const c = writingCounts(w);
+    const chip = (n, label) => '<span class="ai-wchip' + (n ? " has" : "") + '"><strong>' + n + "</strong> " + label + "</span>";
+    let h = '<div class="ai-wchips">' + chip(c.grammar, "grammar / punctuation") + chip(c.spelling, "spelling") + chip(c.facts, "factual") +
+      (w.style.verdict ? '<span class="ai-cov ai-cov-' + (VERDICT_CLS[w.style.verdict] || "ok") + '">Style: ' + esc(w.style.verdict) + (w.style.score !== null ? " · " + fmt(w.style.score) + "/10" : "") + "</span>" : "") +
+      "</div>";
+    if (w.style.assessment || w.style.issues.length) {
+      h += "<h6>Is the writing style up to RBI standard?</h6>" + (w.style.assessment ? "<p>" + inline(w.style.assessment) + "</p>" : "") + (w.style.issues.length ? listHTML(w.style.issues, "") : "");
+    }
+    h += "<h6>Grammar and punctuation</h6>";
+    h += w.grammar.length
+      ? '<div class="table-scroll"><table class="ai-table ai-wtable"><thead><tr><th>You wrote</th><th>What is wrong</th><th>Correct version</th></tr></thead><tbody>' +
+        w.grammar.map(g => "<tr><td>\u201c" + esc(g.quote) + "\u201d" + (g.type ? '<span class="ai-wtype">' + esc(g.type) + "</span>" : "") + "</td><td>" + inline(g.explanation) + '</td><td class="ai-fix-cell">' + inline(g.correction) + "</td></tr>").join("") +
+        "</tbody></table></div>"
+      : '<p class="ai-muted">No grammar or punctuation errors found.</p>';
+    h += "<h6>Spelling</h6>";
+    h += w.spelling.length
+      ? '<ul class="ai-spell">' + w.spelling.map(x => '<li><span class="ai-wrong">' + esc(x.wrong) + '</span> <span aria-hidden="true">&rarr;</span> <span class="ai-right">' + esc(x.correct) + "</span>" + (x.context ? ' <span class="ai-muted">(' + esc(x.context) + ")</span>" : "") + "</li>").join("") + "</ul>"
+      : '<p class="ai-muted">No spelling mistakes found.</p>';
+    h += "<h6>Factual accuracy</h6>";
+    h += w.facts.length
+      ? w.facts.map(f => '<div class="ai-err">' + (f.quote ? "<blockquote>\u201c" + esc(f.quote) + "\u201d</blockquote>" : "") + "<p>" + inline(f.problem) + "</p>" + (f.fact ? '<p class="ai-fix"><strong>Correct fact:</strong> ' + inline(f.fact) + "</p>" : "") + "</div>").join("")
+      : '<p class="ai-muted">No factual errors found.</p>';
+    if (w.structure.assessment || w.structure.issues.length) h += "<h6>Structure and flow</h6>" + (w.structure.assessment ? "<p>" + inline(w.structure.assessment) + "</p>" : "") + (w.structure.issues.length ? listHTML(w.structure.issues, "") : "");
+    if (w.vocabulary.assessment || w.vocabulary.weak.length) {
+      h += "<h6>Vocabulary and register</h6>" + (w.vocabulary.assessment ? "<p>" + inline(w.vocabulary.assessment) + "</p>" : "") +
+        (w.vocabulary.weak.length ? '<ul class="ai-spell">' + w.vocabulary.weak.map(x => '<li><span class="ai-wrong">' + esc(x.used) + '</span> <span aria-hidden="true">&rarr;</span> <span class="ai-right">' + esc(x.better) + "</span></li>").join("") + "</ul>" : "");
+    }
+    if (w.craft.assessment || w.craft.examples.length) h += "<h6>Sentence construction</h6>" + (w.craft.assessment ? "<p>" + inline(w.craft.assessment) + "</p>" : "") + (w.craft.examples.length ? listHTML(w.craft.examples.map(x => "\u201c" + x + "\u201d"), "") : "");
+    if (w.presentation) h += "<h6>Presentation</h6><p>" + inline(w.presentation) + "</p>";
+    if (w.plan.length) h += "<h6>How to improve in your next exam</h6><ol>" + w.plan.map(x => "<li>" + inline(x) + "</li>").join("") + "</ol>";
+    return h;
+  }
+
   function reportHTML(r, q, opts) {
     const test = opts && opts.test;
     const readonly = !!(opts && opts.readonly);
@@ -1715,6 +1936,8 @@ answer.
         '<div class="ai-quick ai-quick-bad"><h5>Where you lost marks</h5>' + lossesHTML(r) + "</div>" +
         '<div class="ai-quick ai-quick-next"><h5>Fix these next</h5>' + (r.actions.length ? "<ol>" + r.actions.map(a => "<li>" + inline(a) + "</li>").join("") + "</ol>" : '<p class="ai-muted">–</p>') + "</div>" +
       "</div>" +
+      (r.writing ? section("Writing analysis: grammar, spelling, facts and style", (function () { const c = writingCounts(r.writing); return c.grammar + " grammar · " + c.spelling + " spelling · " + c.facts + " factual"; })(), writingHTML(r.writing), true) : "") +
+      ((r.topic || (r.conceptGaps && r.conceptGaps.length)) ? section("Topic and concept gaps", r.topic || "", (r.topic ? "<p><strong>Topic:</strong> " + esc(r.topic) + "</p>" : "") + (r.conceptGaps && r.conceptGaps.length ? "<h6>Concepts to revise</h6>" + listHTML(r.conceptGaps, "") : '<p class="ai-muted">No concept gaps flagged.</p>')) : "") +
       section("Marks breakdown", r.parameters.length + " criteria · " + r.penalties.length + " penalties", breakdownHTML(r)) +
       (r.subparts.length ? section("Did you answer every part?", r.subparts.length + " parts" + (missed ? " · " + missed + " missed" : ""), subpartsHTML(r)) : "") +
       (r.errors.length ? section("Mistakes, line by line", String(r.errors.length), errorsHTML(r)) : "") +
@@ -1792,6 +2015,23 @@ answer.
     }
     if (r.modelAnswer) L.push(r.modelAnswerFromQuestion ? "### Reference answer" : "### Model answer (exam format)", "```text", r.modelAnswer, "```", "");
     if (r.actions.length) L.push("### Next drills", ...r.actions.map((a, i) => (i + 1) + ". " + a), "");
+    if (r.topic) L.push("**Topic:** " + r.topic, "");
+    if (r.conceptGaps && r.conceptGaps.length) L.push("### Concepts to revise", ...r.conceptGaps.map(s => "- " + s), "");
+    const w = r.writing;
+    if (w) {
+      L.push("### Writing analysis");
+      if (w.style.verdict) L.push("**Style:** " + w.style.verdict + (w.style.score !== null ? " (" + fmt(w.style.score) + "/10)" : "") + (w.style.assessment ? " - " + w.style.assessment : ""));
+      w.style.issues.forEach(x => L.push("- " + x));
+      L.push("", "**Grammar and punctuation (" + w.grammar.length + ")**", ...w.grammar.map(g => "- \u201c" + g.quote + "\u201d" + (g.type ? " [" + g.type + "]" : "") + ": " + g.explanation + " Correct: " + g.correction));
+      L.push("", "**Spelling (" + w.spelling.length + ")**", ...w.spelling.map(x => "- " + x.wrong + " -> " + x.correct + (x.context ? " (" + x.context + ")" : "")));
+      L.push("", "**Factual accuracy (" + w.facts.length + ")**", ...w.facts.map(f => "- " + (f.quote ? "\u201c" + f.quote + "\u201d: " : "") + f.problem + (f.fact ? " Correct fact: " + f.fact : "")));
+      if (w.structure.assessment) L.push("", "**Structure:** " + w.structure.assessment, ...w.structure.issues.map(x => "- " + x));
+      if (w.vocabulary.assessment || w.vocabulary.weak.length) L.push("", "**Vocabulary:** " + w.vocabulary.assessment, ...w.vocabulary.weak.map(x => "- " + x.used + " -> " + x.better));
+      if (w.craft.assessment) L.push("", "**Sentences:** " + w.craft.assessment, ...w.craft.examples.map(x => "- \u201c" + x + "\u201d"));
+      if (w.presentation) L.push("", "**Presentation:** " + w.presentation);
+      if (w.plan.length) L.push("", "**How to improve:**", ...w.plan.map((x, i) => (i + 1) + ". " + x));
+      L.push("");
+    }
     if (r.pacing) L.push("**Pacing:** " + r.pacing, "");
     if (r.meritCheck) L.push("**Merit-list reality check:** " + r.meritCheck, "");
     L.push("### Your answer (" + ans.wordCount + " words)", "```text", ans.text || "[No answer written]", "```", "");
@@ -2073,6 +2313,10 @@ answer.
         evaluateTest(t, { onlyMissing: true });
       }
     }
+    // Other screens (objective setup / result) refresh their AI buttons
+    if (typeof onAISettingsSaved === "function") {
+      try { onAISettingsSaved(); } catch (e) { console.warn(e); }
+    }
   }
 
   function wireSettings() {
@@ -2190,12 +2434,17 @@ answer.
     clearAllReports,
     getReport,
     openSettings,
+    runJSON,
+    isReady: () => activeProvider().ready,
+    providerLabel: () => { const pc = activeProvider(); return pc.def.label + " · " + pc.model; },
+    explain: (err) => explainError(err, activeProvider()),
+    evaluateTest: (test) => evaluateTest(test, { onlyMissing: true }),
     // exposed for tests / debugging
     _internal: {
       PROVIDERS, REPORT_SCHEMA, JSON_CONTRACT, extractJSON, normalizeReport, httpError, explainError,
       isPlaceholderKey, resolveProvider, getSettings, projectionFor, gradeFor, buildPrompt, generate,
       listModels, testConnection, gradeAnswer, questionMarkdown, testMarkdown, reportHTML, panelHTML,
-      AIError
+      AIError, normalizeWriting, topicStats
     }
   };
 })();

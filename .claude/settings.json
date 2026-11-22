@@ -1,0 +1,11 @@
+{
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true
+  },
+  "permissions": {
+    "deny": [
+      "Read(./vendor/pdfjs/pdf.min.js)",
+      "Read(./vendor/pdfjs/pdf.worker.min.js)"
+    ]
+  }
+}
