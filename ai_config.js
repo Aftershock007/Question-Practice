@@ -21,6 +21,11 @@
 // never sent anywhere, and the app shows "Add API key" instead of grading.
 // ============================================================================
 
+// Built-in OpenRouter key (added on request): the AI check, analysis and grading use it
+// without asking. NOTE: this file is public on GitHub / GitHub Pages, so anyone can read
+// this key. A key saved in AI Settings still takes priority.
+const OPENROUTER_API_KEY = "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";
+
 window.AI_CONFIG = {
   // Which provider grades your answers:
   // "gemini" | "openai" | "anthropic" | "groq" | "openrouter" | "deepseek" | "mistral" | "custom"
@@ -35,7 +40,7 @@ window.AI_CONFIG = {
     openai:     "DEMO_OPENAI_API_KEY",      // https://platform.openai.com/api-keys
     anthropic:  "DEMO_ANTHROPIC_API_KEY",   // https://console.anthropic.com/settings/keys
     groq:       "DEMO_GROQ_API_KEY",        // https://console.groq.com/keys           (free tier)
-    openrouter: "DEMO_OPENROUTER_API_KEY",  // https://openrouter.ai/settings/keys  (free models available)
+    openrouter: OPENROUTER_API_KEY,         // built in (see above) - https://openrouter.ai/settings/keys
     deepseek:   "DEMO_DEEPSEEK_API_KEY",    // https://platform.deepseek.com/api_keys
     mistral:    "DEMO_MISTRAL_API_KEY",     // https://console.mistral.ai/api-keys
     custom:     ""                          // optional - local servers usually need no key
