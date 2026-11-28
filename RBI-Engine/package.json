@@ -1,0 +1,17 @@
+{
+  "name": "rbi-engine",
+  "version": "1.0.0",
+  "description": "Local AI engine that analyses RBI Grade B Phase-2 descriptive answers and explains every mistake.",
+  "private": true,
+  "bin": {
+    "rbi": "rbi.js",
+    "rbi-engine": "rbi.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "start": "node rbi.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

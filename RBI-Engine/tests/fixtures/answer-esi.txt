@@ -1,0 +1,21 @@
+# Practice answer for the parser tests
+Paper: ESI
+Topic: Inflation targeting
+Marks: 15
+Word limit: 600
+Time spent: 22 min 30 sec
+
+Question:
+Critically examine the flexible inflation targeting framework adopted by India in 2016. Has it delivered price stability?
+
+Answer:
+INTRODUCTION
+India have adopted flexible inflation targeting in 2016.
+
+Question: why did inflation rise in 2022?
+Paper: FM
+Same line repeated.
+Same line repeated.
+
+Model answer:
+India adopted FIT in 2016. The target is 4% CPI inflation within a band of 2% to 6%.

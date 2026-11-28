@@ -1,0 +1,67 @@
+# Sample answer to try the engine: node rbi.js analyse examples/sample-esi-15m.txt
+# The answer below has typical mistakes on purpose (grammar, spelling, register, structure).
+
+Paper: ESI
+Topic: Inflation targeting
+Marks: 15
+Word limit: 600
+Time spent: 24 min
+
+Question:
+Critically examine the flexible inflation targeting (FIT) framework adopted by India in 2016. Has it delivered price stability? Suggest measures to strengthen it.
+
+Answer:
+INTRODUCTION
+India have adopted flexible inflation targeting (FIT) in 2016 after the Urjit Patel committee recommended it in 2014. Under FIT the RBI has to keep CPI inflation at 4% with a band of 2% to 6%. The RBI Act, 1934 was amended for this and the Monetary Policy Committee was set up in 2016.
+
+FEATURES OF THE FRAMEWORK
+1. The target is notified by the goverment for five years at a time.
+2. A six member Monetary Policy Committee (MPC) decide the repo rate by majority vote, and the Governor has a casting vote.
+3. If average inflation stays above 6% or below 2% for three quarters in a row, the RBI must send a report to the government explaining the reasons and the remedial steps.
+4. Headline CPI is used as the target because it is what the common people feel.
+
+HAS IT DELIVERED PRICE STABILITY?
+In my opinion FIT has worked well. Inflation came down from near double digits in 2010-13 to much lower levels after 2016. Inflation expectations of households has also become more anchored. The framework gave the RBI a clear goal and made it more accountable to the parliament and the public. The MPC also publishes minutes, which improve transparency.
+
+However there are a lot of problems. Food has a very big weight in the CPI basket, so supply shocks like vegetable and pulse prices push inflation up and monetary policy cant control them. Fuel prices and global commodity shocks also matter. In 2022 inflation was above 6% for three quarters and the RBI had to send a report to the government for the first time. Transmission of policy rates to lending rates is also slow, although the External Benchmark Lending Rate from 2019 has helped. Some experts also say that the focus on inflation hurts growth.
+
+WAY FORWARD
+1. Improve supply side management of food through cold chains, buffer stocks and better warehousing.
+2. Better coordination between fiscal and monetary policy so that government borrowing do not crowd out private credit.
+3. Update the CPI basket and weights because consumption pattern has changed a lot.
+4. Keep the 4% target but communicate more clearly through forward guidance.
+5. Strengthen data on inflation expectations from firms and households.
+
+CONCLUSION
+Overall FIT has helped India to achieve more stable prices than before, but it need support from supply-side reforms and fiscal discipline to work fully.
+
+Model answer:
+INTRODUCTION
+India formally adopted flexible inflation targeting (FIT) in 2016, following the Urjit Patel Committee (2014) and the Monetary Policy Framework Agreement between the Government and the RBI (February 2015). The RBI Act, 1934 was amended in 2016 to give the framework a statutory basis.
+
+KEY FEATURES
+1. Target: 4% CPI (Combined) inflation with a tolerance band of 2% to 6%, set by the Government in consultation with the RBI every five years; it was retained in 2021 for 2021-26.
+2. Monetary Policy Committee: six members (three from the RBI including the Governor, who has a casting vote, and three external members); it decides the policy repo rate by majority.
+3. Accountability: failure means average inflation above 6% or below 2% for three consecutive quarters; the RBI must then report the reasons, remedial action and the expected time to return to target.
+4. Transparency: published minutes, the Monetary Policy Report every six months and forward guidance.
+
+ACHIEVEMENTS
+1. Disinflation: CPI inflation fell from close to double digits in 2010-13 to markedly lower and less volatile levels after 2016.
+2. Anchored expectations: household inflation expectations became more stable, improving policy credibility.
+3. Institutional credibility: a clear nominal anchor, rule-based accountability and a committee-based decision replaced discretion by one person.
+
+LIMITATIONS
+1. Supply shocks: food and beverages carry about 46% weight in the CPI basket, so vegetable, pulse and edible oil shocks drive headline inflation beyond the reach of interest rates.
+2. The 2022 breach: inflation stayed above 6% for three quarters (January-September 2022) after global commodity and supply-chain shocks, and the RBI sent its first report to the Government in November 2022.
+3. Transmission gaps: pass-through of the repo rate to lending rates is partial and slow, although the External Benchmark Lending Rate (October 2019) improved it for new retail and MSME loans.
+4. Growth trade-off concerns and fiscal dominance risks when government borrowing is high.
+
+WAY FORWARD
+1. Supply-side management: cold chains, buffer stocks of pulses and onions, and agricultural marketing reforms.
+2. Fiscal-monetary coordination: credible fiscal consolidation to reduce pressure on yields and inflation.
+3. Measurement: revise the CPI base year and weights to reflect current consumption patterns.
+4. Transmission: deepen external benchmark linkage and improve liquidity management.
+5. Communication: clearer forward guidance and surveys of firms' inflation expectations.
+
+CONCLUSION
+FIT has given India a credible nominal anchor and lower, more stable inflation. Its effectiveness now depends on supply-side reforms, fiscal discipline and better transmission, so that price stability supports sustainable growth in line with the goal of Viksit Bharat @2047.

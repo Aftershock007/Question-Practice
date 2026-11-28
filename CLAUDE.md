@@ -4,7 +4,7 @@ Offline, single-page study app for RBI Grade B: Phase-1/Phase-2 objective (MCQ, 
 Phase-2 subjective (descriptive typing + AI grading), a Calendar/TODO built from a 415-day study plan, and History.
 
 ## Hard constraints
-- Plain HTML/CSS/vanilla JS only. No frameworks, npm deps, CDNs, build step or backend.
+- Plain HTML/CSS/vanilla JS only. No frameworks, npm deps, CDNs, build step or backend. (This is for the web app; `RBI-Engine/` is a separate Node.js CLI, see the end of this file.)
 - Must work from `file://` (double-click `index.html`) and on GitHub Pages. So: **no `type="module"`, no `import`/`export`**.
 - All scripts are classic `<script>` tags sharing ONE global scope. Load order (index.html:736-742) matters:
   `auth.js` -> `prompt.js` -> `schedule_data.js` -> `app.js` -> `ai_config.js` -> `ai_eval.js` -> `objective_ai.js` -> `descriptive_ai.js` -> `calendar.js` -> `folders.js`.
@@ -81,3 +81,12 @@ Phase-2 subjective (descriptive typing + AI grading), a Calendar/TODO built from
 ## Code style
 - No code comments in app.js, ai_eval.js, calendar.js, folders.js, auth.js, ai_config.js, globals.d.ts, index.html, style.css and the test-docs scripts; keep them comment-free. `"use strict"` files. Build HTML with template strings + `escapeHTML`.
 - Persist through `loadJSON`/`saveJSON`. Keep README.md in sync when features change.
+
+## RBI-Engine (separate CLI in `RBI-Engine/`)
+Local command-line analyser for descriptive answers (`node rbi.js analyse <file>`). Node.js 18+, CommonJS, **no npm packages**, no code comments, no emojis in any output. Design and build plan: `RBI-Engine/ROADMAP.md`; user guide: `RBI-Engine/README.md`.
+- Tests: `cd RBI-Engine && node --test` (must all pass; AI is faked by `tests/helpers.js fakeGenerate` or a local mock server via `RBI_GEMINI_BASE`). Never make live AI calls in tests.
+- Pipeline (`src/pipeline.js`): local analysis (`text.js`, `checks.js`) -> marking checklist (`passes/scheme.js`, cached per question in `data/schemes/`) -> in parallel: gradings (`passes/score.js`, 1 full + 2 score-only, more when they disagree), language audit (`passes/language.js`), structure coach (`passes/coach.js`) -> `aggregate.js combineRuns` (median per parameter, majority votes, rubric re-enforced) -> summary (`passes/synthesis.js`, deterministic fallback) -> `report/build.js` + `markdown.js`/`html.js`/`terminal.js` (shared facts in `report/view.js`) -> `history.js`.
+- Every AI reply is cached under a hash of the exact request (`data/cache/`): same input -> same report with no calls. Prompts must stay deterministic (no current date or random text in a prompt).
+- Keep in step with the app: `src/rubric-text.js` == `prompt.js` `EVAL_PROMPT_TEMPLATE` (`tests/sync.test.js`); `src/rubric.js` tables mirror `ai_eval.js` (`PENALTY_TABLE`, `WORD_BANDS`, `EXAMINER_CHECKS`); `src/docx.js` mirrors `app.js` DOCX extraction (identical text on all `test-docs/*.docx`, except kept blank lines); `src/input.js` parses the app's `Practice_*.txt` exports (`buildQuestionText` / `buildCombinedText`) - regenerate `tests/fixtures/app-*.txt` with `tests/helpers.js appExports()` if those change.
+- Quotes from the AI are verified against the answer (`util.findSpan`, `quoteInScript`); British/Indian spellings are never errors (`util.isBritishVariant`).
+- Keys: env vars or `~/.rbi-engine/keys.json` (0600) only. `RBI-Engine/data/`, `reports/`, `answers/` are gitignored.

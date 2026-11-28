@@ -1,0 +1,21 @@
+# RBI-Engine answer file
+# 1. Fill in the details below (Paper: ESI, Finance, Management, English or Other).
+# 2. Paste the question under "Question:" and write your answer under "Answer:".
+# 3. The model answer is optional. When you add one, the marking checklist is built from it.
+# 4. Save the file and run:  node rbi.js analyse <this file>
+# Lines starting with # up here are notes and are ignored.
+
+Paper: ESI
+Topic:
+Marks: 15
+Word limit: 600
+Time spent:
+
+Question:
+
+
+Answer:
+
+
+Model answer:
+

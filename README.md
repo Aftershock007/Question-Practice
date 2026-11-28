@@ -8,3 +8,4 @@ An offline practice website for RBI Grade B: objective MCQ tests in a TCS iON-st
 - **Calendar & History:** a 415-day study plan with daily TODOs, and past tests sorted into subject and chapter folders.
 - **AI keys:** add your own key with the **API keys** button; it is kept only for the browser session and never saved in the repo.
 - **Messy question files:** convert them first with the prompt in [`AI_CONVERT_PROMPT.md`](AI_CONVERT_PROMPT.md).
+- **RBI-Engine (command line):** [`RBI-Engine/`](RBI-Engine/README.md) analyses answers in more depth on your computer: strict marks with every rule explained, every language mistake with its fix, structure and framing advice, a model answer, and progress over time. The same answer always gets the same report.
