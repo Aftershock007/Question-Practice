@@ -17,6 +17,7 @@
     "schedule_data.js",
     "app.js",
     "ai_config.js",
+    "answer-marks.js",
     "ai_eval.js",
     "objective_ai.js",
     "descriptive_ai.js",

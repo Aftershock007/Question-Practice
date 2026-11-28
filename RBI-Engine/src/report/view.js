@@ -1,6 +1,7 @@
 "use strict";
 
 const { fmt } = require("../util");
+const AM = require("../answer-marks");
 const { usageText } = require("../ai");
 
 const IDEAL_SHARES = {
@@ -97,8 +98,35 @@ function rulesInForce(r) {
   return out;
 }
 
-function lostItems(r) {
-  return (r.lost || []).map(l => l.what + ": " + fmt(l.lost) + " mark" + (l.lost === 1 ? "" : "s"));
+function built(r) {
+  const m = r.marked || {};
+  return { text: r.answer.text, marks: m.marks || [], counts: m.counts || {}, dropped: m.dropped || 0 };
+}
+
+const COUNT_WORDS = [["lang", "language mistake", "language mistakes"], ["frame", "sentence to frame better", "sentences to frame better"], ["fact", "wrong fact", "wrong facts"], ["add", "addition", "additions"], ["cut", "deduction", "deductions"]];
+
+function markCounts(r) {
+  const c = built(r).counts;
+  return COUNT_WORDS.filter(([k]) => c[k]).map(([k, one, many]) => c[k] + " " + (c[k] === 1 ? one : many)).join(", ");
+}
+
+function signedLoss(v) {
+  return v < 0 ? "+" + fmt(-v) : "-" + fmt(v);
+}
+
+function ledgerLines(r, n) {
+  const rows = (r.ledger ? r.ledger.rows : []).map((x, i) => Object.assign({ order: i }, x)).sort((a, b) => b.lost - a.lost || a.order - b.order);
+  return rows.slice(0, n || rows.length).map(x => x.title + " " + signedLoss(x.lost) + (x.reasons.length ? ": " + endSentence(x.reasons[0]) : ""));
+}
+
+function lossTitle(r) {
+  const t = r.ledger ? r.ledger.total : null;
+  if (t === null || t === undefined) return "Why you lost marks";
+  return "Why you lost " + fmt(t) + " mark" + (t === 1 ? "" : "s");
+}
+
+function notShown(r) {
+  return built(r).marks.filter(m => !m.inline && m.kind !== "cut").length;
 }
 
 function unitText(r, id) {
@@ -106,17 +134,8 @@ function unitText(r, id) {
   return u ? u.text : id;
 }
 
-function markedAnswer(r) {
-  const text = r.answer.text;
-  const issues = (r.language && r.language.issues) || [];
-  let out = "";
-  let pos = 0;
-  for (const i of issues) {
-    if (i.start < pos) continue;
-    out += text.slice(pos, i.start) + "[-" + i.wrong + "-]" + (i.fix ? "{+" + i.fix + "+}" : "");
-    pos = i.end;
-  }
-  return out + text.slice(pos);
+function markedAnswer(r, paint) {
+  return AM.markedPlain(built(r), paint ? { paint } : {});
 }
 
 function languageOverview(r) {
@@ -171,6 +190,7 @@ function technical(r, session) {
   (s.warnings || []).forEach(w => lines.push("Warning: " + w));
   (s.failed || []).forEach(f => lines.push("Failed: " + f.pass + " (" + f.kind + ": " + f.message + ")."));
   if ((s.skipped || []).length) lines.push("Skipped: " + s.skipped.join(", ") + ". Run the same command again to finish them.");
+  if (notShown(r)) lines.push(notShown(r) + " suggestion" + (notShown(r) === 1 ? " is" : "s are") + " listed under Your answer, marked but not shown inside the answer, because the exact place was not found.");
   if (r.language && r.language.dropped) lines.push(r.language.dropped + " language suggestion" + (r.language.dropped === 1 ? " was" : "s were") + " left out because they quoted words that are not in your answer, repeated another fix, or only changed British spelling.");
   if (r.coaching && r.coaching.fallback && !(r.marks && r.marks.notAttempted)) lines.push("The summary was written by the engine itself because the AI summary was not available.");
   lines.push("Report id: " + r.id + (session ? " · " + session.engine : ""));
@@ -179,6 +199,7 @@ function technical(r, session) {
 
 module.exports = {
   IDEAL_SHARES, COVERAGE_TEXT, CHECKLIST_TEXT, OUTLINE_TEXT,
-  scoreText, wordsText, timeText, verdict, arithmetic, paramRows, penaltyRows, checkRows, lostItems, unitText, rulesInForce, endSentence,
+  scoreText, wordsText, timeText, verdict, arithmetic, paramRows, penaltyRows, checkRows, unitText, rulesInForce, endSentence,
+  built, markCounts, signedLoss, ledgerLines, lossTitle, notShown,
   markedAnswer, languageOverview, styleLine, allocationLine, structureFacts, outlineRows, technical
 };

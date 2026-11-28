@@ -4,6 +4,8 @@
   const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta";
   const GEMINI_FALLBACK_MODEL = "gemini-flash-latest";
   const ANTHROPIC_API = "https://api.anthropic.com/v1";
+  const AM = AnswerMarks;
+  const { plainText, quoteInScript, isBritishVariant, onlyBritishChanges } = AM;
 
   const PROVIDERS = {
     gemini: {
@@ -142,13 +144,25 @@
   };
   const TRACK_PARAMS = { A: 5, B: 5, C: 5, D: 4 };
 
+  function snap4(n) { return Math.round((Number(n) || 0) * 4) / 4; }
+  function floor4(n) { return Math.floor((Number(n) || 0) * 4 + 1e-9) / 4; }
+
   function penaltyValue(code, max) {
     const t = PENALTY_TABLE[code];
     if (!t) return null;
+    if (code === "RP-7") return max === 30 || max === 40 ? t.m30 : Math.max(0.25, snap4(t.m30 * max / 30));
     if (max === 10) return t.m10;
     if (max === 15) return t.m15;
     if (max === 30 || max === 40) return t.m30;
-    return code === "RP-7" ? round2(t.m30 * max / 30) : round2(t.m10 * max / 10);
+    return Math.max(0.25, snap4(t.m10 * max / 10));
+  }
+
+  function ceilingFor(track, max) {
+    const m = Number(max);
+    if (track === "A") return m === 10 ? 6.25 : m === 15 ? 9.5 : floor4(m * 0.63);
+    if (track === "B") return m === 40 ? 28.5 : floor4(m * 0.7125);
+    if (track === "C" || track === "D") return m === 30 ? 22.5 : floor4(m * 0.75);
+    return m;
   }
 
   function wordBand(track, words, limit) {
@@ -551,6 +565,7 @@ Keys, in this exact order (section numbers refer to the format above):
   reports, committees or schemes (for pure management / OB questions: named
   theories and real cases) stated WITH their function; bare name-drops and
   wrong facts do not count. 0 for Tracks B, C and D.
+- "off_topic": true only if the script does not answer this question at all.
 - "caps_triggered": evidence-gate caps applied, e.g. "P3 capped at 20% - no
   data" ([] if none).
 - "pacing_audit": word count %, time used, WPM and any speed risk (1-3 sentences).
@@ -567,10 +582,15 @@ Keys, in this exact order (section numbers refer to the format above):
   (content, logic, structure and recurring language patterns).        [Section 3A]
 - "parameters": one item per parameter of the chosen track, each {"name",
   "max_marks", "cap_applied" ("" if none, else e.g. "45% - sub-part missed"),
-  "awarded", "justification": the evidence for the mark}. The max_marks must
-  add up to exactly {{MARKS}} (scale the track's allocation - RULE 5).  [Section 4A]
+  "awarded", "justification": the evidence for the mark, "lost": the specific
+  reasons the mark is below max_marks, one short line each, naming what was
+  missing or wrong and what would have earned the mark ([] when awarded equals
+  max_marks)}. The max_marks must add up to exactly {{MARKS}} (scale the
+  track's allocation - RULE 5).                                         [Section 4A]
 - "penalties": every Stage-2 deduction, each {"code": "RP-1" to "RP-8",
-  "trigger": the exact trigger found in the script, "deduction": a positive
+  "trigger": the exact trigger found in the script, "quote": the candidate's
+  exact words that triggered it, copied character for character ("" when the
+  trigger is not a passage, such as the word count), "deduction": a positive
   number such as 0.25 from the column for {{MARKS}} marks (RULE 5)}.  [Section 4B]
 - "stage1_raw_sum", "total_penalties", "final_score": numbers, where
   final_score = max(0, stage1_raw_sum - total_penalties), never above {{MARKS}}.
@@ -580,8 +600,21 @@ Keys, in this exact order (section numbers refer to the format above):
   English with no rubric codes (no "RP-3", no "P2"): what this mark means, the
   1-2 biggest reasons marks were lost, and the single most important fix.
 - "strengths": 2-4 specific things this answer genuinely did well ([] if none).
-- "rewrites": 3 items {"before": the candidate's exact sentence(s), "after":
-  the Grade-A upgrade, "why": what the upgrade fixes}.                 [Section 6]
+- "rewrites": every sentence an examiner would want framed better (vague,
+  generic, wordy, informal, badly linked or not answering the question
+  directly), weakest first, up to 8, each {"before": the candidate's exact
+  sentence(s), copied character for character, "after": the better-framed
+  version in exam style, keeping the candidate's meaning and correct facts,
+  "why": what was weak and what the new version fixes}. Leave out sentences
+  that are already good and pure grammar slips.                        [Section 6]
+- "additions": up to 5 specific additions that would lift the marks, each
+  placed where it belongs: {"after": the candidate's exact words that end the
+  sentence after which it should go ("" for the end of the answer), "add": the
+  exact sentence(s) to add, in exam style (a data point, an example, a
+  committee or report, or a causal chain such as "Repo hike -> costlier loans
+  -> lower demand"), "why": the key point, examiner check or parameter it
+  earns}. Use only facts you are sure of; mark recent figures you cannot
+  confirm with [VERIFY LATEST FIGURE].
 - "model_answer": the complete benchmark answer as plain text in exam-portal
   format, with \\n for line breaks, ending with [EXACT WORD COUNT: N words].
                                                                         [Section 7]
@@ -605,7 +638,8 @@ Keys, in this exact order (section numbers refer to the format above):
     candidate's exact words, "type": "grammar" | "tense" | "agreement" |
     "article" | "preposition" | "punctuation" | "sentence structure",
     "explanation": the rule that is broken, in one plain sentence,
-    "correction": the corrected wording}.
+    "correction": the corrected wording that replaces exactly the quoted
+    words}.
   - "spelling_errors": every misspelt word (up to 25), each {"wrong": as typed,
     "correct": correct spelling, "context": the 3-8 words around it}.
   - "factual_errors": every PROVABLY wrong fact, figure, date, name, committee
@@ -638,8 +672,8 @@ Keys, in this exact order (section numbers refer to the format above):
   verdict "Not yet" and a short improvement plan.
 
 Rules: all marks are JSON numbers (not strings) in 0.25 steps. Strings are plain
-text (no markdown tables, no ** markers). Quote the candidate exactly in "quote"
-and "before". Skip Section 9 (SCORE_LOG): the app logs the score itself. If the
+text (no markdown tables, no ** markers). Quote the candidate exactly in "quote",
+"before" and "after". Skip Section 9 (SCORE_LOG): the app logs the score itself. If the
 script is blank, off-topic or under 60 words, still return every key, with
 final_score 0, "rewrites" as [] if there is nothing to rewrite, and a full model
 answer. Never invent errors: an empty list is the right answer when the script
@@ -652,6 +686,7 @@ has no error of that kind, but do not skip real ones.
   const S = { type: "string" };
   const N = { type: "number" };
   const SL = { type: "array", items: S };
+  const B = { type: "boolean" };
   const CHECKLIST_SCHEMA = { type: "array", items: objSchema({ id: S, coverage: { type: "string", enum: ["full", "partial", "missing"] }, quote: S }) };
   const REPORT_SCHEMA = objSchema({
     track: { type: "string", enum: ["A", "B", "C", "D"] },
@@ -659,6 +694,7 @@ has no error of that kind, but do not skip real ones.
     subparts: { type: "array", items: objSchema({ part: S, coverage: { type: "string", enum: Object.keys(COVERAGE) }, comment: S }) },
     examiner_checks: { type: "array", items: objSchema({ id: S, result: { type: "string", enum: ["YES", "NO", "N/A"] }, evidence: S }) },
     anchor_count: N,
+    off_topic: B,
     caps_triggered: SL,
     pacing_audit: S,
     anchors_used: SL,
@@ -666,8 +702,8 @@ has no error of that kind, but do not skip real ones.
     missing_anchors: SL,
     verify_flags: SL,
     error_log: { type: "array", items: objSchema({ quote: S, code: S, problem: S, correction: S }) },
-    parameters: { type: "array", items: objSchema({ name: S, max_marks: N, cap_applied: S, awarded: N, justification: S }) },
-    penalties: { type: "array", items: objSchema({ code: S, trigger: S, deduction: N }) },
+    parameters: { type: "array", items: objSchema({ name: S, max_marks: N, cap_applied: S, awarded: N, justification: S, lost: SL }) },
+    penalties: { type: "array", items: objSchema({ code: S, trigger: S, quote: S, deduction: N }) },
     stage1_raw_sum: N,
     total_penalties: N,
     final_score: N,
@@ -676,6 +712,7 @@ has no error of that kind, but do not skip real ones.
     summary: S,
     strengths: SL,
     rewrites: { type: "array", items: objSchema({ before: S, after: S, why: S }) },
+    additions: { type: "array", items: objSchema({ after: S, add: S, why: S }) },
     model_answer: S,
     action_plan: SL,
     topic: S,
@@ -698,6 +735,7 @@ has no error of that kind, but do not skip real ones.
     checklist: CHECKLIST_SCHEMA,
     examiner_checks: { type: "array", items: objSchema({ id: S, result: { type: "string", enum: ["YES", "NO", "N/A"] }, evidence: S }) },
     anchor_count: N,
+    off_topic: B,
     parameters: { type: "array", items: objSchema({ name: S, max_marks: N, cap_applied: S, awarded: N, justification: S }) },
     penalties: { type: "array", items: objSchema({ code: S, trigger: S, deduction: N }) },
     stage1_raw_sum: N,
@@ -734,6 +772,7 @@ then return ONE JSON object with ONLY these keys and nothing else:
   reports, committees or schemes (for pure management / OB questions: named
   theories and real cases) stated WITH their function; bare name-drops and
   wrong facts do not count. 0 for Tracks B, C and D.
+- "off_topic": true only if the script does not answer this question at all.
 - "parameters": one item per parameter of the chosen track, each {"name",
   "max_marks", "cap_applied" ("" if none), "awarded", "justification": at most
   12 words}. The max_marks must add up to exactly {{MARKS}} (RULE 5).
@@ -1337,13 +1376,16 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       const pmax = num(p.max_marks != null ? p.max_marks : p.max);
       let awarded = num(p.awarded != null ? p.awarded : (p.marks_awarded != null ? p.marks_awarded : p.score));
       if (awarded !== null) awarded = Math.max(0, pmax !== null && pmax > 0 ? Math.min(awarded, pmax) : awarded);
-      return { name: criterionName(p.name || p.parameter || p.criterion), max: pmax, awarded, cap: str(p.cap_applied || p.cap, 300), why: str(p.justification || p.reason || p.comment, 1500) };
+      return { name: criterionName(p.name || p.parameter || p.criterion), max: pmax, awarded, cap: str(p.cap_applied || p.cap, 300), why: str(p.justification || p.reason || p.comment, 1500), lost: strList(p.lost, 6, 400) };
     }).filter(p => p.name || p.why);
+    const scriptPlain = plainText(answerText);
+    const verified = v => (v && quoteInScript(v, scriptPlain) ? v : "");
     const penalties = objList(o.penalties, 15).map(p => ({
       code: normCode(p.code),
       trigger: str(p.trigger || p.reason || p.detail, 600),
+      quote: verified(str(p.quote, 400)),
       deduction: Math.abs(num(p.deduction != null ? p.deduction : p.marks) || 0)
-    })).filter(p => p.deduction > 0);
+    })).filter(p => p.deduction > 0 || /^RP-[1-8]$/.test(p.code));
 
     const track = /^[ABCD]$/.test(String(o.track || "").trim().toUpperCase().charAt(0)) ? String(o.track).trim().toUpperCase().charAt(0) : "";
     const checks = objList(o.examiner_checks, 15).map(c => {
@@ -1353,6 +1395,9 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const anchorCount = num(o.anchor_count);
     const words = answerText ? wordsIn(answerText) : 0;
     const enforced = track ? enforceRubric(track, parameters, penalties, checks, anchorCount, q, words) : { rules: [], autoFail: false };
+    for (let i = penalties.length - 1; i >= 0; i--) if (!(penalties[i].deduction > 0)) penalties.splice(i, 1);
+    const offTopic = o.off_topic === true || /^(?:true|yes)$/i.test(String(o.off_topic == null ? "" : o.off_topic).trim());
+    if (offTopic) enforced.rules.push("Off-topic answer: the rubric gives 0 marks.");
 
     const scored = parameters.filter(p => p.awarded !== null);
     if (!scored.length) throw new AIError("format", "The reply had no marks breakdown.");
@@ -1360,12 +1405,19 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const penaltySum = penalties.length || Array.isArray(o.penalties) ? round2(sum(penalties.map(p => p.deduction))) : Math.abs(num(o.total_penalties) || 0);
     const modelFinal = num(o.final_score != null ? o.final_score : o.score);
     let score = rawSum !== null ? rawSum - penaltySum : modelFinal;
-    if (enforced.autoFail) score = 0;
+    if (enforced.autoFail || offTopic) score = 0;
     if (score === null || !Number.isFinite(score)) {
       throw new AIError("format", "The reply contained no usable score.");
     }
     const unclamped = round2(score);
     score = clamp(unclamped, 0, max);
+    const capped = unclamped !== score;
+    const ceiling = track ? ceilingFor(track, max) : max;
+    const ceilingApplied = score > ceiling + 1e-9;
+    if (ceilingApplied) {
+      score = ceiling;
+      enforced.rules.push("Capped at the rubric's hard ceiling of " + fmt(ceiling) + " / " + fmt(max) + " for this answer type (a real exam panel marks about 2-3 marks higher).");
+    }
     const percent = round1(score / max * 100);
     const g = gradeFor(percent);
 
@@ -1377,7 +1429,11 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       projection: projectionFor(score, max),
       rawSum: rawSum !== null ? rawSum : null,
       penaltySum,
-      capped: unclamped !== score,
+      capped,
+      ceiling,
+      ceilingApplied,
+      offTopic,
+      autoFail: enforced.autoFail,
       modelFinal,
       adjusted: modelFinal !== null && Math.abs(clamp(modelFinal, 0, max) - score) >= 0.125,
       rules: enforced.rules,
@@ -1403,13 +1459,16 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       nameDrops: strList(o.bare_name_drops, 10, 300).filter(c => !/^none\.?$/i.test(c)),
       missingAnchors: strList(o.missing_anchors, 8, 400),
       verifyFlags: strList(o.verify_flags, 8, 300).filter(c => !/^none\.?$/i.test(c)),
-      errors: objList(o.error_log, 12).map(x => ({ quote: str(x.quote, 600), code: normCode(x.code), problem: str(x.problem || x.issue, 600), correction: str(x.correction || x.fix, 800) })).filter(x => x.quote || x.problem),
+      errors: objList(o.error_log, 12).map(x => ({ quote: str(x.quote, 600), code: normCode(x.code), problem: str(x.problem || x.issue, 600), correction: str(x.correction || x.fix, 800) })).filter(x => x.quote && quoteInScript(x.quote, scriptPlain) && (x.problem || x.correction)),
       parameters,
       penalties,
       meritCheck: str(o.merit_check, 800),
       summary: str(o.summary, 1500),
       strengths: strList(o.strengths, 5, 400),
-      rewrites: objList(o.rewrites, 5).map(x => ({ before: str(x.before, 1200), after: str(x.after, 1600), why: str(x.why, 500) })).filter(x => x.before && x.after),
+      rewrites: objList(o.rewrites, 12).map(x => ({ before: str(x.before, 1200), after: str(x.after, 1600).replace(/\\n/g, "\n"), why: str(x.why, 500) }))
+        .filter(x => x.before && x.after && quoteInScript(x.before, scriptPlain) && plainText(x.before) !== plainText(x.after)).slice(0, 8),
+      additions: objList(o.additions, 8).map(x => ({ after: str(x.after, 600), add: str(x.add || x.text, 1200).replace(/\\n/g, "\n"), why: str(x.why, 500) }))
+        .filter(x => x.add && (!x.after || quoteInScript(x.after, scriptPlain))).slice(0, 5),
       modelAnswer: str(o.model_answer, 14000).replace(/\\n/g, "\n"),
       actions: strList(o.action_plan, 5, 500),
       topic: sanitizeTopic(o.topic) || sanitizeTopic(q && q.topic),
@@ -1421,31 +1480,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
   function sanitizeTopic(v) {
     const t = str(v, 120).replace(/^topic\s*[:\-]\s*/i, "").trim();
     return /^(?:not specified|none|n\/a|unknown)$/i.test(t) ? "" : t;
-  }
-
-  function isBritishVariant(wrong, correct) {
-    const a = String(wrong || "").toLowerCase().trim();
-    const b = String(correct || "").toLowerCase().trim();
-    if (!a || !b || a === b) return false;
-    const toUS = (x) => x
-      .replace(/isation(s)?$/, "ization$1").replace(/ise(s|d)?$/, "ize$1").replace(/ising$/, "izing").replace(/yse(s|d)?$/, "yze$1")
-      .replace(/our(s|ed|ing|able|ite|ites)?$/, "or$1").replace(/tre(s)?$/, "ter$1").replace(/amme(s)?$/, "am$1").replace(/ogue(s)?$/, "og$1")
-      .replace(/^(def|lic|off|pret)ence(s)?$/, "$1ense$2");
-    return toUS(a) === toUS(b) || toUS(a) === b || a === toUS(b);
-  }
-
-  function plainText(v) {
-    return String(v || "").toLowerCase().replace(/[‘’`]/g, "'").replace(/[^a-z0-9']+/g, " ").trim();
-  }
-  function quoteInScript(quote, scriptPlain) {
-    if (!scriptPlain) return true;
-    const qp = plainText(String(quote || "").replace(/\.{3}|…/g, " "));
-    if (!qp) return false;
-    if (scriptPlain.includes(qp)) return true;
-    const words = qp.split(" ").filter(x => x.length > 2);
-    if (!words.length) return false;
-    const have = new Set(scriptPlain.split(" "));
-    return words.filter(x => have.has(x)).length / words.length >= 0.8;
   }
 
   function normalizeWriting(w, answerText) {
@@ -1464,17 +1498,17 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const score = num(style.score);
     const out = {
       grammar: objList(w.grammar_errors, 25).map(x => ({ quote: str(x.quote, 500), type: str(x.type, 40).toLowerCase(), explanation: str(x.explanation || x.error || x.problem, 500), correction: str(x.correction || x.fix, 600) }))
-        .filter(x => x.quote && x.correction && quoteInScript(x.quote, script) && plainText(x.quote) !== plainText(x.correction)),
+        .filter(x => x.quote && x.correction && quoteInScript(x.quote, script) && plainText(x.quote) !== plainText(x.correction) && !onlyBritishChanges(x.quote, x.correction)),
       spelling: objList(w.spelling_errors, 30).map(x => ({ wrong: str(x.wrong || x.word, 80), correct: str(x.correct || x.correction, 80), context: str(x.context, 200) }))
         .filter(x => x.wrong && x.correct && x.wrong.toLowerCase() !== x.correct.toLowerCase() && (!script || plainText(x.wrong).split(" ").every(t => scriptWords.has(t))) && !isBritishVariant(x.wrong, x.correct)),
       facts: objList(w.factual_errors, 12).map(x => {
         const problem = str(x.problem || x.issue, 600);
         const fact = str(x.correct_fact || x.correction, 600);
         return { quote: str(x.quote, 500), problem, fact, verify: /\[?\s*VERIFY\b/i.test(problem + " " + fact) };
-      }).filter(x => (x.quote || x.problem) && (!x.quote || quoteInScript(x.quote, script))),
+      }).filter(x => x.quote && quoteInScript(x.quote, script) && (x.problem || x.fact)),
       style: { verdict, score: score === null ? null : clamp(round1(score), 0, 10), assessment: str(style.assessment, 1500), issues: strList(style.issues, 10, 300) },
       structure: { assessment: str(structure.assessment, 1200), issues: strList(structure.issues, 8, 300) },
-      vocabulary: { assessment: str(vocab.assessment, 800), weak: objList(vocab.weak_words, 12).map(x => ({ used: str(x.used, 120), better: str(x.better, 160) })).filter(x => x.used && x.better) },
+      vocabulary: { assessment: str(vocab.assessment, 800), weak: objList(vocab.weak_words, 12).map(x => ({ used: str(x.used, 120), better: str(x.better, 160) })).filter(x => x.used && x.better && quoteInScript(x.used, script) && !isBritishVariant(x.used, x.better) && !onlyBritishChanges(x.used, x.better)) },
       craft: { assessment: str(craft.assessment, 800), examples: strList(craft.examples, 6, 600).filter(x => quoteInScript(x, script)) },
       presentation: str(w.presentation, 800),
       plan: strList(w.improvement_plan, 10, 500)
@@ -1590,7 +1624,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     if (scheme && modelCov === null && substantial) return "the marking checklist was missing from the reply";
     if (modelCov !== null && lex !== null && Math.abs(modelCov - lex) >= 0.45) return "its checklist verdict does not match the text of your answer";
     if (r.score === 0 && substantial && (lex === null || lex >= 0.3)) return "a zero for a full, on-topic answer";
-    if (r.score >= 0.8 * max && lex !== null && lex < 0.2) return "a very high mark for an answer that covers little of the reference";
+    if (r.score >= 0.52 * max && lex !== null && lex < 0.2) return "a top-grade mark for an answer that covers little of the reference";
     return "";
   }
 
@@ -1603,14 +1637,16 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const covs = runs.map(checklistCoverage).filter(c => c !== null).sort((a, b) => a - b);
     const coverage = !covs.length ? null : covs.length % 2 ? covs[(covs.length - 1) / 2] : (covs[covs.length / 2 - 1] + covs[covs.length / 2]) / 2;
     let anchored = "";
+    const track = (runs.find(r => r.track) || {}).track || "";
+    const ceiling = track ? ceilingFor(track, max) : max;
     if (coverage !== null) {
-      const anchor = coverage * max;
+      const anchor = coverage * ceiling;
       const lo = Math.max(0, anchor - ANCHOR_BELOW * max);
-      const hi = Math.min(max, anchor + ANCHOR_ABOVE * max);
+      const hi = Math.min(ceiling, anchor + ANCHOR_ABOVE * max);
       if (final < lo) { anchored = "raised"; final = lo; }
       else if (final > hi) { anchored = "lowered"; final = hi; }
     }
-    final = clamp(Math.round(final * 4) / 4, 0, max);
+    final = clamp(Math.round(final * 4) / 4, 0, ceiling);
     const fulls = runs.filter(r => !r.scoreOnly);
     const base = (fulls.length ? fulls : runs).slice().sort((a, b) => Math.abs(a.score - combined) - Math.abs(b.score - combined))[0];
     const usage = runs.reduce((u, r) => addUsage(u, r.usage), null);
@@ -2395,15 +2431,70 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       '<div class="ai-sec-body">' + body + "</div></details>";
   }
 
-  function lossesHTML(r) {
-    if (r.penalties.length) {
-      const top = r.penalties.slice().sort((a, b) => b.deduction - a.deduction).slice(0, 4);
-      return "<ul>" + top.map(p => "<li><strong>−" + fmt(p.deduction) + " · " + esc(PENALTY_LABELS[p.code] || p.code) + "</strong>" +
-        (p.trigger ? ': <span class="ai-muted">' + inline(p.trigger) + "</span>" : "") + "</li>").join("") + "</ul>";
-    }
-    const weak = r.parameters.filter(p => p.max > 0 && p.awarded !== null).sort((a, b) => a.awarded / a.max - b.awarded / b.max).slice(0, 3);
-    if (weak.length) return "<ul>" + weak.map(p => "<li><strong>" + esc(p.name) + "</strong>: " + fmt(p.awarded) + " / " + fmt(p.max) + "</li>").join("") + "</ul>";
-    return '<p class="ai-muted">No specific deductions listed.</p>';
+  function markPrefix(q) {
+    return "ai-" + String((q && q.id) || "q").replace(/[^A-Za-z0-9_-]/g, "") + "-";
+  }
+
+  function siteLedger(r, q) {
+    const params = r.parameters || [];
+    const named = params.length === TRACK_PARAMS[r.track];
+    const missed = (r.checklist || []).map((k, i) => Object.assign({ order: i }, k)).filter(k => k.coverage !== "full")
+      .sort((a, b) => (b.weight || 1) - (a.weight || 1) || (a.coverage === "missing" ? 0 : 1) - (b.coverage === "missing" ? 0 : 1) || a.order - b.order);
+    const c = r.consistency;
+    const why = [];
+    if (c && c.runs && c.runs.length > 1) why.push("Your final mark is the " + c.method + " (" + c.runs.map(fmt).join(", ") + "), not this breakdown's own total.");
+    if (c && c.anchored) why.push("It was " + c.anchored + " to stay in line with how much of your reference answer the script covers.");
+    return AM.lossLedger({
+      max: r.max || maxMarksOf(q), score: r.score, rawSum: r.rawSum, penaltySum: r.penaltySum, ceiling: r.ceiling,
+      autoFail: !!r.autoFail, offTopic: !!r.offTopic, notAttempted: !!r.notAttempted, track: r.track,
+      params: params.map((p, i) => ({ id: named && !/^P\d\b/.test(p.name) ? "P" + (i + 1) : "", name: p.name, max: p.max, awarded: p.awarded, cap: p.cap, reasons: p.lost && p.lost.length ? p.lost : (p.why ? [p.why] : []) })),
+      penalties: (r.penalties || []).map(p => ({ code: p.code, label: PENALTY_LABELS[p.code] || p.code, trigger: p.trigger, quote: p.quote || "", deduction: p.deduction })),
+      missed: missed.map(k => ({ id: k.id, point: k.point, weight: k.weight, coverage: k.coverage })),
+      adjustment: why.length ? { title: "Consistency check", why: why.join(" ") } : null
+    });
+  }
+
+  function siteMarks(r, answerText, prefix, ledger) {
+    const w = r.writing || {};
+    const refs = (ledger && ledger.penaltyRefs) || [];
+    return AM.buildMarks(answerText, {
+      lang: (w.grammar || []).map(g => ({ wrong: g.quote, fix: g.correction, why: g.explanation, type: g.type }))
+        .concat((w.spelling || []).map(x => ({ wrong: x.wrong, fix: x.correct, context: x.context, why: "Spelling mistake.", type: "spelling" }))),
+      facts: (w.facts || []).filter(x => !x.verify && x.quote).map(x => ({ quote: x.quote, fix: x.fact, why: x.problem })),
+      frames: (r.rewrites || []).map(x => ({ quote: x.before, fix: x.after, why: x.why })),
+      adds: (r.additions || []).map(x => ({ after: x.after, fix: x.add, why: x.why })),
+      cuts: (r.penalties || []).map((p, i) => ({ quote: p.quote, deduction: p.deduction, label: (PENALTY_LABELS[p.code] || p.code) + " (" + p.code + ")", ref: refs[i] ? prefix + refs[i] : "" }))
+    });
+  }
+
+  const MARK_WORDS = [["lang", "language mistake", "language mistakes"], ["frame", "sentence to frame better", "sentences to frame better"], ["fact", "wrong fact", "wrong facts"], ["add", "addition", "additions"], ["cut", "deduction", "deductions"]];
+  const MARK_GROUPS = [["lang", "Language mistakes"], ["frame", "Sentences to frame better"], ["fact", "Wrong facts"], ["add", "Add these to lift the answer"]];
+
+  function markCountsText(built) {
+    const c = built.counts;
+    return MARK_WORDS.filter(([k]) => c[k]).map(([k, one, many]) => c[k] + " " + (c[k] === 1 ? one : many)).join(" · ");
+  }
+
+  function lossTitleText(ledger) {
+    return ledger.total > 0 ? "Why you lost " + fmt(ledger.total) + " mark" + (ledger.total === 1 ? "" : "s") : "Marks lost";
+  }
+
+  function markedSectionHTML(built, prefix) {
+    if (!built.marks.length) return '<p class="ai-muted">Nothing to mark: no language, framing or fact changes were found.</p><div class="mk-answer">' + esc(built.text) + "</div>";
+    const opts = { idPrefix: prefix, heading: "h6" };
+    return AM.legendHTML(built) + AM.markedHTML(built, opts) + AM.marksListHTML(built, opts);
+  }
+
+  function markLine(m) {
+    const where = m.kind === "add" ? " (" + (m.atEnd ? "at the end" : m.where ? "after \u201c" + m.where + "\u201d" : "wherever it fits best") + ")" : "";
+    const pair = m.kind === "add" ? "add \u201c" + m.fix + "\u201d" : "\u201c" + m.wrong + "\u201d -> " + (m.fix ? "\u201c" + m.fix + "\u201d" : "(delete)");
+    return "- " + m.id + where + ": " + pair + (m.kind === "lang" && m.type ? " [" + m.type + "]" : "") + (m.why ? ". " + m.why : "") + (m.inline ? "" : " (not shown in your answer)");
+  }
+
+  function lossesHTML(ledger) {
+    const rows = ledger.rows.map((x, i) => Object.assign({ order: i }, x)).filter(x => x.lost > 0).sort((a, b) => b.lost - a.lost || a.order - b.order).slice(0, 4);
+    if (!rows.length) return '<p class="ai-muted">No marks lost.</p>';
+    return "<ul>" + rows.map(x => "<li><strong>−" + fmt(x.lost) + " · " + esc(x.title) + "</strong>" + (x.reasons[0] ? ': <span class="ai-muted">' + inline(x.reasons[0]) + "</span>" : "") + "</li>").join("") + "</ul>";
   }
 
   function breakdownHTML(r) {
@@ -2436,8 +2527,14 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     } else {
       h += '<p class="ai-muted">No penalties.</p>';
     }
-    h += '<p class="ai-math">' + (r.rawSum !== null ? fmt(r.rawSum) + " − " + fmt(r.penaltySum) + " penalties = " : "Final score: ") +
-      "<strong>" + fmt(r.score) + " / " + fmt(r.max) + "</strong>" + (r.capped ? " (limited to the 0–" + fmt(r.max) + " range)" : "") + "</p>";
+    const net = r.rawSum !== null ? round2(r.rawSum - r.penaltySum) : null;
+    const note = r.offTopic ? "but the answer is off-topic, so the rubric gives 0"
+      : r.autoFail ? "but the rubric gives 0 under 60 words"
+      : r.ceilingApplied ? "capped at the rubric's hard ceiling"
+      : r.capped ? "limited to the 0–" + fmt(r.max) + " range"
+      : net !== null && Math.abs(net - r.score) >= 0.005 ? "and the consistency check set the final mark" : "";
+    h += '<p class="ai-math">' + (net !== null ? fmt(r.rawSum) + " − " + fmt(r.penaltySum) + " penalties = " + (note ? fmt(net) + ", " + note + ": " : "") : "Final score: ") +
+      "<strong>" + fmt(r.score) + " / " + fmt(r.max) + "</strong></p>";
     if (r.rules && r.rules.length) {
       h += '<h6>Rubric rules applied by the app</h6><ul class="ai-rules">' + r.rules.map(x => "<li>" + esc(x) + "</li>").join("") + "</ul>";
     }
@@ -2470,13 +2567,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     return h;
   }
 
-  function rewritesHTML(r) {
-    return r.rewrites.map(w =>
-      '<div class="ai-rewrite"><div class="ai-before"><span>Your version</span><p>' + inline(w.before) + "</p></div>" +
-      '<div class="ai-after"><span>Grade-A version</span><p>' + inline(w.after) + "</p></div>" +
-      (w.why ? '<p class="ai-why">' + inline(w.why) + "</p>" : "") + "</div>").join("");
-  }
-
   const VERDICT_CLS = { "RBI-ready": "good", "Nearly there": "ok", "Not yet": "weak" };
 
   function writingCounts(w) {
@@ -2488,26 +2578,14 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const chip = (n, label) => '<span class="ai-wchip' + (n ? " has" : "") + '"><strong>' + n + "</strong> " + label + "</span>";
     let h = '<div class="ai-wchips">' + chip(c.grammar, "grammar / punctuation") + chip(c.spelling, "spelling") + chip(c.facts, "factual") +
       (w.style.verdict ? '<span class="ai-cov ai-cov-' + (VERDICT_CLS[w.style.verdict] || "ok") + '">Style: ' + esc(w.style.verdict) + (w.style.score !== null ? " · " + fmt(w.style.score) + "/10" : "") + "</span>" : "") +
-      "</div>";
+      "</div>" +
+      '<p class="ai-muted">' + (c.grammar + c.spelling + c.facts
+        ? "Every grammar, spelling and fact correction is marked in Your answer, marked above, with its reason."
+        : "No grammar, spelling or factual errors were found.") + "</p>";
     if (w.style.assessment || w.style.issues.length) {
       h += "<h6>Is the writing style up to RBI standard?</h6>" + (w.style.assessment ? "<p>" + inline(w.style.assessment) + "</p>" : "") + (w.style.issues.length ? listHTML(w.style.issues, "") : "");
     }
-    h += "<h6>Grammar and punctuation</h6>";
-    h += w.grammar.length
-      ? '<div class="table-scroll"><table class="ai-table ai-wtable"><thead><tr><th>You wrote</th><th>What is wrong</th><th>Correct version</th></tr></thead><tbody>' +
-        w.grammar.map(g => "<tr><td>\u201c" + esc(g.quote) + "\u201d" + (g.type ? '<span class="ai-wtype">' + esc(g.type) + "</span>" : "") + "</td><td>" + inline(g.explanation) + '</td><td class="ai-fix-cell">' + inline(g.correction) + "</td></tr>").join("") +
-        "</tbody></table></div>"
-      : '<p class="ai-muted">No grammar or punctuation errors found.</p>';
-    h += "<h6>Spelling</h6>";
-    h += w.spelling.length
-      ? '<ul class="ai-spell">' + w.spelling.map(x => '<li><span class="ai-wrong">' + esc(x.wrong) + '</span> <span aria-hidden="true">&rarr;</span> <span class="ai-right">' + esc(x.correct) + "</span>" + (x.context ? ' <span class="ai-muted">(' + esc(x.context) + ")</span>" : "") + "</li>").join("") + "</ul>"
-      : '<p class="ai-muted">No spelling mistakes found.</p>';
-    h += "<h6>Factual accuracy</h6>";
-    const wrongFacts = w.facts.filter(f => !f.verify);
     const checkFacts = w.facts.filter(f => f.verify);
-    h += wrongFacts.length
-      ? wrongFacts.map(f => '<div class="ai-err">' + (f.quote ? "<blockquote>\u201c" + esc(f.quote) + "\u201d</blockquote>" : "") + "<p>" + inline(f.problem) + "</p>" + (f.fact ? '<p class="ai-fix"><strong>Correct fact:</strong> ' + inline(f.fact) + "</p>" : "") + "</div>").join("")
-      : '<p class="ai-muted">No factual errors found.</p>';
     if (checkFacts.length) {
       h += "<h6>Check these figures (could not be verified, not counted as errors)</h6>" +
         checkFacts.map(f => '<div class="ai-err">' + (f.quote ? "<blockquote>\u201c" + esc(f.quote) + "\u201d</blockquote>" : "") + "<p>" + inline(f.problem) + "</p>" + (f.fact ? '<p class="ai-fix"><strong>Latest known:</strong> ' + inline(f.fact) + "</p>" : "") + "</div>").join("");
@@ -2547,6 +2625,10 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     const mwords = r.modelAnswer ? wordsIn(r.modelAnswer.replace(/\[EXACT WORD COUNT[^\]]*\]/i, "")) : 0;
     const refCount = r.anchorsUsed.length + r.nameDrops.length + r.missingAnchors.length + r.verifyFlags.length;
     const missed = r.subparts.filter(s => s.coverage === "MISSED").length;
+    const prefix = markPrefix(q);
+    const ledger = siteLedger(r, q);
+    const answer = test ? answerOf(test, q).text : "";
+    const built = answer ? siteMarks(r, answer, prefix, ledger) : null;
 
     return '<div class="ai-report">' +
       '<div class="ai-report-head">' + ringHTML(r.score, r.max, g.cls) +
@@ -2560,16 +2642,17 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       consistencyHTML(r) +
       '<div class="ai-quick-grid">' +
         '<div class="ai-quick ai-quick-good"><h5>What worked</h5>' + listHTML(r.strengths, "Nothing stood out yet - focus on the fixes.") + "</div>" +
-        '<div class="ai-quick ai-quick-bad"><h5>Where you lost marks</h5>' + lossesHTML(r) + "</div>" +
+        '<div class="ai-quick ai-quick-bad"><h5>Where you lost marks</h5>' + lossesHTML(ledger) + "</div>" +
         '<div class="ai-quick ai-quick-next"><h5>Fix these next</h5>' + (r.actions.length ? "<ol>" + r.actions.map(a => "<li>" + inline(a) + "</li>").join("") + "</ol>" : '<p class="ai-muted">–</p>') + "</div>" +
       "</div>" +
+      (built ? section("Your answer, marked", markCountsText(built), markedSectionHTML(built, prefix), true) : "") +
+      section(lossTitleText(ledger), "", AM.ledgerHTML(ledger, { idPrefix: prefix, tableClass: "ai-table", heading: "h6" }), true) +
       (r.writing ? section("Writing analysis: grammar, spelling, facts and style", (function () { const c = writingCounts(r.writing); return c.grammar + " grammar · " + c.spelling + " spelling · " + c.facts + " factual"; })(), writingHTML(r.writing), true) : "") +
       ((r.topic || (r.conceptGaps && r.conceptGaps.length)) ? section("Topic and concept gaps", r.topic || "", (r.topic ? "<p><strong>Topic:</strong> " + esc(r.topic) + "</p>" : "") + (r.conceptGaps && r.conceptGaps.length ? "<h6>Concepts to revise</h6>" + listHTML(r.conceptGaps, "") : '<p class="ai-muted">No concept gaps flagged.</p>')) : "") +
       section("Marks breakdown", r.parameters.length + " criteria · " + r.penalties.length + " penalties", breakdownHTML(r)) +
       (r.subparts.length ? section("Did you answer every part?", r.subparts.length + " parts" + (missed ? " · " + missed + " missed" : ""), subpartsHTML(r)) : "") +
       (r.errors.length ? section("Mistakes, line by line", String(r.errors.length), errorsHTML(r)) : "") +
       (refCount ? section("Facts, data and references", r.anchorsUsed.length + " used · " + r.missingAnchors.length + " to add", anchorsHTML(r)) : "") +
-      (r.rewrites.length ? section("Your sentences, rewritten", String(r.rewrites.length), rewritesHTML(r)) : "") +
       (r.modelAnswer ? section("Model answer (exam format)", "~" + mwords + " words",
         '<div class="ai-model-answer">' + esc(r.modelAnswer) + "</div>" +
         '<div class="ai-sec-actions"><button type="button" class="btn-soft" data-ai-action="copy-model"' + ids + ">Copy model answer</button></div>") : "") +
@@ -2641,10 +2724,22 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     L.push("");
     if (r.projection) L.push("**Likely real RBI score:** " + fmt(r.projection[0]) + "–" + fmt(r.projection[1]) + " / " + fmt(r.max) + " (this grader is ~2–3 marks stricter)", "");
     if (r.summary) L.push("**In plain words:** " + r.summary, "");
+    const ledger = siteLedger(r, q);
+    const built = ans.text ? siteMarks(r, ans.text, "", ledger) : null;
+    if (built && built.marks.length) {
+      L.push("### Your answer, marked", "", "How to read the marks:", "", "```text", AM.plainLegend(built), "```", "", "```text", AM.markedPlain(built), "```", "");
+      MARK_GROUPS.forEach(([kind, title]) => {
+        const mine = built.marks.filter(m => m.kind === kind);
+        if (mine.length) L.push("**" + title + " (" + mine.length + ")**", ...mine.map(markLine), "");
+      });
+    }
+    if (!r.notAttempted) {
+      L.push("### " + lossTitleText(ledger), ...ledger.rows.map(x => "- " + x.title + (x.detail ? " (" + x.detail + ")" : "") + ": " + (x.lost < 0 ? "+" + fmt(-x.lost) : "-" + fmt(x.lost)) + ". " + x.reasons.join(" ") + (x.quote ? " Your words: \u201c" + x.quote + "\u201d." : "") + (x.fix ? " Next time: " + x.fix : "")), "", "**Total lost: " + fmt(ledger.total) + "** (" + fmt(ledger.max) + " - " + fmt(ledger.total) + " = " + fmt(ledger.score) + " / " + fmt(ledger.max) + ")", "");
+      if (ledger.missed.length) L.push("Key points from your reference answer you missed or only partly covered:", ...ledger.missed.map(k => "- " + k.id + " (weight " + k.weight + ", " + (k.coverage === "partial" ? "only partly covered" : "missing") + "): " + k.point), "");
+    }
     if (r.consistency) L.push("**How the mark was set:** " + r.consistency.method + " (" + r.consistency.runs.map(fmt).join(", ") + ")" + (r.consistency.coverage !== null ? "; reference checklist covered " + fmt(r.consistency.coverage) + "%" : "") + (r.consistency.anchored ? "; " + r.consistency.anchored + " to match the checklist" : "") + ".", "");
     if (r.checklist && r.checklist.length) L.push("### Key points from your reference answer", ...r.checklist.map(x => "- [" + x.coverage + "] (weight " + x.weight + ") " + x.point), "");
     if (r.strengths.length) L.push("### What worked", ...r.strengths.map(s => "- " + s), "");
-    if (r.penalties.length) L.push("### Where marks were lost", ...r.penalties.map(p => "- " + p.code + " " + (PENALTY_LABELS[p.code] || "") + " (−" + fmt(p.deduction) + "): " + p.trigger), "");
     if (r.checks && r.checks.length) L.push("### Examiner checks", ...r.checks.map(c => "- [" + (c.pass === true ? "Yes" : c.pass === false ? "No" : "N/A") + "] " + (c.label || "Check " + c.id) + (c.evidence ? " - " + c.evidence : "")), "");
     if (r.parameters.length) {
       L.push("### Marks breakdown", "| Criterion | Marks | Why |", "|---|---|---|");
@@ -2657,11 +2752,6 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
     if (r.anchorsUsed.length) L.push("### References used", ...r.anchorsUsed.map(s => "- " + s), "");
     if (r.nameDrops.length) L.push("### Mentioned without explaining", ...r.nameDrops.map(s => "- " + s), "");
     if (r.missingAnchors.length) L.push("### Add these to reach Grade A", ...r.missingAnchors.map(s => "- " + s), "");
-    if (r.rewrites.length) {
-      L.push("### Your sentences, rewritten");
-      r.rewrites.forEach((w, i) => L.push((i + 1) + ". **Your version:** " + w.before, "   **Grade-A version:** " + w.after, w.why ? "   *Why:* " + w.why : ""));
-      L.push("");
-    }
     if (r.modelAnswer) L.push(r.modelAnswerFromQuestion ? "### Reference answer" : "### Model answer (exam format)", "```text", r.modelAnswer, "```", "");
     if (r.actions.length) L.push("### Next drills", ...r.actions.map((a, i) => (i + 1) + ". " + a), "");
     if (r.topic) L.push("**Topic:** " + r.topic, "");
@@ -2671,10 +2761,8 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       L.push("### Writing analysis");
       if (w.style.verdict) L.push("**Style:** " + w.style.verdict + (w.style.score !== null ? " (" + fmt(w.style.score) + "/10)" : "") + (w.style.assessment ? " - " + w.style.assessment : ""));
       w.style.issues.forEach(x => L.push("- " + x));
-      L.push("", "**Grammar and punctuation (" + w.grammar.length + ")**", ...w.grammar.map(g => "- \u201c" + g.quote + "\u201d" + (g.type ? " [" + g.type + "]" : "") + ": " + g.explanation + " Correct: " + g.correction));
-      L.push("", "**Spelling (" + w.spelling.length + ")**", ...w.spelling.map(x => "- " + x.wrong + " -> " + x.correct + (x.context ? " (" + x.context + ")" : "")));
-      const wrongFacts = w.facts.filter(f => !f.verify);
-      L.push("", "**Factual accuracy (" + wrongFacts.length + ")**", ...wrongFacts.map(f => "- " + (f.quote ? "\u201c" + f.quote + "\u201d: " : "") + f.problem + (f.fact ? " Correct fact: " + f.fact : "")));
+      const wc = writingCounts(w);
+      L.push("", wc.grammar + wc.spelling + wc.facts ? "Grammar, spelling and fact corrections (" + wc.grammar + " grammar, " + wc.spelling + " spelling, " + wc.facts + " factual) are listed under Your answer, marked." : "No grammar, spelling or factual errors were found.");
       const checkFacts = w.facts.filter(f => f.verify);
       if (checkFacts.length) L.push("", "**Check these figures (" + checkFacts.length + ")**", ...checkFacts.map(f => "- " + (f.quote ? "\u201c" + f.quote + "\u201d: " : "") + f.problem + (f.fact ? " Latest known: " + f.fact : "")));
       if (w.structure.assessment) L.push("", "**Structure:** " + w.structure.assessment, ...w.structure.issues.map(x => "- " + x));
@@ -3150,7 +3238,7 @@ All marks are JSON numbers in 0.25 steps. No other keys, no prose, no markdown.
       isPlaceholderKey, resolveEngine, getSettings, projectionFor, gradeFor, buildPrompt, generate,
       listModels, testConnection, gradeAnswer, questionMarkdown, testMarkdown, reportHTML, panelHTML,
       AIError, normalizeWriting, topicStats, quoteInScript, isBritishVariant, combineRuns, checklistCoverage, schemeHash,
-      lexicalCoverage, crossCheckReason, usageFrom
+      lexicalCoverage, crossCheckReason, usageFrom, penaltyValue, ceilingFor, siteLedger, siteMarks
     }
   };
 })();

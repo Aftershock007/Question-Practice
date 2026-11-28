@@ -1,10 +1,10 @@
 "use strict";
 
-const { str, strList, objList, plainText, quoteInScript } = require("../util");
+const { str, strList, objList, plainText } = require("../util");
 const { countWords } = require("../text");
 const { S, SL, objSchema, listOf, oneOf, clip, questionBlock, metaLine } = require("./common");
 
-const VERSION = "c1";
+const VERSION = "c2";
 
 const SYSTEM = "You are an RBI Grade B Phase-2 answer-writing mentor. You show candidates exactly how to frame their answer better: structure, flow, introduction, conclusion and wording. Reply with exactly one valid JSON object and nothing else.";
 
@@ -16,8 +16,8 @@ const SCHEMA = objSchema({
   paragraphs: listOf({ id: S, assessment: S, fix: S }),
   headings: objSchema({ assessment: S, suggested: SL }),
   flow: SL,
-  value_additions: SL,
-  rewrites: listOf({ before: S, after: S, why: S }),
+  reframe: listOf({ unit: S, better: S, why: S }),
+  additions: listOf({ after: S, add: S, why: S }),
   model_answer: S
 });
 
@@ -40,10 +40,19 @@ function structureLines(q, local) {
   return out;
 }
 
+function scriptLines(local) {
+  const out = [];
+  local.paras.forEach((p, i) => {
+    out.push("[" + p.id + "]");
+    local.units.filter(u => u.para === i + 1).forEach(u => out.push("[" + u.id + "] " + u.text));
+  });
+  return out;
+}
+
 function build(q, local, scheme) {
   const limit = Number(q.wordLimit) || 0;
   const lines = [
-    "Coach this candidate on how to FRAME the answer better for this exact question. Work only from the question, the candidate's script and the reference answer. Be specific: name the paragraph, quote the sentence and show the better version.",
+    "Coach this candidate on how to FRAME the answer better for this exact question. Work only from the question, the candidate's script and the reference answer. Be specific: name the paragraph or sentence by its id and show the better version.",
     "",
     "FIXED OUTLINE FOR THIS QUESTION (the engine's ideal structure; the same for every attempt):",
     ...scheme.outline.map(o => o.id + " " + o.section + " (" + o.share + "%" + (o.words ? ", about " + o.words + " words" : "") + "): " + o.covers),
@@ -59,17 +68,17 @@ function build(q, local, scheme) {
     "- \"paragraphs\": for each paragraph that needs work: {\"id\": \"P3\", \"assessment\": what is weak, \"fix\": exactly what to change}.",
     "- \"headings\": {\"assessment\": 1-2 sentences on the headings (Track A) or on the paragraphing (Tracks B-D), \"suggested\": the headings the candidate should have typed, in order (Track A only; [] otherwise)}.",
     "- \"flow\": up to 5 problems with logical flow (repetition, ordering, missing links, abrupt jumps), one line each.",
-    "- \"value_additions\": up to 6 specific additions that would lift the answer (a data point, an example, a committee or report, an ASCII causal chain such as \"Repo hike -> higher lending rates -> lower demand -> lower inflation\"), one line each. Use only facts you are sure of; mark recent figures you cannot confirm with [VERIFY LATEST FIGURE].",
-    "- \"rewrites\": 3-5 of the candidate's weakest sentences: {\"before\": the exact sentence(s), copied character for character, \"after\": the Grade-A upgrade, \"why\": what the upgrade fixes}.",
+    "- \"reframe\": every sentence an examiner would want framed better (vague, generic, wordy, needlessly passive, informal, badly linked, or not answering the question directly), weakest first, up to 10: {\"unit\": its sentence id such as \"S5\", or a range such as \"S5-S6\" to merge sentences of one paragraph, \"better\": the rewritten sentence(s) in exam style, keeping the candidate's meaning and correct facts, \"why\": what was weak and what the new version fixes}. Leave out sentences that are already good and pure grammar slips (another pass corrects those).",
+    "- \"additions\": up to 6 specific additions that would lift the marks, each placed where it belongs: {\"after\": the sentence id after which it goes, or \"end\", \"add\": the exact sentence(s) to add, in exam style (a data point, an example, a committee or report, or an ASCII causal chain such as \"Repo hike -> higher lending rates -> lower demand -> lower inflation\"), \"why\": the key point, examiner check or parameter it earns}. Use only facts you are sure of; mark recent figures you cannot confirm with [VERIFY LATEST FIGURE].",
     "- \"model_answer\": a complete, exam-ready model answer for this question " + (limit ? "within the word limit (90-102% of " + limit + " words)" : "kept concise") + ", plain text in exam-portal format with \\n for line breaks: " + (MODEL_RULES[q.track] || MODEL_RULES.A) + ".",
-    "Rules: plain text only (no markdown, no ** markers). Write to the candidate as \"you\". Quote the candidate exactly in \"before\".",
+    "Rules: plain text only (no markdown, no ** markers). Write to the candidate as \"you\". Use the paragraph and sentence ids exactly as given.",
     "",
     metaLine(q, local),
     "",
     questionBlock(q),
     "",
-    "CANDIDATE'S SCRIPT (paragraph ids in brackets):",
-    ...local.paras.map(p => "[" + p.id + "] " + p.text),
+    "CANDIDATE'S SCRIPT (paragraph ids [P1], [P2] ... and sentence ids [S1], [S2] ...):",
+    ...scriptLines(local),
     "",
     q.modelAnswer ? "REFERENCE ANSWER:\n" + clip(q.modelAnswer, "reference answer") : "No reference answer was given."
   ];
@@ -85,9 +94,44 @@ function paraId(v) {
   return m ? "P" + Number(m[1]) : "";
 }
 
+function unitRange(units, v) {
+  const m = String(v || "").toUpperCase().match(/^\s*S?\s*(\d+)\s*(?:(?:-|–|—|TO)\s*S?\s*(\d+))?\s*$/);
+  if (!m) return null;
+  const a = units.findIndex(u => u.id === "S" + Number(m[1]));
+  const b = m[2] ? units.findIndex(u => u.id === "S" + Number(m[2])) : a;
+  if (a < 0 || b < a || b - a > 2 || units[a].para !== units[b].para) return null;
+  return { from: units[a], to: units[b] };
+}
+
+function reframes(list, q, units) {
+  const out = [];
+  for (const x of list) {
+    const r = unitRange(units, x.unit);
+    if (!r) continue;
+    const before = q.answer.slice(r.from.start, r.to.end);
+    const better = unescapeBreaks(str(x.better || x.after, 1600));
+    if (!better || plainText(before) === plainText(better)) continue;
+    if (out.some(o => o.start < r.to.end && r.from.start < o.end)) continue;
+    out.push({ unit: r.from.id === r.to.id ? r.from.id : r.from.id + "-" + r.to.id, start: r.from.start, end: r.to.end, before, better, why: str(x.why, 500) });
+  }
+  return out.slice(0, 10);
+}
+
+function additions(list, q, units) {
+  const out = [];
+  for (const x of list) {
+    const add = unescapeBreaks(str(x.add || x.text, 1200));
+    if (!add) continue;
+    const after = String(x.after || "").trim();
+    if (!after || /^end$/i.test(after)) { out.push({ after: "end", at: q.answer.length, add, why: str(x.why, 500) }); continue; }
+    const r = unitRange(units, after);
+    if (r) out.push({ after: r.to.id, at: r.to.end, add, why: str(x.why, 500) });
+  }
+  return out.slice(0, 6);
+}
+
 function normalize(obj, q, local, scheme) {
   const o = obj && typeof obj === "object" ? obj : {};
-  const script = plainText(q.answer);
   const got = objList(o.outline_match, 12);
   const outlineMatch = scheme.outline.map((s, i) => {
     let hit = got.find(x => String(x.id || "").trim().toUpperCase() === s.id);
@@ -115,11 +159,8 @@ function normalize(obj, q, local, scheme) {
       .filter(x => paraIds.has(x.id) && (x.assessment || x.fix)),
     headings: { assessment: str(side(o.headings).assessment, 600), suggested: strList(side(o.headings).suggested, 10, 160) },
     flow: strList(o.flow, 5, 300),
-    valueAdds: strList(o.value_additions, 6, 400),
-    rewrites: objList(o.rewrites, 8)
-      .map(x => ({ before: str(x.before, 1200), after: unescapeBreaks(str(x.after, 1600)), why: str(x.why, 500) }))
-      .filter(x => x.before && x.after && quoteInScript(x.before, script) && plainText(x.before) !== plainText(x.after))
-      .slice(0, 5),
+    reframe: reframes(objList(o.reframe, 16), q, local.units),
+    additions: additions(objList(o.additions, 10), q, local.units),
     modelAnswer: { text: model, words: countWords(model) }
   };
 }

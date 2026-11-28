@@ -2,6 +2,7 @@
 
 const path = require("path");
 const { marksLost } = require("../passes/synthesis");
+const { ledgerFor, markedFor } = require("./marked");
 const { defaultOutline, withWords } = require("../passes/scheme");
 const { PENALTY_LABELS } = require("../rubric");
 const { round1, round2, sha256, slug } = require("../util");
@@ -23,6 +24,7 @@ function buildReport(result) {
   const status = Object.assign({}, result.status);
   delete status.debug;
   const st = local.stats;
+  const ledger = ledgerFor(q, marks);
   return {
     id: q.qhash + "-" + q.ahash,
     index: q.index,
@@ -45,6 +47,8 @@ function buildReport(result) {
     },
     marks: marks || null,
     lost: marksLost(marks),
+    ledger,
+    marked: markedFor(q, language, marks, coach, ledger, "q" + q.index),
     language: language || null,
     mechanical: mechanical || [],
     structure: st,

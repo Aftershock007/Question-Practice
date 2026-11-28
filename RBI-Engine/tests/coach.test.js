@@ -34,11 +34,19 @@ function reply(over = {}) {
     paragraphs: [{ id: "P2", assessment: "No mechanism.", fix: "Explain transmission." }, { id: "P7", assessment: "x", fix: "y" }],
     headings: { assessment: "Generic headings.", suggested: ["INTRODUCTION", "ACHIEVEMENTS", "LIMITATIONS", "WAY FORWARD"] },
     flow: ["Jumps from MPC to food prices."],
-    value_additions: ["Add the 2022 breach and the report to the Government."],
-    rewrites: [
-      { before: "Food prices matter a lot.", after: "Food carries about 46% weight in the CPI basket.", why: "Specific." },
-      { before: "Inflation was always zero.", after: "x", why: "y" },
-      { before: "FIT worked.", after: "FIT worked.", why: "same" }
+    reframe: [
+      { unit: "S5", better: "Food carries about 46% weight in the CPI basket.", why: "Specific." },
+      { unit: "S9", better: "x", why: "no such sentence" },
+      { unit: "S7", better: "FIT worked.", why: "no change" },
+      { unit: "S4-S5", better: "Merged.", why: "overlaps S5" },
+      { unit: "S2-S4", better: "Across paragraphs.", why: "x" },
+      { unit: "s2", better: "India adopted flexible inflation targeting in 2016.", why: "Spell out FIT." }
+    ],
+    additions: [
+      { after: "S5", add: "The 2022 breach led to a report to the Government.", why: "Adds a recent development." },
+      { after: "end", add: "Cite the Monetary Policy Report.", why: "Adds a source." },
+      { after: "S99", add: "x", why: "no such sentence" },
+      { after: "S2", add: "", why: "empty" }
     ],
     model_answer: "INTRODUCTION\\nIndia adopted FIT in 2016.\\nWAY FORWARD\\nStrengthen transmission.\n[EXACT WORD COUNT: 999 words]"
   }, over);
@@ -49,16 +57,34 @@ test("the coach prompt carries the fixed outline with word budgets, paragraph id
   assert.match(p.system, /answer-writing mentor/);
   assert.ok(p.prompt.includes("O1 INTRODUCTION (15%, about 90 words)"));
   assert.ok(p.prompt.includes("O2 MERITS AND LIMITS (70%, about 420 words)"));
-  assert.ok(p.prompt.includes("[P2] BODY\nThe MPC sets rates. Food prices matter a lot."));
+  assert.ok(p.prompt.includes("[P2]\n[S3] BODY\n[S4] The MPC sets rates.\n[S5] Food prices matter a lot."));
+  assert.match(p.prompt, /"reframe": every sentence/);
+  assert.match(p.prompt, /"additions": up to 6/);
+  assert.ok(p.schema.properties.reframe && p.schema.properties.additions);
+  assert.equal(p.schema.properties.rewrites, undefined);
+  assert.equal(coach.VERSION, "c2");
   assert.match(p.prompt, /REFERENCE ANSWER:\nReference text\./);
   assert.match(p.prompt, /ALL CAPS headings/);
   assert.match(p.prompt, /within the word limit \(90-102% of 600 words\)/);
   assert.equal(p.schema.type, "object");
 });
 
-test("rewrites must quote the answer and actually change it", () => {
+test("reframes name real sentences in one paragraph, take their exact text, change it and do not overlap", () => {
   const c = coach.normalize(reply(), q(), local(), SCHEME);
-  assert.deepEqual(c.rewrites.map(r => r.before), ["Food prices matter a lot."]);
+  const qq = q();
+  assert.deepEqual(c.reframe.map(r => [r.unit, r.before, r.why]), [["S5", "Food prices matter a lot.", "Specific."], ["S2", "India adopted FIT in 2016.", "Spell out FIT."]]);
+  assert.equal(qq.answer.slice(c.reframe[0].start, c.reframe[0].end), "Food prices matter a lot.");
+  const merged = coach.normalize(reply({ reframe: [{ unit: "S4-S5", better: "Merged.", why: "Choppy." }] }), q(), local(), SCHEME);
+  assert.deepEqual(merged.reframe.map(r => [r.unit, r.before]), [["S4-S5", "The MPC sets rates. Food prices matter a lot."]]);
+});
+
+test("additions go after a real sentence or at the end of the answer", () => {
+  const c = coach.normalize(reply(), q(), local(), SCHEME);
+  const qq = q();
+  assert.deepEqual(c.additions.map(a => [a.after, a.at, a.add]), [
+    ["S5", qq.answer.indexOf("a lot.") + 6, "The 2022 breach led to a report to the Government."],
+    ["end", qq.answer.length, "Cite the Monetary Policy Report."]
+  ]);
 });
 
 test("outline verdicts follow the fixed outline; unknown ids are dropped and unreported sections are marked not assessed", () => {
@@ -83,5 +109,6 @@ test("lists are kept and trimmed", () => {
   assert.equal(c.framing, "You answered only half of the question.");
   assert.deepEqual(c.headings.suggested, ["INTRODUCTION", "ACHIEVEMENTS", "LIMITATIONS", "WAY FORWARD"]);
   assert.equal(c.flow.length, 1);
-  assert.equal(c.valueAdds.length, 1);
+  assert.equal(c.valueAdds, undefined);
+  assert.equal(c.rewrites, undefined);
 });

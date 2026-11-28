@@ -6,6 +6,7 @@ const { renderMarkdown } = require("./markdown");
 const { fmt } = require("../util");
 
 const GRADE_COLOR = { A: "green", B: "green", C: "yellow", D: "red", F: "red" };
+const MARK_STYLE = { "lang-old": "red", "lang-new": "green", "frame-old": "blue", "frame-new": "cyan", "fact-old": "magenta", "fact-new": "bold+magenta", add: "yellow", cut: "bold+red", ref: "dim" };
 
 function renderSummary(session, opts = {}) {
   const on = !!opts.color;
@@ -39,7 +40,9 @@ function renderSummary(session, opts = {}) {
     }
     row("Words", v.words);
     row("Time", v.time);
-    if (r.lost.length) row("Marks lost", r.lost.slice(0, 3).map(l => l.what + " -" + fmt(l.lost)).join("\n"));
+    const lost = V.ledgerLines(r, 3);
+    if (lost.length) row("Marks lost", lost.join("\n"));
+    if (V.markCounts(r)) row("Marked", V.markCounts(r) + " (shown in colour in the HTML report)");
     if (r.language) row("Language", r.language.issues.length + " language mistake" + (r.language.issues.length === 1 ? "" : "s") + " (" + fmt(r.language.per100) + " per 100 words)" + (V.styleLine(r) ? "; " + V.styleLine(r).replace(/\.$/, "") : ""));
     if (r.mechanical.length) row("Engine checks", r.mechanical.length + " found: " + [...new Set(r.mechanical.map(m => m.kind))].slice(0, 5).join(", "));
     const prio = (r.coaching && r.coaching.priorities) || [];
@@ -63,9 +66,11 @@ function renderSummary(session, opts = {}) {
 }
 
 function renderFull(session, opts = {}) {
-  return renderMarkdown(session).split("\n").map(line => {
+  const on = !!opts.color;
+  const md = renderMarkdown(session, on ? { paint: (role, text) => paint(MARK_STYLE[role] || "", text, true) } : {});
+  return md.split("\n").map(line => {
     const m = line.match(/^(#{1,4}) (.*)$/);
-    return m ? paint("bold" + (m[1].length <= 2 ? "+cyan" : ""), m[2], !!opts.color) : line;
+    return m ? paint("bold" + (m[1].length <= 2 ? "+cyan" : ""), m[2], on) : line;
   }).join("\n");
 }
 

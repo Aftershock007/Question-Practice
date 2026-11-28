@@ -31,10 +31,11 @@ async function result(q, gen) {
 test("the Markdown report has every section in order", async () => {
   const report = buildReport(await result(question()));
   const md = renderMarkdown(buildSession([report], { file: "/x/sample-esi.txt", createdAt: "2026-11-28T10:00:00.000Z" }));
-  const order = ["### Verdict", "### Summary and priorities", "### Reading the question", "### Marks breakdown", "### Content", "### Language", "### Structure and framing", "### Model answer", "### Improvement plan", "### Technical details"];
+  const order = ["### Verdict", "### Summary and priorities", "### Your answer, marked", "### Why you lost", "### Reading the question", "### Marks breakdown", "### Content", "### Language", "### Structure and framing", "### Model answer", "### Improvement plan", "### Technical details"];
+  const lines = md.split("\n");
   let pos = -1;
   for (const s of order) {
-    const at = md.indexOf(s);
+    const at = lines.findIndex(l => l === s || l.startsWith(s + " "));
     assert.ok(at > pos, s + " missing or out of order");
     pos = at;
   }
@@ -50,16 +51,38 @@ test("the parameter table total equals the raw sum and the arithmetic line adds 
 
 test("table cells escape pipes and line breaks", async () => {
   const report = buildReport(await result(question()));
-  report.language.issues[0].wrong = "a | b\nc";
+  report.marked.marks.find(m => m.kind === "lang").wrong = "a | b\nc";
   const md = renderMarkdown(buildSession([report], {}));
   assert.ok(md.includes("a \\| b c"));
 });
 
-test("the corrected answer marks deletions and insertions in plain text", async () => {
+test("the marked answer in Markdown uses the text notation with ids and a legend", async () => {
   const report = buildReport(await result(question()));
   const md = renderMarkdown(buildSession([report], {}));
   const i = report.language.issues[0];
-  assert.ok(md.includes("[-" + i.wrong + "-]{+" + i.fix + "+}"));
+  assert.ok(md.includes("[-" + i.wrong + "-]{+" + i.fix + "+}(L1)"));
+  assert.ok(md.includes("[[B1: "));
+  assert.ok(md.includes("{{A1 Add: "));
+  assert.ok(md.includes("[-wrong-]{+right+}(L1)   language mistake, then the correction"));
+  assert.ok(md.includes("| L1 | " + i.wrong + " | " + i.fix + " |"));
+});
+
+test("the report carries placed marks and a ledger that adds up to the marks lost", async () => {
+  const gen = h.fakeGenerate({ penalties: quote => [{ code: "RP-2", trigger: "Generic opening", quote }] });
+  const report = buildReport(await result(question(), gen));
+  const kinds = new Set(report.marked.marks.map(m => m.kind));
+  for (const k of ["lang", "frame", "add", "cut"]) assert.ok(kinds.has(k), k);
+  assert.equal(report.marked.counts.lang, report.language.issues.length);
+  assert.equal(report.marked.marks.find(m => m.kind === "frame").fix, "An upgraded sentence.");
+  assert.equal(report.ledger.total, Math.round((15 - report.marks.score) * 100) / 100);
+  const pen = report.ledger.rows.find(r => r.kind === "penalty");
+  assert.equal(pen.title, "Platitude / fluff (RP-2)");
+  assert.equal(report.marked.marks.find(m => m.kind === "cut").ref, "q1-" + pen.ref);
+  const params = report.ledger.rows.filter(r => r.kind === "param");
+  assert.ok(params.length > 0 && params.every(r => r.reasons.some(x => /^Reason P\d lost marks\.$/.test(x))));
+  const md = renderMarkdown(buildSession([report], {}));
+  assert.ok(md.includes("| What cost you marks | Lost | Why | How to earn them next time |"));
+  assert.ok(md.includes("**Total lost: " + report.ledger.total + "** (15 - " + report.ledger.total + " = " + report.marks.score + " / 15)"));
 });
 
 test("a not-attempted question renders without AI sections failing", async () => {
@@ -131,4 +154,26 @@ test("a priority's reason ends with a full stop before the advice", async () => 
   const report = buildReport(await result(question()));
   report.coaching.priorities = [{ title: "Add sources", why: "Cost you marks", how: "Cite two reports" }];
   assert.ok(renderMarkdown(buildSession([report], {})).includes("**Add sources** - Cost you marks. How: Cite two reports"));
+});
+
+test("ledger rows explain caps with the failed check's evidence and list missed key points by weight", () => {
+  const { ledgerFor } = require("../src/report/marked");
+  const marks = {
+    score: 5, rawSum: 5.5, penaltySum: 0.5, ceiling: 9.5, autoFail: false, offTopic: false,
+    params: [
+      { id: "P1", name: "Directive compliance & scope", max: 3, awarded: 1.25, cap: "45% - check failed: every sub-part answered", lost: [], why: "Only part one." },
+      { id: "P2", name: "Conceptual clarity & mechanisms", max: 4, awarded: 2, cap: "", lost: ["No transmission chain."], why: "x" },
+      { id: "P3", name: "Evidence: reports, committees, data", max: 4, awarded: 1, cap: "", lost: [], why: "" },
+      { id: "P4", name: "Structure & presentation", max: 2.5, awarded: 1, cap: "", lost: [], why: "" },
+      { id: "P5", name: "Register & word discipline", max: 1.5, awarded: 0.25, cap: "", lost: [], why: "" }
+    ],
+    checks: [{ id: 1, label: "Every sub-part answered", pass: false, evidence: "Measures are missing." }, { id: 4, label: "Domain terms and cause-effect mechanics", pass: true, evidence: "ok" }],
+    penalties: [{ code: "RP-2", label: "Platitude / fluff", trigger: "slogan", quote: "", deduction: 0.25 }, { code: "RP-8", label: "Language / register", trigger: "slang", quote: "", deduction: 0.25 }],
+    checklist: [{ id: "K1", point: "a", weight: 1, coverage: "partial" }, { id: "K2", point: "b", weight: 3, coverage: "missing" }, { id: "K3", point: "c", weight: 2, coverage: "full" }]
+  };
+  const l = ledgerFor({ marks: 15, track: "A" }, marks);
+  assert.deepEqual(l.rows[0].reasons, ["Capped at 45%: check failed: every sub-part answered.", "Every sub-part answered: Measures are missing.", "Only part one."]);
+  assert.deepEqual(l.rows[1].reasons, ["No transmission chain."]);
+  assert.deepEqual(l.missed.map(k => k.id), ["K2", "K1"]);
+  assert.equal(l.total, 10);
 });

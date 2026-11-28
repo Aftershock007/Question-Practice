@@ -182,8 +182,8 @@ function fakeReply(pass, req, options, n) {
       examiner_checks: checkIds.map(id => ({ id, result: "YES", evidence: "evidence" })),
       anchor_count: 3,
       off_topic: false,
-      parameters: maxima.map((m, i) => ({ id: m.id, cap_applied: "", awarded: awards[i], justification: "Justification " + m.id })),
-      penalties: [],
+      parameters: maxima.map((m, i) => ({ id: m.id, cap_applied: "", awarded: awards[i], justification: "Justification " + m.id, lost: awards[i] < m.max ? ["Reason " + m.id + " lost marks."] : [] })),
+      penalties: options.penalties ? options.penalties(quote) : [],
       stage1_raw_sum: sum,
       total_penalties: 0,
       final_score: sum
@@ -209,8 +209,10 @@ function fakeReply(pass, req, options, n) {
   }
   if (pass === "coach") {
     const outline = [...p.matchAll(/^(O\d+) /gm)].map(m => m[1]);
-    const paras = [...p.matchAll(/^\[(P\d+)\] (.*)$/gm)].map(m => ({ id: m[1], text: m[2] }));
-    const before = paras.length ? paras[paras.length - 1].text.split(/(?<=\.)\s/)[0] : "";
+    const paras = [...p.matchAll(/^\[(P\d+)\]$/gm)].map(m => ({ id: m[1] }));
+    const units = [...p.matchAll(/^\[(S\d+)\] (.*)$/gm)].map(m => ({ id: m[1], text: m[2] }));
+    const sentence = units.find(u => u.text.split(/\s+/).length >= 4 && /[a-z]/.test(u.text));
+    const last = units.length ? units[units.length - 1] : null;
     return {
       framing: "You framed half of the question.",
       outline_match: outline.map(id => ({ id, status: id === "O3" ? "missing" : "covered", comment: "Comment " + id })),
@@ -218,8 +220,9 @@ function fakeReply(pass, req, options, n) {
       conclusion: { assessment: "Missing.", rewrite: "A better conclusion." },
       paragraphs: paras.slice(0, 1).map(x => ({ id: x.id, assessment: "Weak.", fix: "Add data." })),
       headings: { assessment: "Generic.", suggested: ["INTRODUCTION", "MERITS", "LIMITS", "WAY FORWARD"] },
-      flow: ["Abrupt jump."], value_additions: ["Add a causal chain."],
-      rewrites: before ? [{ before, after: "An upgraded sentence.", why: "More specific." }] : [],
+      flow: ["Abrupt jump."],
+      reframe: sentence ? [{ unit: sentence.id, better: "An upgraded sentence.", why: "More specific." }] : [],
+      additions: last ? [{ after: last.id, add: "Add a causal chain: repo hike -> costlier loans -> lower demand.", why: "Shows the mechanism." }] : [],
       model_answer: "INTRODUCTION\\nModel answer text.\\nWAY FORWARD\\nMeasures."
     };
   }
@@ -309,3 +312,23 @@ function docxXml(paragraphs) {
 
 module.exports.makeZip = makeZip;
 module.exports.docxXml = docxXml;
+
+function siteContext() {
+  const store = () => {
+    const m = new Map();
+    return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: k => { m.delete(k); } };
+  };
+  const nothing = () => null;
+  const ctx = vm.createContext({
+    console, setTimeout, clearTimeout, localStorage: store(), sessionStorage: store(),
+    document: { addEventListener() {}, getElementById: nothing, querySelector: nothing, querySelectorAll: () => [], dispatchEvent() {} },
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } }
+  });
+  ctx.window = ctx;
+  ctx.self = ctx;
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, "answer-marks.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, "ai_eval.js"), "utf8"), ctx);
+  return ctx;
+}
+
+module.exports.siteContext = siteContext;

@@ -6,7 +6,7 @@ const R = require("../rubric");
 const { EVAL_PROMPT_TEMPLATE, fillTemplate } = require("../rubric-text");
 const { S, N, B, SL, objSchema, listOf, oneOf } = require("./common");
 
-const VERSION = "g1";
+const VERSION = "g2";
 
 const SYSTEM = "You grade RBI Grade B Phase-2 descriptive answers for a candidate's practice engine. Apply the rubric, gates, penalties and calibration exactly as written, together with the fixed engine settings. Reply with exactly one valid JSON object containing the keys listed in the OUTPUT CONTRACT - no markdown, no code fences, no text before or after the JSON.";
 
@@ -28,8 +28,8 @@ const FULL_SCHEMA = objSchema({
   concept_gaps: SL,
   error_log: listOf({ quote: S, code: S, problem: S, correction: S }),
   caps_triggered: SL,
-  parameters: listOf({ id: S, cap_applied: S, awarded: N, justification: S }),
-  penalties: listOf({ code: S, trigger: S }),
+  parameters: listOf({ id: S, cap_applied: S, awarded: N, justification: S, lost: SL }),
+  penalties: listOf({ code: S, trigger: S, quote: S }),
   stage1_raw_sum: N,
   total_penalties: N,
   final_score: N,
@@ -141,8 +141,8 @@ function fullContract(q) {
     "- \"concept_gaps\": up to 5 concepts of this topic you got wrong, confused or left out, one short line each. Missing reports or committees belong in missing_anchors instead.",
     "- \"error_log\": up to 10 mark-relevant errors (content, logic, structure and recurring language patterns): {\"quote\": the candidate's exact words, \"code\": \"RP-1\" to \"RP-8\" (or \"TYPO\" for a no-penalty slip), \"problem\": what is wrong, \"correction\": the corrected wording or fact}.",
     "- \"caps_triggered\": the evidence-gate caps you applied, e.g. \"P3 capped at 20% - no data\" ([] if none).",
-    "- \"parameters\": one item per parameter, in order (" + ids + "): {\"id\": \"P1\", \"cap_applied\": \"\" or e.g. \"45% - sub-part missed\", \"awarded\": marks in 0.25 steps, never above that parameter's maximum, \"justification\": the evidence for the mark}.",
-    "- \"penalties\": every Stage-2 deduction: {\"code\": \"RP-1\" to \"RP-8\", \"trigger\": the exact trigger found in the script}. The engine sets the deduction values from the table.",
+    "- \"parameters\": one item per parameter, in order (" + ids + "): {\"id\": \"P1\", \"cap_applied\": \"\" or e.g. \"45% - sub-part missed\", \"awarded\": marks in 0.25 steps, never above that parameter's maximum, \"justification\": the evidence for the mark, \"lost\": the specific reasons the mark is below that parameter's maximum, one short line each, naming what was missing or wrong and what would have earned the mark ([] when awarded equals the maximum)}.",
+    "- \"penalties\": every Stage-2 deduction: {\"code\": \"RP-1\" to \"RP-8\", \"trigger\": the exact trigger found in the script, \"quote\": the candidate's exact words that triggered it, copied character for character (\"\" when the trigger is not a passage, such as the word count)}. The engine sets the deduction values from the table.",
     "- \"stage1_raw_sum\", \"total_penalties\", \"final_score\": numbers, where final_score = max(0, stage1_raw_sum - total_penalties).",
     "- \"merit_check\": the blunt two-line merit-list reality check (Section 5).",
     "- \"pacing_audit\": word count %, time used, words per minute and any speed risk (1-3 sentences).",
@@ -209,7 +209,7 @@ function pickParams(list, expected) {
     if (!hit) throw new AIError("format", "The reply had no mark for " + p.id + ".");
     const awarded = num(hit.awarded != null ? hit.awarded : (hit.marks_awarded != null ? hit.marks_awarded : hit.score));
     if (awarded === null) throw new AIError("format", "The reply had no mark for " + p.id + ".");
-    out.push({ id: p.id, name: p.name, max: p.max, awarded: clamp(snap4(awarded), 0, p.max), modelCap: str(hit.cap_applied || hit.cap, 300), why: str(hit.justification || hit.reason || hit.comment, 1500) });
+    out.push({ id: p.id, name: p.name, max: p.max, awarded: clamp(snap4(awarded), 0, p.max), modelCap: str(hit.cap_applied || hit.cap, 300), why: str(hit.justification || hit.reason || hit.comment, 1500), lost: strList(hit.lost, 6, 400) });
   });
   return out;
 }
@@ -232,7 +232,7 @@ function normalize(obj, q, local, scheme, opts = {}) {
   const anchorCount = track === "A" ? (rawAnchor === null ? null : Math.max(0, Math.round(rawAnchor))) : 0;
   const offTopic = obj.off_topic === true || /^(?:true|yes)$/i.test(String(obj.off_topic || "").trim());
   const penalties = objList(obj.penalties, 20)
-    .map(p => ({ code: normCode(p.code), trigger: str(p.trigger || p.reason || p.detail, 600) }))
+    .map(p => ({ code: normCode(p.code), trigger: str(p.trigger || p.reason || p.detail, 600), quote: (q => (q && quoteInScript(q, script) ? q : ""))(str(p.quote, 400)) }))
     .filter(p => /^RP-[1-8]$/.test(p.code));
   const gotChecklist = objList(obj.checklist, 20);
   const checklist = scheme ? scheme.points.map((p, i) => {
@@ -251,7 +251,7 @@ function normalize(obj, q, local, scheme, opts = {}) {
   const fs = R.finalScore({ track, marks: q.marks, params: enforced.params, penalties: enforced.penalties, autoFail: enforced.autoFail, offTopic });
   const run = {
     full: !!opts.full,
-    params: enforced.params.map((p, i) => Object.assign({}, p, { why: params[i].why, modelCap: params[i].modelCap })),
+    params: enforced.params.map((p, i) => Object.assign({}, p, { why: params[i].why, modelCap: params[i].modelCap, lost: params[i].lost })),
     checks,
     anchorCount,
     offTopic,

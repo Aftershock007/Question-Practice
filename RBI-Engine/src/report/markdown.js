@@ -1,6 +1,7 @@
 "use strict";
 
 const V = require("./view");
+const AM = require("../answer-marks");
 const { fmt } = require("../util");
 
 const NA = "_Not available for this answer._";
@@ -57,6 +58,58 @@ function summarySection(r) {
   return "### Summary and priorities\n\n" + out.join("\n\n");
 }
 
+const KIND_TABLES = [
+  ["lang", "Language mistakes", ["#", "You wrote", "Correction", "Why"]],
+  ["frame", "Sentences to frame better", ["#", "Your sentence", "Better", "Why"]],
+  ["fact", "Wrong facts", ["#", "You wrote", "Correct fact", "Why"]],
+  ["add", "Add these to lift the answer", ["#", "Where", "Add", "Why"]]
+];
+
+function markWhy(m) {
+  const meta = m.kind === "lang" && m.type ? m.type.charAt(0).toUpperCase() + m.type.slice(1) + (m.severity ? ", " + m.severity : "") + "." : "";
+  return [meta, m.why || "", m.inline ? "" : "(Not shown in your answer: the exact place was not found.)"].filter(Boolean).join(" ");
+}
+
+function markRow(m) {
+  if (m.kind === "add") return [m.id, m.atEnd ? "At the end" : m.where ? "After: " + m.where : "Wherever it fits best", m.fix, markWhy(m)];
+  return [m.id, m.wrong, m.fix || (m.kind === "lang" ? "(delete)" : ""), markWhy(m)];
+}
+
+function markedSection(r, paint) {
+  const b = V.built(r);
+  const title = "### Your answer, marked";
+  if (r.marks && r.marks.notAttempted) return title + "\n\n" + NA;
+  if (!b.marks.length) return title + "\n\n" + (r.language || r.coach ? "Nothing to mark: no language, framing or fact changes were found." : "The AI parts did not run, so nothing is marked yet.");
+  const out = [];
+  const legend = AM.plainLegend(b);
+  if (legend) out.push("How to read the marks:\n\n" + block(legend));
+  out.push(block(V.markedAnswer(r, paint)));
+  for (const [kind, name, heads] of KIND_TABLES) {
+    const mine = b.marks.filter(m => m.kind === kind);
+    if (mine.length) out.push(part(name + " (" + mine.length + ")", table(heads, mine.map(markRow))));
+  }
+  return title + "\n\n" + out.join("\n\n");
+}
+
+function ledgerSection(r) {
+  const title = "### " + V.lossTitle(r);
+  const l = r.ledger;
+  if (!l) return title + "\n\nThe marks could not be computed in this run. Run the same command again to retry the gradings.";
+  const max = fmt(l.max);
+  const out = [];
+  if (l.zero === "notAttempted") out.push("You wrote nothing, so all " + max + " marks were lost.");
+  else if (l.zero) out.push("The rubric gives 0 for this answer, so all " + max + " marks were lost.");
+  else if (!(l.total > 0)) out.push("You lost no marks.");
+  if (l.rows.length) {
+    out.push(table(["What cost you marks", "Lost", "Why", "How to earn them next time"], l.rows.map(x => [
+      x.title + (x.detail ? " (" + x.detail + ")" : ""), V.signedLoss(x.lost), x.reasons.join(" ") + (x.quote ? " Your words: \"" + x.quote + "\"" : ""), x.fix
+    ])));
+    out.push("**Total lost: " + fmt(l.total) + "** (" + max + " - " + fmt(l.total) + " = " + fmt(l.score) + " / " + max + ")");
+  }
+  if (l.missed.length) out.push(part("Key points from the model answer you missed or only partly covered", bullets(l.missed.map(k => k.id + " (weight " + k.weight + ", " + (k.coverage === "partial" ? "only partly covered" : "missing") + "): " + k.point))));
+  return title + "\n\n" + out.join("\n\n");
+}
+
 function readingSection(r) {
   const rd = r.reading;
   const out = [];
@@ -79,7 +132,6 @@ function marksSection(r) {
     table(["Parameter", "Max", "Awarded", "Gate cap", "Why"], rows),
     pens.length ? table(["Code", "Penalty", "Found in your answer", "Deduction"], pens) : "No red-pen penalties.",
     "**Arithmetic:** " + V.arithmetic(r),
-    part("Where your marks went", bullets(V.lostItems(r))),
     part("Gates and rules in force", bullets(V.rulesInForce(r))),
     part("Examiner checks", table(["#", "Check", "Result", "Evidence"], V.checkRows(r)))
   ];
@@ -94,7 +146,7 @@ function contentSection(r) {
     part("Parts of the question", table(["Part", "Coverage", "Comment"], m.subparts.map(s => [s.part, V.COVERAGE_TEXT[s.coverage] || s.coverage, s.comment]))),
     part("Marking checklist" + (m.coverage !== null && m.coverage !== undefined ? " (you covered " + fmt(m.coverage) + "% of the weighted points)" : ""), table(["#", "Key point", "Weight", "Verdict", "Your words"], m.checklist.map(k => [k.id, k.point, String(k.weight), V.CHECKLIST_TEXT[k.coverage] || k.coverage, k.quote]))),
     part("Concept gaps", bullets(c.conceptGaps)),
-    part("Factual errors", table(["You wrote", "Problem", "Correct fact"], (c.factualErrors || []).map(f => [f.quote, f.problem, f.fact]))),
+    part("Factual errors", (c.factualErrors || []).length ? c.factualErrors.length + " wrong fact" + (c.factualErrors.length === 1 ? " is" : "s are") + " marked in Your answer, marked (F1" + (c.factualErrors.length > 1 ? "-F" + c.factualErrors.length : "") + "), each with the correct fact." : "No provably wrong facts were found."),
     part("Content and logic errors (red-pen log)", table(["You wrote", "Code", "Problem", "Correction"], (c.errorLog || []).map(e => [e.quote, e.code, e.problem, e.correction]))),
     part("Sources you used", bullets(c.anchorsUsed)),
     part("Named without saying what they do", bullets(c.nameDrops)),
@@ -111,7 +163,7 @@ function languageSection(r) {
   if (l) {
     out.push([V.languageOverview(r), V.styleLine(r), l.style.assessment, l.summary].filter(Boolean).join(" "));
     if (l.style.issues.length) out.push(part("Style problems", bullets(l.style.issues)));
-    out.push(part("Every mistake", table(["#", "Where", "You wrote", "Correct", "Type", "Rule"], l.issues.map((i, n) => [String(n + 1), i.unit, i.wrong, i.fix || "(delete)", i.type + (i.severity === "major" ? " (major)" : ""), i.rule]))));
+    out.push(l.issues.length ? "All " + l.issues.length + " language mistake" + (l.issues.length === 1 ? " is" : "s are") + " marked in Your answer, marked (L1" + (l.issues.length > 1 ? "-L" + l.issues.length : "") + "), each with its rule." : "No language corrections were needed.");
   } else {
     out.push(r.marks && r.marks.notAttempted ? NA : "The AI language audit is not available in this run. The engine's own checks are below.");
   }
@@ -120,7 +172,6 @@ function languageSection(r) {
     out.push(part("Register and tone", table(["You wrote", "Problem", "Better"], l.register.map(x => [x.quote, x.problem, x.better]))));
     out.push(part("Vocabulary upgrades", table(["You used", "Better", "Why"], l.vocabulary.map(x => [x.used, x.better, x.why]))));
     out.push(part("Sentence craft", table(["Sentence", "Problem", "Suggestion"], l.craft.map(x => [x.unit + ": " + V.unitText(r, x.unit), x.problem, x.suggestion]))));
-    out.push(part("Your answer with the language corrections", l.issues.length ? "Deleted text is shown as [-like this-] and inserted text as {+like this+}.\n\n" + block(V.markedAnswer(r)) : "No language corrections were needed."));
   }
   return "### Language\n\n" + out.join("\n\n");
 }
@@ -138,8 +189,7 @@ function structureSection(r) {
   out.push(part("Conclusion", [c.conclusion.assessment, c.conclusion.rewrite ? "Better conclusion:\n\n" + block(c.conclusion.rewrite) : ""]));
   out.push(part("Headings and paragraphing", [c.headings.assessment, c.headings.suggested.length ? "Headings to use: " + c.headings.suggested.join(" / ") : ""]));
   out.push(part("Flow", bullets(c.flow)));
-  out.push(part("What would lift this answer", bullets(c.valueAdds)));
-  out.push(part("Rewrites of your weakest sentences", c.rewrites.map((w, i) => (i + 1) + ". **Before:** " + oneLine(w.before) + "\n   **After:** " + oneLine(w.after) + "\n   **Why:** " + oneLine(w.why)).join("\n")));
+  if (c.reframe.length || c.additions.length) out.push("Sentences to frame better and additions are marked in Your answer, marked (" + [c.reframe.length ? c.reframe.length + " to frame better" : "", c.additions.length ? c.additions.length + " to add" : ""].filter(Boolean).join(", ") + ").");
   return "### Structure and framing\n\n" + out.join("\n\n");
 }
 
@@ -175,11 +225,13 @@ function questionHeader(r) {
   return parts.join("\n\n");
 }
 
-function renderReport(r, session) {
+function renderReport(r, session, opts) {
   return [
     questionHeader(r),
     verdictSection(r),
     summarySection(r),
+    markedSection(r, opts && opts.paint),
+    ledgerSection(r),
     readingSection(r),
     marksSection(r),
     contentSection(r),
@@ -203,7 +255,7 @@ function testSummarySection(s) {
   ].join("\n\n");
 }
 
-function renderMarkdown(session) {
+function renderMarkdown(session, opts) {
   const when = new Date(session.createdAt);
   const head = "# RBI-Engine report: " + session.name + "\n\n" + [
     isNaN(when) ? "" : when.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
@@ -212,7 +264,7 @@ function renderMarkdown(session) {
   ].filter(Boolean).join(" · ");
   const parts = [head];
   if (session.testSummary) parts.push(testSummarySection(session.testSummary));
-  for (const r of session.reports) parts.push(renderReport(r, session));
+  for (const r of session.reports) parts.push(renderReport(r, session, opts));
   return parts.join("\n\n") + "\n";
 }
 

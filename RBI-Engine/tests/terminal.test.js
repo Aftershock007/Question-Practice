@@ -60,6 +60,8 @@ test("the summary shows the verdict, consistency, losses, language counts, prior
   assert.match(out, /median of 3 independent gradings/i);
   for (const l of r.lost.slice(0, 3)) assert.ok(out.includes(l.what), l.what);
   assert.match(out, /1 language mistake/);
+  assert.match(out, /Marked\s+1 language mistake, 1 sentence to frame better, 1 addition/);
+  assert.match(out, /-2: Reason P2 lost marks\./);
   for (const p of r.coaching.priorities.slice(0, 3)) assert.ok(out.includes(p.title), p.title);
   assert.ok(out.includes("/r/report.html"));
 });
@@ -75,6 +77,9 @@ test("the full view prints the whole report", async () => {
   const out = renderFull(await session(), { color: false });
   assert.match(out, /Marks breakdown/);
   assert.match(out, /Model answer/);
+  const coloured = renderFull(await session(), { color: true });
+  assert.ok(coloured.includes("\x1b[31m[-"), "language mistakes are red");
+  assert.ok(coloured.includes("\x1b[34m[[B1: "), "frames are blue");
 });
 
 test("wrap never goes past the width and keeps the indent", () => {

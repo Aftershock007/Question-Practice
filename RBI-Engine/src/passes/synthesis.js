@@ -4,6 +4,7 @@ const { str, strList, objList, round2, fmt } = require("../util");
 const { AIError } = require("../ai");
 const { PENALTY_LABELS } = require("../rubric");
 const { S, SL, objSchema, listOf } = require("./common");
+const { HOW_PARAM: HOW, HOW_PENALTY } = require("../answer-marks");
 
 const VERSION = "y1";
 
@@ -16,47 +17,6 @@ const SCHEMA = objSchema({
   drills: SL,
   plan: SL
 });
-
-const HOW = {
-  A: [
-    "Break the question into its parts before writing and give each part its own heading; obey the command word.",
-    "Explain each point as a cause-and-effect chain with the correct technical terms.",
-    "Add two or three specific reports, committees, schemes or data points, each with what it does.",
-    "Use a short introduction, headed numbered points and a specific way forward.",
-    "Write within 82-104% of the word limit in a sober third-person voice."
-  ],
-  B: [
-    "Unpack the prompt in the first paragraph and state a clear thesis.",
-    "Cover four or more dimensions and answer the strongest counter-view.",
-    "Weave in concrete examples, data and recent developments.",
-    "Write linked paragraphs with no bullets or headings, and close the loop at the end.",
-    "Keep within 90-105% of the word limit in clear, varied sentences."
-  ],
-  C: [
-    "Add a 3-8 word title that states the central idea.",
-    "Keep every core argument of the passage and cut examples and repetition.",
-    "Rewrite every idea in your own words; never copy five or more words in a row.",
-    "Write one third-person paragraph with no opinion of your own.",
-    "Stay within 92-105% of the word limit and check grammar."
-  ],
-  D: [
-    "Take every answer from the passage and check each detail.",
-    "Answer in your own words instead of copying sentences.",
-    "Answer every sub-question in proportion to its weight.",
-    "Write complete, grammatical sentences."
-  ]
-};
-
-const HOW_PENALTY = {
-  "RP-1": "Answer every part of the question; list the parts before you start writing.",
-  "RP-2": "Replace slogans with a specific mechanism, scheme or institution.",
-  "RP-3": "Whenever you name a scheme, report or theory, say what it does in the same sentence.",
-  "RP-4": "Fix the format: headings and points for ESI/FM, continuous prose for an essay, one paragraph for a precis.",
-  "RP-5": "Plan a word budget per section and stay inside the allowed band.",
-  "RP-6": "Check facts, figures, dates and names before you use them, and leave out what you are not sure of.",
-  "RP-7": "Paraphrase the passage in your own words and add no outside opinion.",
-  "RP-8": "Keep a formal register and fix your repeated grammar patterns."
-};
 
 function marksLost(marks) {
   if (!marks) return [];

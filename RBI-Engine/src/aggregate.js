@@ -92,7 +92,8 @@ function combineRuns(runs, q, scheme) {
     name: p.name,
     max: p.max,
     awarded: snap4(median(runs.map(r => r.params[i].awarded))),
-    why: (base.params[i] && base.params[i].why) || ""
+    why: (base.params[i] && base.params[i].why) || "",
+    lost: (base.params[i] && base.params[i].lost) || []
   }));
 
   const table = R.EXAMINER_CHECKS[track] || {};
@@ -123,10 +124,10 @@ function combineRuns(runs, q, scheme) {
         const key = p.trigger.toLowerCase().trim();
         if (seen.has(key)) continue;
         seen.add(key);
-        triggers.push(p.trigger);
+        triggers.push(p);
       }
     }
-    for (let k = 0; k < n; k++) penalties.push({ code, trigger: triggers[k] || "Found by the gradings (" + code + ")." });
+    for (let k = 0; k < n; k++) penalties.push({ code, trigger: triggers[k] ? triggers[k].trigger : "Found by the gradings (" + code + ").", quote: (triggers[k] && triggers[k].quote) || "" });
   }
 
   const enforced = R.enforceRubric({ track, marks: q.marks, wordLimit: q.wordLimit, words: q.words, params, checks: checks.map(c => ({ id: c.id, pass: c.pass })), anchorCount, penalties, offTopic });
@@ -148,7 +149,7 @@ function combineRuns(runs, q, scheme) {
   const pick = base.full ? base : null;
 
   return {
-    params: enforced.params.map((p, i) => Object.assign({}, p, { why: params[i].why })),
+    params: enforced.params.map((p, i) => Object.assign({}, p, { why: params[i].why, lost: params[i].lost })),
     penalties: enforced.penalties,
     checks,
     anchorCount,

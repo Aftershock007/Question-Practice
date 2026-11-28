@@ -8,6 +8,8 @@ declare const RBI_OFFICIAL_SCHEDULE_DATA: Array<{
   ca: string;
 }>;
 
+declare const AnswerMarks: Record<string, any>;
+
 declare const AIEval: {
   init(): void;
   autoEvaluate(test: any): void;

@@ -201,3 +201,8 @@ test("ideal minutes follow the rubric's pacing guide", () => {
   assert.deepEqual(r.idealMinutes("B", 40), [32, 35]);
   assert.deepEqual(r.idealMinutes("C", 30), [25, 28]);
 });
+
+test("penalties keep the words that triggered them", () => {
+  const out = enforce({ penalties: [{ code: "RP-2", trigger: "slogan", quote: "Inflation is bad" }, { code: "RP-1", trigger: "missed part" }] });
+  assert.deepEqual(out.penalties.map(p => p.quote), ["Inflation is bad", ""]);
+});

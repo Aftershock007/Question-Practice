@@ -146,3 +146,13 @@ test("crossCheckReason explains when one grading looks unreliable", () => {
   assert.match(agg.crossCheckReason(run({ checklist: ["full", "full", "full"] }), SCHEME, offWords), /does not match/);
   assert.equal(agg.crossCheckReason(run({ final: 6, checklist: ["full", "full", "full"] }), SCHEME, onTopic), "");
 });
+
+test("the combined marks keep the base run's reasons for lost marks and each penalty's quote", () => {
+  const full = run({ full: true, penalties: ["RP-2"] });
+  full.params[2].lost = ["No CPI data."];
+  full.penalties[0].quote = "Inflation targeting began";
+  const m = agg.combineRuns([full, run({ penalties: ["RP-2"] }), run({ penalties: ["RP-2"] })], q(), SCHEME);
+  assert.deepEqual(m.params[2].lost, ["No CPI data."]);
+  assert.deepEqual(m.params[0].lost, []);
+  assert.equal(m.penalties[0].quote, "Inflation targeting began");
+});

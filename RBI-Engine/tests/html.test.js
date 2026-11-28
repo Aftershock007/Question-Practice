@@ -44,8 +44,8 @@ test("the page is self-contained: no remote scripts, styles or fonts", async () 
 
 test("every section of the Markdown report is in the page", async () => {
   const html = renderHTML(await session([ANSWER]));
-  for (const s of ["Verdict", "Summary and priorities", "Reading the question", "Marks breakdown", "Content", "Language", "Structure and framing", "Model answer", "Improvement plan", "Technical details"]) {
-    assert.ok(html.includes(">" + s + "<") || html.includes(">" + s + " ("), s);
+  for (const s of ["Verdict", "Summary and priorities", "Your answer, marked", "Why you lost", "Reading the question", "Marks breakdown", "Content", "Language", "Structure and framing", "Model answer", "Improvement plan", "Technical details"]) {
+    assert.ok(html.includes(">" + s + "<") || html.includes(">" + s + " "), s);
   }
 });
 
@@ -58,12 +58,20 @@ test("checklist verdicts are coloured chips with the classes full, partial and m
   assert.match(html, /class="chip missing"/);
 });
 
-test("each correction in the marked answer links to its row in the mistakes table", async () => {
+test("the marked answer shows each kind of mark, links it to its explanation and the ledger explains the marks lost", async () => {
   const s = await session([ANSWER]);
   const html = renderHTML(s);
   const i = s.reports[0].language.issues[0];
-  assert.ok(html.includes("<del>" + i.wrong + "</del><ins>" + i.fix + "</ins><sup><a href=\"#q1-m1\">1</a></sup>"));
-  assert.ok(html.includes("id=\"q1-m1\""));
+  assert.ok(html.includes("<del class=\"mk-old\">" + i.wrong + "</del><ins class=\"mk-new\">" + i.fix + "</ins><a class=\"mk-ref\" href=\"#q1-L1\">L1</a>"));
+  assert.ok(html.includes("<li id=\"q1-L1\">"));
+  assert.ok(html.includes("class=\"mk mk-frame\""));
+  assert.ok(html.includes("class=\"mk mk-add\""));
+  assert.ok(html.includes("<ul class=\"mk-legend\">"));
+  assert.ok(html.includes("<table class=\"mk-ltable\">"));
+  assert.ok(html.includes("id=\"q1-loss-1\""));
+  assert.match(html, /\.mk-frame > \.mk-old \{/);
+  assert.match(html, /print-color-adjust: exact/);
+  assert.doesNotMatch(html, /Rewrites of your weakest sentences|What would lift this answer/);
 });
 
 test("a two-question session lists the questions with their marks at the top", async () => {

@@ -1,6 +1,7 @@
 "use strict";
 
 const V = require("./view");
+const AM = require("../answer-marks");
 const { escapeHTML: esc, fmt } = require("../util");
 
 const CSS = `
@@ -8,6 +9,10 @@ const CSS = `
   --bg: #f5f5f7; --paper: #ffffff; --ink: #1d1d1f; --ink-2: #3a3a3c; --muted: #6e6e73; --line: #e5e5ea; --line-strong: #d2d2d7;
   --fill: #f8f8fa; --brand: #0d2b5e; --accent: #1d5fc4; --accent-soft: #eef4fd; --gold: #9a7128;
   --ok: #1e8e3e; --ok-soft: #ebf6ee; --danger: #c9302c; --danger-soft: #fdefee; --warn: #b0600c; --warn-soft: #fdf4e7;
+  --mk-red: #c62828; --mk-green-soft: #c9efd4; --mk-green-ink: #0b5126;
+  --mk-blue: #1e3a8a; --mk-blue-soft: #dbe8ff; --mk-blue-ink: #10316b;
+  --mk-purple: #5b21b6; --mk-purple-soft: #ede4ff; --mk-purple-ink: #3f1d70;
+  --mk-gold: #b7791f; --mk-gold-soft: #fdf0c8; --mk-gold-ink: #5a4000;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --script: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   color-scheme: light dark;
@@ -17,6 +22,10 @@ const CSS = `
     --bg: #16181d; --paper: #1f2128; --ink: #f2f2f4; --ink-2: #d6d6da; --muted: #a1a1a6; --line: #34363d; --line-strong: #44474f;
     --fill: #262830; --brand: #a9c1ee; --accent: #7aa7f0; --accent-soft: #1f2a3d; --gold: #d8b36a;
     --ok: #63c482; --ok-soft: #1d3325; --danger: #f2847d; --danger-soft: #3a2224; --warn: #eaa95a; --warn-soft: #3a2d1d;
+    --mk-red: #d64541; --mk-green-soft: #1d4a2c; --mk-green-ink: #b8f0c8;
+    --mk-blue: #3557c4; --mk-blue-soft: #1d2d50; --mk-blue-ink: #c6d7ff;
+    --mk-purple: #7c4ddb; --mk-purple-soft: #2f2245; --mk-purple-ink: #dccbff;
+    --mk-gold: #d8a743; --mk-gold-soft: #3b3014; --mk-gold-ink: #f3d892;
   }
 }
 * { box-sizing: border-box; }
@@ -50,7 +59,7 @@ dl.facts dd { margin: 2px 0 0; font-size: 15px; color: var(--ink); }
 details.sec { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 14px; }
 details.sec > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 12px; }
 details.sec > summary::-webkit-details-marker { display: none; }
-details.sec > summary h3 { margin: 0; font-size: 19px; color: var(--brand); }
+details.sec > summary h3 { margin: 0; font-size: 19px; color: var(--brand); flex: none; }
 details.sec > summary .meta { color: var(--muted); font-size: 14px; }
 details.sec > summary::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); align-self: center; }
 details.sec:not([open]) > summary::after { transform: rotate(-45deg); }
@@ -73,19 +82,53 @@ td.quote { font-family: var(--script); font-size: 15px; }
 .chip.textbook { background: var(--accent-soft); color: var(--accent); }
 .chip.unknown { background: var(--fill); color: var(--muted); }
 .script { font-family: var(--script); font-size: 16.5px; line-height: 1.75; white-space: pre-wrap; background: var(--fill); border-left: 3px solid var(--line-strong); border-radius: 0 10px 10px 0; padding: 16px 20px; margin: 10px 0; overflow-wrap: anywhere; }
-.script.marked { border-left-color: var(--danger); }
-.script del { color: var(--danger); background: var(--danger-soft); text-decoration: line-through; text-decoration-thickness: 2px; }
-.script ins { color: var(--ok); background: var(--ok-soft); text-decoration: none; border-bottom: 2px solid var(--ok); }
-.script del + ins { margin-left: 3px; }
-.script sup { font-family: var(--font); font-size: 11px; margin-left: 1px; }
-.script sup a { text-decoration: none; font-weight: 700; color: var(--brand); }
-.legend { font-size: 13.5px; color: var(--muted); }
-.legend del { color: var(--danger); } .legend ins { color: var(--ok); text-decoration: none; border-bottom: 2px solid var(--ok); }
-.rewrite { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 10px 0; }
-.rewrite p { margin: 4px 0; }
-.rewrite .before { font-family: var(--script); color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--danger); }
-.rewrite .after { font-family: var(--script); color: var(--ink); }
-.rewrite .why { font-size: 14px; color: var(--muted); }
+.mk-answer { font-family: var(--script); font-size: 16.5px; line-height: 2.05; white-space: pre-wrap; background: var(--fill); border-left: 3px solid var(--line-strong); border-radius: 0 10px 10px 0; padding: 16px 20px; margin: 12px 0; overflow-wrap: anywhere; }
+.mk-old, .mk-new, .mk-add { -webkit-box-decoration-break: clone; box-decoration-break: clone; border-radius: 3px; padding: 1px 3px; }
+.mk-new { margin-left: 3px; text-decoration: none; }
+.mk-lang > .mk-old { background: var(--mk-red); color: #fff; text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.85); text-decoration-thickness: 2px; }
+.mk-lang > .mk-new { background: var(--mk-green-soft); color: var(--mk-green-ink); font-weight: 600; }
+.mk-frame > .mk-old { background: var(--mk-blue); color: #fff; }
+.mk-frame > .mk-new { background: var(--mk-blue-soft); color: var(--mk-blue-ink); }
+.mk-fact > .mk-old { background: var(--mk-purple); color: #fff; }
+.mk-fact > .mk-new { background: var(--mk-purple-soft); color: var(--mk-purple-ink); }
+.mk-add { background: var(--mk-gold-soft); color: var(--mk-gold-ink); text-decoration: none; border-left: 3px solid var(--mk-gold); margin-left: 4px; padding: 1px 6px; }
+.mk-tag { font-family: var(--font); font-size: 11px; font-weight: 700; margin-right: 2px; }
+.mk-ref { font-family: var(--font); font-size: 10.5px; font-weight: 700; vertical-align: super; line-height: 0; margin-left: 2px; text-decoration: none; color: var(--brand); }
+.mk-frame > .mk-old .mk-ref, .mk-fact > .mk-old .mk-ref { color: #fff; }
+.mk-cut { font-family: var(--font); font-size: 11px; font-weight: 700; vertical-align: super; line-height: 0; margin-left: 2px; padding: 0 5px; border: 1px solid var(--ink); border-radius: 999px; color: var(--ink); background: var(--paper); text-decoration: none; white-space: nowrap; }
+.mk-legend { list-style: none; padding: 0; margin: 10px 0 4px; display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13.5px; color: var(--ink-2); max-width: none; }
+.mk-legend li { margin: 0; }
+.mk-legend .mk, .mk-legend .mk-add { font-family: var(--script); font-size: 14px; }
+.mk-legend .mk-cut { vertical-align: baseline; line-height: 1.4; }
+.mk-group { margin-top: 20px; }
+.body .mk-gh { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 0 0 4px; color: var(--ink); }
+.mk-gh::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--mk-sw, var(--muted)); }
+.mk-g-lang { --mk-sw: var(--mk-red); } .mk-g-frame { --mk-sw: var(--mk-blue); } .mk-g-fact { --mk-sw: var(--mk-purple); } .mk-g-add { --mk-sw: var(--mk-gold); }
+.mk-count { color: var(--muted); font-weight: 500; }
+.body .mk-list { list-style: none; padding: 0; margin: 0; max-width: none; }
+.body .mk-list > li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; padding: 10px 0; margin: 0; border-top: 1px solid var(--line); }
+.mk-num { font-weight: 700; font-size: 13px; color: var(--brand); text-decoration: none; padding-top: 3px; font-variant-numeric: tabular-nums; }
+.body .mk-body p { margin: 2px 0; }
+.body .mk-pair { font-family: var(--script); font-size: 15.5px; line-height: 1.95; }
+.body .mk-why { font-size: 14px; color: var(--ink-2); }
+.mk-meta { font-weight: 600; color: var(--ink); }
+.body .mk-where { font-size: 13px; color: var(--muted); }
+.mk-note { font-size: 13px; color: var(--warn); }
+.mk-hint { font-size: 13px; color: var(--muted); }
+.mk-list > li:target { background: var(--accent-soft); }
+.body .mk-ledger-sum { font-size: 15.5px; margin: 6px 0 10px; }
+.mk-tw { overflow-x: auto; margin: 8px 0; }
+th.mk-n, td.mk-n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mk-ltable td:first-child { min-width: 170px; }
+.mk-sub { display: block; color: var(--muted); font-size: 13px; font-weight: 400; }
+.body .mk-reasons { margin: 0; padding-left: 18px; }
+.body .mk-reasons li { margin: 2px 0; }
+.mk-ltable p { margin: 0 0 4px; }
+.mk-quote { font-family: var(--script); color: var(--ink-2); }
+.mk-r-param td.mk-n, .mk-r-penalty td.mk-n, .mk-r-ceiling td.mk-n, .mk-r-zero td.mk-n, .mk-r-adjust td.mk-n { color: var(--danger); font-weight: 700; }
+.mk-r-floor td.mk-n { color: var(--ok); font-weight: 700; }
+tr.mk-total td { font-weight: 700; border-bottom: 0; }
+.mk-missed { margin-top: 16px; }
 .prio li { margin: 10px 0; }
 .prio strong { color: var(--ink); }
 .tech { font-size: 13.5px; color: var(--muted); }
@@ -100,7 +143,8 @@ tr:target td { background: var(--accent-soft); }
   body { background: #fff; color: #000; }
   .sheet { border: 0; margin: 0; padding: 0; max-width: none; }
   details.sec > summary::after { display: none; }
-  tr, .rewrite, .verdict { break-inside: avoid; }
+  tr, .verdict, .mk-list > li { break-inside: avoid; }
+  .mk-answer, .mk-legend, .mk-lists, .mk-ledger { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   a { color: inherit; text-decoration: none; }
 }
 `;
@@ -203,7 +247,6 @@ function marksBody(r) {
   return table(["Parameter", "Max", "Awarded", "Gate cap", "Why"], rows, { num: [1, 2] }) +
     sub("Red-pen penalties", pens.length ? table(["Code", "Penalty", "Found in your answer", "Deduction"], pens, { num: [3] }) : para("No red-pen penalties.")) +
     para("Arithmetic: " + V.arithmetic(r), "note") +
-    sub("Where your marks went", list(V.lostItems(r))) +
     sub("Gates and rules in force", list(V.rulesInForce(r))) +
     sub("Examiner checks", table(["#", "Check", "Result", "Evidence"], checks));
 }
@@ -216,7 +259,7 @@ function contentBody(r) {
     sub("Marking checklist" + (m.coverage !== null && m.coverage !== undefined ? " (you covered " + fmt(m.coverage) + "% of the weighted points)" : ""),
       table(["#", "Key point", "Weight", "Verdict", "Your words"], m.checklist.map(k => [k.id, k.point, String(k.weight), { html: chip(k.coverage, V.CHECKLIST_TEXT[k.coverage] || k.coverage) }, k.quote]), { num: [2], quote: [4] })) +
     sub("Concept gaps", list(c.conceptGaps)) +
-    sub("Factual errors", table(["You wrote", "Problem", "Correct fact"], (c.factualErrors || []).map(f => [f.quote, f.problem, f.fact]), { quote: [0] })) +
+    sub("Factual errors", para((c.factualErrors || []).length ? c.factualErrors.length + " wrong fact" + (c.factualErrors.length === 1 ? " is" : "s are") + " marked in purple in Your answer, marked (F1" + (c.factualErrors.length > 1 ? "-F" + c.factualErrors.length : "") + "), each with the correct fact." : "No provably wrong facts were found.")) +
     sub("Content and logic errors (red-pen log)", table(["You wrote", "Code", "Problem", "Correction"], (c.errorLog || []).map(e => [e.quote, e.code, e.problem, e.correction]), { quote: [0] })) +
     sub("Sources you used", list(c.anchorsUsed)) +
     sub("Named without saying what they do", list(c.nameDrops)) +
@@ -224,20 +267,20 @@ function contentBody(r) {
     sub("Figures to verify", list(c.verifyFlags));
 }
 
-function markedHTML(r, qid) {
-  const text = r.answer.text;
-  const issues = (r.language && r.language.issues) || [];
-  let out = "";
-  let pos = 0;
-  issues.forEach((i, n) => {
-    if (i.start < pos) return;
-    out += esc(text.slice(pos, i.start)) + "<del>" + esc(i.wrong) + "</del>" + (i.fix ? "<ins>" + esc(i.fix) + "</ins>" : "") + "<sup><a href=\"#" + qid + "-m" + (n + 1) + "\">" + (n + 1) + "</a></sup>";
-    pos = i.end;
-  });
-  return "<div class=\"script marked\">" + out + esc(text.slice(pos)) + "</div>";
+function markedBody(r, qid) {
+  const b = V.built(r);
+  if (r.marks && r.marks.notAttempted) return NA;
+  if (!b.marks.length) return para(r.language || r.coach ? "Nothing to mark: no language, framing or fact changes were found." : "The AI parts did not run, so nothing is marked yet.") + script(r.answer.text);
+  const opts = { idPrefix: qid + "-", heading: "h4" };
+  return AM.legendHTML(b) + AM.markedHTML(b, opts) + AM.marksListHTML(b, opts);
 }
 
-function languageBody(r, qid) {
+function ledgerBody(r, qid) {
+  if (!r.ledger) return para("The marks could not be computed in this run. Run the same command again to retry the gradings.");
+  return AM.ledgerHTML(r.ledger, { idPrefix: qid + "-", heading: "h4" });
+}
+
+function languageBody(r) {
   const l = r.language;
   const mech = r.mechanical || [];
   let html = "";
@@ -246,13 +289,7 @@ function languageBody(r, qid) {
     if (l.style.assessment) html += para(l.style.assessment);
     if (l.summary) html += para(l.summary);
     if (l.style.issues.length) html += sub("Style problems", list(l.style.issues));
-    html += sub("Your answer, marked", l.issues.length
-      ? "<p class=\"legend\"><del>Struck text</del> is wrong; <ins>underlined text</ins> is the correction. The numbers link to the list below.</p>" + markedHTML(r, qid)
-      : para("No language corrections were needed."));
-    html += sub("Every mistake", table(["#", "Where", "You wrote", "Correct", "Type", "Rule"], l.issues.map((i, n) => ({
-      cells: [String(n + 1), i.unit, i.wrong, i.fix || "(delete)", { html: esc(i.type) + (i.severity === "major" ? " " + chip("bad", "major") : "") }, i.rule],
-      attrs: " id=\"" + qid + "-m" + (n + 1) + "\""
-    })), { quote: [2, 3] }));
+    html += para(l.issues.length ? "All " + l.issues.length + " language mistake" + (l.issues.length === 1 ? " is" : "s are") + " marked in red and green in Your answer, marked (L1" + (l.issues.length > 1 ? "-L" + l.issues.length : "") + "), each with its rule." : "No language corrections were needed.");
   } else {
     html += r.marks && r.marks.notAttempted ? NA : para("The AI language audit is not available in this run. The engine's own checks are below.");
   }
@@ -275,10 +312,7 @@ function structureBody(r) {
   html += sub("Conclusion", para(c.conclusion.assessment) + (c.conclusion.rewrite ? script(c.conclusion.rewrite) : ""));
   html += sub("Headings and paragraphing", para(c.headings.assessment) + (c.headings.suggested.length ? list(c.headings.suggested, true) : ""));
   html += sub("Flow", list(c.flow));
-  html += sub("What would lift this answer", list(c.valueAdds));
-  html += sub("Rewrites of your weakest sentences", c.rewrites.length
-    ? c.rewrites.map(w => "<div class=\"rewrite\"><p class=\"before\">" + esc(w.before) + "</p><p class=\"after\">" + esc(w.after) + "</p><p class=\"why\">" + esc(w.why) + "</p></div>").join("")
-    : "<p class=\"empty\">None.</p>");
+  if (c.reframe.length || c.additions.length) html += para("Sentences to frame better (blue) and additions (gold) are marked in Your answer, marked (" + [c.reframe.length ? c.reframe.length + " to frame better" : "", c.additions.length ? c.additions.length + " to add" : ""].filter(Boolean).join(", ") + ").");
   return html;
 }
 
@@ -306,10 +340,12 @@ function renderQuestion(r, session) {
     "<p class=\"question\">" + esc(q.text) + "</p>" +
     section(qid + "-verdict", "Verdict", "", verdictBlock(r)) +
     section(qid + "-summary", "Summary and priorities", "", summaryBody(r)) +
+    section(qid + "-marked", "Your answer, marked", V.markCounts(r), markedBody(r, qid)) +
+    section(qid + "-lost", V.lossTitle(r), "", ledgerBody(r, qid)) +
     section(qid + "-reading", "Reading the question", "", readingBody(r)) +
     section(qid + "-marks", "Marks breakdown", r.marks && !r.marks.notAttempted ? fmt(r.marks.rawSum) + " raw, -" + fmt(r.marks.penaltySum) + " penalties" : "", marksBody(r)) +
     section(qid + "-content", "Content", r.marks && r.marks.coverage !== null && r.marks.coverage !== undefined ? fmt(r.marks.coverage) + "% of the checklist" : "", contentBody(r)) +
-    section(qid + "-language", "Language", l ? l.issues.length + " mistake" + (l.issues.length === 1 ? "" : "s") + ", " + (r.mechanical || []).length + " engine check" + ((r.mechanical || []).length === 1 ? "" : "s") : "", languageBody(r, qid)) +
+    section(qid + "-language", "Language", l ? l.issues.length + " mistake" + (l.issues.length === 1 ? "" : "s") + ", " + (r.mechanical || []).length + " engine check" + ((r.mechanical || []).length === 1 ? "" : "s") : "", languageBody(r)) +
     section(qid + "-structure", "Structure and framing", "", structureBody(r)) +
     section(qid + "-model", "Model answer", ma && ma.text ? ma.words + " words" : "", modelBody(r)) +
     section(qid + "-plan", "Improvement plan", "", planBody(r)) +

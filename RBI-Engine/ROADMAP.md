@@ -449,3 +449,62 @@ Small issues left for later:
 - `new` prints a stack trace if `examples/answer-template.txt` has been deleted.
 
 Review: the whole build was self-reviewed by its author (no independent reviewer was run), which is weaker than a fresh review.
+
+# Part 5 - Colour-marked answer, reasons for every lost mark, same checks on the site
+
+Requested on 2026-11-28: mark the answer itself in colour, explain every lost mark, place suggested additions inside the answer, and give the practice site the same checks and marking as the engine.
+
+## What the candidate sees
+
+In the HTML report (engine) and in the AI Analysis result (site), a section **Your answer, marked** shows the answer with:
+
+| Mark | Original text | Then | Source |
+|---|---|---|---|
+| Language mistake | red, struck through | the correction in green | engine: language pass; site: grammar and spelling audit |
+| Weak framing | the sentence in deep blue | the better sentence in light blue | engine: coach `reframe`; site: `rewrites` |
+| Wrong fact | the words in deep purple | the correct fact in light purple | grading run `factual_errors` |
+| Something to add | - | an "Add" note in gold where it belongs | engine: coach `additions`; site: `additions` |
+| Deduction | - | a small "-0.25" tag after the words that cost marks | grading run `penalties[].quote` |
+
+Every mark carries a number (L1, B1, F1, A1) that links to the list under the answer, which gives the original words, the fix and the reason. Marks nest: a language mistake inside a weak sentence shows red/green inside the blue sentence. A mark that cannot be placed exactly (or crosses another mark) is still listed, marked "not shown in the answer".
+
+A section **Why you lost N marks** lists every lost mark: one row per parameter below its maximum (with the engine's gate caps, failed examiner checks and the AI's specific reasons), one row per penalty (with the words that triggered it and how to avoid it), and rows for the hard ceiling, the 0-mark rules and, on the site, the consistency adjustment. The rows add up exactly to maximum minus score; key checklist points that were missed are listed under the table.
+
+## Design
+
+- **One shared core, two identical copies.** `answer-marks.js` (repo root, a classic script that sets `window.AnswerMarks`) and `RBI-Engine/src/answer-marks.js` (CommonJS) are byte-identical (UMD wrapper); `tests/sync.test.js` checks it. The core holds the quote checks (`normChars`, `plainText`, `quoteInScript`, `findSpan`, `isBritishVariant`, `onlyBritishChanges`), `buildMarks`, `markedHTML`, `marksListHTML`, `legendHTML`, `markedPlain`, `lossLedger`, `ledgerHTML` and the "how to fix" tables `HOW_PARAM` / `HOW_PENALTY`. `src/util.js` re-exports the quote checks so existing engine code is unchanged; `ai_eval.js` uses the global instead of its own older copies.
+- **`buildMarks(text, {lang, facts, frames, adds, cuts})`**: items with offsets are checked against the text; items with quotes are located with `findSpan` (spelling via its context). Facts are placed first, then frames (a fact may sit inside a frame, never across its edge), then language marks (inside or outside a fact or frame, never across an edge, never overlapping each other). Additions go at a sentence end (moved past a mark that ends there); deduction tags go at the end of their quote. Ids are numbered per kind in reading order. Output: `{marks, counts, dropped}`; renderers walk the same nesting.
+- **`lossLedger({max, score, rawSum, penaltySum, ceiling, ceilingApplied, autoFail, offTopic, notAttempted, track, params, penalties, adjustment})`** returns `{rows, total}` with `total === max - score` (to 0.01).
+- **Engine passes.** Grading (full run, `g2`): each parameter adds `lost` (the specific reasons it is below its maximum) and each penalty adds `quote`; `enforceRubric` and `combineRuns` carry both. Coach (`c2`): sees the answer as numbered sentences inside numbered paragraphs and returns `reframe` (every sentence that needs better framing, up to 10, by sentence id or id range) and `additions` (up to 6, each after a sentence id) instead of `rewrites` and `value_additions`.
+- **Site grading contract.** Parameters add `lost`, penalties add `quote`, new `off_topic` and `additions`, `rewrites` become every sentence that needs better framing (up to 8), grammar corrections must replace exactly the quoted words. `normalizeReport` drops quotes that are not in the answer (rewrites, additions, facts, error log, vocabulary, penalty quotes), drops grammar fixes that only change British spelling, and applies the same rules as the engine: hard ceiling, 0 when off-topic, RP-7 for precis and comprehension of any mark, penalty values for other marks snapped to 0.25 (at least 0.25), the 52% "high mark, little coverage" cross-check. The coverage clamp stays (the site grades once by default) but is centred on coverage x the hard ceiling and never goes above the ceiling, so it no longer conflicts with the rubric.
+- **Reports.** Engine HTML/Markdown: new sections after "Summary and priorities"; the old "Factual errors" table, "Every mistake" table, "Rewrites" and "What would lift this answer" lists move into the marked-answer lists (no duplicates). Terminal summary: a "Marked" line with the counts and the main reason beside each lost mark. Site: the two new sections open by default; the duplicate grammar/spelling/fact lists and "Your sentences, rewritten" are replaced; the Markdown export gets both sections. `style.css` and the engine's CSS style the shared `mk-*` classes with their own tokens (print keeps the colours).
+
+## Tasks (each test-first)
+
+1. Core: move the quote checks into `src/answer-marks.js`, re-export from `util.js` (util tests unchanged), copy to the root, sync test.
+2. Core: `buildMarks` with placement, nesting and numbering tests.
+3. Core: `markedHTML`, `marksListHTML`, `legendHTML`, `markedPlain` (escaping, ids, links, nesting).
+4. Core: `lossLedger` + `ledgerHTML`; `HOW_*` tables move from `synthesis.js`.
+5. Engine grading `g2`: `lost` and `quote` through normalize, `enforceRubric`, `combineRuns`.
+6. Engine coach `c2`: sentence ids, `reframe`, `additions`.
+7. Engine report: `report.marked`, `report.ledger`; HTML, Markdown and terminal sections; fake replies and e2e updated.
+8. Site: load `answer-marks.js`, contract and schemas, `normalizeReport` checks and rules, combine clamp, `tests/site.test.js` (vm) for the site's rules and for identical marks from identical input.
+9. Site UI: result sections, CSS, Markdown export; check in Chromium with a mocked AI reply.
+10. Docs: READMEs, CLAUDE.md (load order, shared core), this roadmap's decisions.
+
+## Decisions made during Part 5
+
+Built on 2026-11-28, test-first (308 tests, including 10 that load the site's `ai_eval.js` in a sandbox), checked in Chromium on the engine report (light and dark) and on the site (AI Analysis with mocked AI replies, no console errors). Decisions, with the cost if wrong:
+
+1. Wrong facts are deep purple then light purple; additions are gold; a small "-0.25" tag marks the words that cost marks (not requested, added so every deduction is visible in place). Cost: none; the legend explains each colour.
+2. One shared file, `answer-marks.js`, kept byte-identical in the site and the engine (sync test), instead of two implementations. Cost: a change must be copied to both places, or the tests fail.
+3. Overlaps: wrong facts are placed first, then sentences to reframe, then language marks; marks nest inside each other but never cross. A mark that would cross an edge, or whose exact words are not found, is listed and labelled "not shown in your answer". Cost: rarely, a mark appears only in the list.
+4. The site keeps its coverage band (it grades once by default) but centres it on coverage x the hard ceiling and never goes above the ceiling; the engine still has no band. Cost: on the site, a mid-coverage answer that the AI marked high can be lowered more than before, and a weak one is raised less.
+5. The site now applies the engine's rules: hard ceiling, 0 when off-topic, RP-7 for precis and comprehension at any marks, penalty values snapped to 0.25, the 52% cross-check, and quotes that must be in the answer (facts, error log, rewrites, additions, vocabulary, penalty quotes). Cost: an AI quote that is not exact is dropped.
+6. The site still makes one grading call; it now also asks for the reasons behind each lost mark, the words behind each penalty, up to 8 reframed sentences and up to 5 placed additions. Cost: somewhat longer AI replies.
+7. Reports saved on the site before this change still open: marks are built when the report is shown, missing reasons fall back to the justification, and a balancing row keeps the table adding up. Cost: none.
+8. The site's balancing row is "Consistency check" when the final mark came from several gradings or the coverage band, otherwise "Final adjustment". Cost: none.
+9. The engine coach now answers by sentence id (`c2`) and the grading pass gives reasons and quotes (`g2`), so cached replies from before are not reused: the first re-run of an old answer makes new coach and grading calls. Cost: one-time AI calls.
+10. Lists that the marked answer now holds were removed elsewhere (engine: "Every mistake", "Factual errors", "Rewrites", "What would lift this answer", "Where your marks went"; site: grammar, spelling and fact lists, "Your sentences, rewritten", the penalty list in the Markdown export). Cost: none; each section points to the marked answer.
+
+Review: self-review by the author (no independent reviewer), which is weaker than a fresh review.

@@ -149,3 +149,23 @@ test("off-topic replies give zero", () => {
   assert.equal(run.offTopic, true);
   assert.equal(run.final, 0);
 });
+
+test("a full run keeps the reasons each parameter lost marks and the words behind each penalty", () => {
+  const r = reply({
+    parameters: reply().parameters.map((p, i) => Object.assign({}, p, { lost: i === 2 ? ["Only two sources; no CPI data.", "None"] : [] })),
+    penalties: [{ code: "RP-2", trigger: "generic line", quote: "Food prices drive CPI inflation" }, { code: "RP-8", trigger: "slang", quote: "Banks hate inflation" }]
+  });
+  const run = score.normalize(r, q(), null, SCHEME, { full: true });
+  assert.deepEqual(run.params[2].lost, ["Only two sources; no CPI data."]);
+  assert.deepEqual(run.params[0].lost, []);
+  assert.deepEqual(run.penalties.map(p => [p.code, p.quote]), [["RP-2", "Food prices drive CPI inflation"], ["RP-8", ""], ["RP-5", ""]]);
+});
+
+test("the full contract asks for the reasons behind every lost mark and the words behind each penalty", () => {
+  const p = score.build(q(), null, SCHEME, { full: true });
+  assert.match(p.prompt, /"lost": the specific reasons/);
+  assert.match(p.prompt, /"quote": the candidate's exact words that triggered it/);
+  assert.ok(p.schema.properties.parameters.items.properties.lost);
+  assert.ok(p.schema.properties.penalties.items.properties.quote);
+  assert.equal(score.VERSION, "g2");
+});

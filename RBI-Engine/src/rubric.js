@@ -250,10 +250,10 @@ function enforceRubric(input) {
   if (band === "half") capParam(5, 0.5, "word count " + words + " of " + wordLimit + " (" + pct + "%)");
   if (band === "zero") capParam(5, 0, "word count " + words + " of " + wordLimit + " (" + pct + "%)");
 
-  let penalties = (input.penalties || []).map(p => ({ code: p.code, trigger: String(p.trigger || "") }));
+  let penalties = (input.penalties || []).map(p => ({ code: p.code, trigger: String(p.trigger || ""), quote: String(p.quote || "") }));
   const hasRp5 = penalties.some(p => p.code === "RP-5");
   if (band === "zero" && !hasRp5) {
-    penalties.push({ code: "RP-5", trigger: "Word count " + words + " of " + wordLimit + " (" + pct + "% of the limit)" });
+    penalties.push({ code: "RP-5", trigger: "Word count " + words + " of " + wordLimit + " (" + pct + "% of the limit)", quote: "" });
     rules.push("RP-5 added: the word count is outside the allowed band.");
   } else if (band && band !== "zero" && hasRp5) {
     penalties = penalties.filter(p => p.code !== "RP-5");
@@ -274,7 +274,7 @@ function enforceRubric(input) {
     if (v === null || v === 0) { trimmed = true; continue; }
     seen[p.code] = (seen[p.code] || 0) + 1;
     if (seen[p.code] > PENALTY_TABLE[p.code].most) { trimmed = true; continue; }
-    kept.push({ code: p.code, label: PENALTY_LABELS[p.code], trigger: p.trigger, deduction: v });
+    kept.push({ code: p.code, label: PENALTY_LABELS[p.code], trigger: p.trigger, quote: p.quote, deduction: v });
   }
   if (trimmed) rules.push("Penalties limited to the rubric's codes and maximum instances (RP-2, RP-3 and RP-8 count at most 3 times).");
 
